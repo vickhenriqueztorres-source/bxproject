@@ -1,0 +1,89 @@
+{
+  "realm": "broker-demo",
+  "displayName": "Plataforma de Índices Sintéticos - Demo",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "failureFactor": 5,
+  "maxDeltaTimeSeconds": 900,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      {
+        "name": "USER",
+        "description": "Trader padrão com acesso a boletas e carteira demo"
+      },
+      {
+        "name": "ADMIN",
+        "description": "Administrador da plataforma com permissões operacionais"
+      },
+      {
+        "name": "AUDITOR",
+        "description": "Auditor com permissão exclusivamente de leitura e conformidade"
+      }
+    ]
+  },
+  "defaultRoles": [
+    "USER"
+  ],
+  "clients": [
+    {
+      "clientId": "broker-web",
+      "name": "Broker Web Frontend",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "rootUrl": "http://localhost:5173",
+      "baseUrl": "http://localhost:5173",
+      "redirectUris": [
+        "http://localhost:5173/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "broker-api",
+      "name": "Broker API Backend",
+      "enabled": true,
+      "bearerOnly": true
+    },
+    {
+      "clientId": "broker-admin",
+      "name": "Broker Admin Console",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "rootUrl": "http://localhost:5174",
+      "redirectUris": [
+        "http://localhost:5174/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5174"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    }
+  ],
+  "smtpServer": {
+    "host": "mailpit",
+    "port": "1025",
+    "from": "noreply@brokerproject.local",
+    "auth": "false",
+    "ssl": "false",
+    "starttls": "false"
+  }
+}

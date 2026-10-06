@@ -1,0 +1,9 @@
+-- Migration Rollback: 0001_initial_schema.down.sql
+
+DROP TABLE IF EXISTS audit_logs CASCADE;
+DROP TABLE IF EXISTS outbox_events CASCADE;
+DROP TABLE IF EXISTS contracts CASCADE;
+DROP TABLE IF EXISTS candles CASCADE;
+DROP TABLE IF EXISTS ticks CASCADE;
+DROP TABLE IF EXISTS index_state CASCADE;
+DROP TABLE IF EXISTS indices CASCADE;
