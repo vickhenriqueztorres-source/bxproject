@@ -49,6 +49,11 @@ O agente atua como `tech-lead-orchestrator` e coordena o pool de 6 workers espec
      7. Governança de Decisões Arquiteturais (ADRs formais com análise de trade-offs e invariantes invioláveis).
    - **Skills chave**: Todas (`01` a `09`), com ênfase em `01-project-context`, `02-financial-invariants`, `03-synthetic-market-engine`, `05-resilience-patterns`, `08-database-foundation`, `09-ai-failure-map`.
 
+8. **`post-implementation-verifier`**:
+   - **Permissão**: `read-only` estrito (`artifacts: []`).
+   - **Responsabilidade**: Verificador independente pós-implementação. Executa testes do gate e valida as pós-condições V-01 a V-13 no banco e Redis em ambiente descartável, comprovando matematicamente o cumprimento de todas as garantias antes do merge.
+   - **Skills chave**: `01-project-context`, `02-financial-invariants`, `03-synthetic-market-engine`, `06-testing-quality`, `08-database-foundation`, `09-ai-failure-map`, `10-post-implementation-verification`.
+
 ---
 
 ## 2. Invariantes e Regras Invioláveis do Projeto
