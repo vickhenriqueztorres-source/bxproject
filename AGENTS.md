@@ -38,9 +38,16 @@ O agente atua como `tech-lead-orchestrator` e coordena o pool de 6 workers espec
    - **Skills chave**: Todas (`01` a `08`).
 
 7. **`broker-architect-agent`**:
-   - **Permissão**: `write-code` / `architecture-design` (desenho técnico e validação de sistemas de trading).
-   - **Responsabilidade**: Modela e projeta motores de preço OTC (Ornstein-Uhlenbeck com reversão à média), TradingView Datafeed (UDF), gestão de risco e teto de solvência pré-ordem (Float Cap de 3%), baixa latência em Redis e integração de ledger financeiro.
-   - **Skills chave**: `01-project-context`, `02-financial-invariants`, `03-synthetic-market-engine`, `04-security-iam`, `05-resilience-patterns`, `06-testing-quality`, `07-production-operations`, `08-database-foundation`.
+   - **Permissão**: `architecture-design` / `write-code` (desenho técnico, análise forense FMEA e validação de sistemas de trading).
+   - **Responsabilidade**: Arquiteto Chefe de Sistemas de Trading. Modela e valida as 7 features arquiteturais:
+     1. Motores estocásticos de preço OTC (Ornstein-Uhlenbeck com reversão à média $\theta$ e CSPRNG Box-Muller).
+     2. Gestão de risco e teto de solvência pré-ordem (Float Cap de 3% via scripts Lua atômicos no Redis <1ms).
+     3. TradingView Datafeed (UDF) duplo-canal (REST indexado + WebSocket a 250ms com catch-up por `lastSequence`).
+     4. Agregação resiliente de velas OHLCV (Zero RAM dependency, Redis Streams `cg:candles` e UPSERT no PostgreSQL).
+     5. Agendamento e liquidação pessimista (`contracts:pending` Sorted Sets, `SELECT FOR UPDATE SKIP LOCKED` e captura oficial de tick).
+     6. Contabilidade de dupla entrada inviolável no Blnk Ledger (partidas dobradas, equação de soma zero e referências idempotentes).
+     7. Governança de Decisões Arquiteturais (ADRs formais com análise de trade-offs e invariantes invioláveis).
+   - **Skills chave**: Todas (`01` a `09`), com ênfase em `01-project-context`, `02-financial-invariants`, `03-synthetic-market-engine`, `05-resilience-patterns`, `08-database-foundation`, `09-ai-failure-map`.
 
 ---
 
