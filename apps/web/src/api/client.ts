@@ -34,7 +34,7 @@ function broadcastMockPrivate(event: { type: string; [key: string]: unknown }) {
 
 function getStoredMock(): MockStore {
   const defaultWallet: Wallet = { currency: 'USD', available_minor: 1000000, reserved_minor: 0 };
-  const raw = typeof window !== 'undefined' ? sessionStorage.getItem('synth_mock_store') : null;
+  const raw = typeof window !== 'undefined' ? sessionStorage.getItem('synth_mock_store_v4') : null;
   if (raw) {
     try { return JSON.parse(raw); } catch { /* ignore */ }
   }
@@ -43,7 +43,7 @@ function getStoredMock(): MockStore {
 
 function saveStoredMock(store: MockStore) {
   if (typeof window !== 'undefined') {
-    sessionStorage.setItem('synth_mock_store', JSON.stringify(store));
+    sessionStorage.setItem('synth_mock_store_v4', JSON.stringify(store));
   }
 }
 
@@ -98,77 +98,129 @@ export const getIndex = async (symbol: string): Promise<Index> => {
   return api<Index>(`/indices/${encodeURIComponent(symbol)}`);
 };
 
-// Base prices and decimal precision for demo historical seed
-const BASE_PRICES: Record<string, { price: number; precision: number }> = {
-  EURUSD_OTC: { price: 1.08542, precision: 5 },
-  GBPUSD_OTC: { price: 1.29415, precision: 5 },
-  USDJPY_OTC: { price: 153.820, precision: 3 },
-  USDCHF_OTC: { price: 0.86510, precision: 5 },
-  AUDUSD_OTC: { price: 0.65820, precision: 5 },
-  USDCAD_OTC: { price: 1.38450, precision: 5 },
-  NZDUSD_OTC: { price: 0.59820, precision: 5 },
-  EURGBP_OTC: { price: 0.83850, precision: 5 },
-  EURJPY_OTC: { price: 166.950, precision: 3 },
-  GBPJPY_OTC: { price: 199.120, precision: 3 },
-  EURCAD_OTC: { price: 1.50280, precision: 5 },
-  EURAUD_OTC: { price: 1.64890, precision: 5 },
-  GBPAUD_OTC: { price: 1.96620, precision: 5 },
-  GBPCAD_OTC: { price: 1.79210, precision: 5 },
-  AUDCAD_OTC: { price: 0.91120, precision: 5 },
-  AUDJPY_OTC: { price: 101.250, precision: 3 },
-  CADJPY_OTC: { price: 111.120, precision: 3 },
-  NZDJPY_OTC: { price: 92.050, precision: 3 },
-  BTCUSD_OTC: { price: 64850.00, precision: 2 },
-  ETHUSD_OTC: { price: 3450.00, precision: 2 },
-  SOLUSD_OTC: { price: 152.40, precision: 2 },
-  BNBUSD_OTC: { price: 585.00, precision: 2 },
-  XRPUSD_OTC: { price: 0.5420, precision: 4 },
-  ADAUSD_OTC: { price: 0.3540, precision: 4 },
-  DOGEUSD_OTC: { price: 0.1240, precision: 4 },
-  AVAXUSD_OTC: { price: 28.40, precision: 2 },
-  XAUUSD_OTC: { price: 2652.80, precision: 2 },
-  XAGUSD_OTC: { price: 31.750, precision: 3 },
-  USOIL_OTC: { price: 72.40, precision: 2 },
-  UKOIL_OTC: { price: 76.20, precision: 2 },
-  SYNTH_VOL_10: { price: 100.5420, precision: 4 },
-  SYNTH_VOL_25: { price: 250.8410, precision: 4 },
-  SYNTH_VOL_50: { price: 500.1250, precision: 4 },
-  SYNTH_VOL_75: { price: 750.3200, precision: 4 },
-  SYNTH_VOL_100: { price: 1000.4500, precision: 4 },
-  SYNTH_CRASH_BOOM_100: { price: 1000.8200, precision: 4 },
+// Base prices, precision and calibrated volatility for realistic historical generation
+const BASE_PRICES: Record<string, { price: number; precision: number; sigma: number }> = {
+  // Forex OTC (18)
+  EURUSD_OTC: { price: 1.08542, precision: 5, sigma: 0.00018 },
+  GBPUSD_OTC: { price: 1.29415, precision: 5, sigma: 0.00020 },
+  USDJPY_OTC: { price: 153.820, precision: 3, sigma: 0.00018 },
+  USDCHF_OTC: { price: 0.86510, precision: 5, sigma: 0.00017 },
+  AUDUSD_OTC: { price: 0.65820, precision: 5, sigma: 0.00019 },
+  USDCAD_OTC: { price: 1.38450, precision: 5, sigma: 0.00018 },
+  NZDUSD_OTC: { price: 0.59820, precision: 5, sigma: 0.00019 },
+  EURGBP_OTC: { price: 0.83850, precision: 5, sigma: 0.00016 },
+  EURJPY_OTC: { price: 166.950, precision: 3, sigma: 0.00020 },
+  GBPJPY_OTC: { price: 199.120, precision: 3, sigma: 0.00022 },
+  EURCAD_OTC: { price: 1.50280, precision: 5, sigma: 0.00019 },
+  EURAUD_OTC: { price: 1.64890, precision: 5, sigma: 0.00020 },
+  GBPAUD_OTC: { price: 1.96620, precision: 5, sigma: 0.00021 },
+  GBPCAD_OTC: { price: 1.79210, precision: 5, sigma: 0.00020 },
+  AUDCAD_OTC: { price: 0.91120, precision: 5, sigma: 0.00018 },
+  AUDJPY_OTC: { price: 101.250, precision: 3, sigma: 0.00019 },
+  CADJPY_OTC: { price: 111.120, precision: 3, sigma: 0.00019 },
+  NZDJPY_OTC: { price: 92.050, precision: 3, sigma: 0.00019 },
+
+  // Cripto OTC (8)
+  BTCUSD_OTC: { price: 64850.00, precision: 2, sigma: 0.00065 },
+  ETHUSD_OTC: { price: 3450.00, precision: 2, sigma: 0.00075 },
+  SOLUSD_OTC: { price: 152.40, precision: 2, sigma: 0.00090 },
+  BNBUSD_OTC: { price: 585.00, precision: 2, sigma: 0.00055 },
+  XRPUSD_OTC: { price: 0.5420, precision: 4, sigma: 0.00085 },
+  ADAUSD_OTC: { price: 0.3540, precision: 4, sigma: 0.00085 },
+  DOGEUSD_OTC: { price: 0.1240, precision: 4, sigma: 0.00110 },
+  AVAXUSD_OTC: { price: 28.40, precision: 2, sigma: 0.00095 },
+
+  // Commodities OTC (4)
+  XAUUSD_OTC: { price: 2652.80, precision: 2, sigma: 0.00030 },
+  XAGUSD_OTC: { price: 31.750, precision: 3, sigma: 0.00045 },
+  USOIL_OTC: { price: 72.40, precision: 2, sigma: 0.00040 },
+  UKOIL_OTC: { price: 76.20, precision: 2, sigma: 0.00040 },
+
+  // Sintéticos (6)
+  SYNTH_VOL_10: { price: 100.5420, precision: 4, sigma: 0.00015 },
+  SYNTH_VOL_25: { price: 250.8410, precision: 4, sigma: 0.00030 },
+  SYNTH_VOL_50: { price: 500.1250, precision: 4, sigma: 0.00060 },
+  SYNTH_VOL_75: { price: 750.3200, precision: 4, sigma: 0.00085 },
+  SYNTH_VOL_100: { price: 1000.4500, precision: 4, sigma: 0.00110 },
+  SYNTH_CRASH_BOOM_100: { price: 1000.8200, precision: 4, sigma: 0.00130 },
 };
 
+function createSeededRandom(seedStr: string) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seedStr.length; i++) {
+    h = Math.imul(h ^ seedStr.charCodeAt(i), 16777619) >>> 0;
+  }
+  return function() {
+    let t = (h += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function nextGaussian(rand: () => number) {
+  const u1 = Math.max(1e-9, rand());
+  const u2 = rand();
+  return Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+}
+
 function generateInitialCandles(symbol: string): Candle[] {
-  const meta = BASE_PRICES[symbol] ?? { price: 500, precision: 4 };
+  const meta = BASE_PRICES[symbol] ?? { price: 500, precision: 4, sigma: 0.0005 };
   const base = meta.price;
   const prec = meta.precision;
-  const now = Math.floor(Date.now() / 60000) * 60;
+  const sigma = meta.sigma;
+  const rand = createSeededRandom(symbol + '_prime_market_v3');
+  const nowMinute = Math.floor(Date.now() / 60000) * 60;
   const bars: Candle[] = [];
-  let current = base;
+  let currentClose = base;
 
-  for (let i = 59; i >= 0; i--) {
-    const t = now - (i * 60);
-    const angle = (t / 180);
-    const wave = Math.sin(angle) * (base * 0.0015) + Math.cos(angle * 1.5) * (base * 0.0009);
-    const openVal = current;
-    const closeVal = base + wave;
-    const highVal = Math.max(openVal, closeVal) + (base * 0.0005);
-    const lowVal = Math.min(openVal, closeVal) - (base * 0.0005);
-    current = closeVal;
+  for (let i = 0; i < 80; i++) {
+    const t = nowMinute - (i * 60);
+    const z = nextGaussian(rand);
+    const step = z * (currentClose * sigma);
+    const openVal = Math.max(currentClose * 0.01, currentClose - step);
+    const bodyTop = Math.max(openVal, currentClose);
+    const bodyBottom = Math.min(openVal, currentClose);
 
-    bars.push({
+    const wickHigh = Math.abs(nextGaussian(rand)) * (currentClose * sigma * 0.7);
+    const wickLow = Math.abs(nextGaussian(rand)) * (currentClose * sigma * 0.7);
+    const highVal = bodyTop + wickHigh;
+    const lowVal = Math.max(currentClose * 0.01, bodyBottom - wickLow);
+
+    bars.unshift({
       time: t,
       open: openVal.toFixed(prec),
       high: highVal.toFixed(prec),
       low: lowVal.toFixed(prec),
-      close: closeVal.toFixed(prec),
-      volume: 120 + ((t % 40) * 3),
+      close: currentClose.toFixed(prec),
+      volume: Math.floor(80 + rand() * 240),
     });
+
+    currentClose = openVal;
   }
   return bars;
 }
 
 export const getCandles = async (symbol: string): Promise<Candle[]> => {
+  // 1. Tenta obter o histórico sincronizado do servidor oficial
+  try {
+    const res = await fetch(`/api/candles?symbol=${encodeURIComponent(symbol)}&interval=1m&limit=100`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        if (isGuestMode()) {
+          const store = getStoredMock();
+          store.candles[symbol] = data;
+          saveStoredMock(store);
+        }
+        return data;
+      }
+    }
+  } catch {
+    // Falha silenciosa no fetch
+  }
+
+  // 2. Fallback resiliente com gerador estocástico realista seeded
   if (isGuestMode()) {
     const store = getStoredMock();
     if (!store.candles[symbol] || store.candles[symbol].length === 0) {
