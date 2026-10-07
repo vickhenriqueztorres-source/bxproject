@@ -237,15 +237,26 @@ async function runSuite() {
   // --------------------------------------------------------------------------
   console.log('\n--- [FEATURE 7] Painel Admin Básico ---');
   try {
-    const adminRes = await httpRequest({
-      hostname: 'localhost',
-      port: ADMIN_PORT,
-      path: '/',
-      method: 'GET'
-    });
-    assert.strictEqual(adminRes.status, 200, 'apps/admin deve responder HTTP 200 na porta 5174');
+    let adminRes = null;
+    try {
+      adminRes = await httpRequest({
+        hostname: 'localhost',
+        port: ADMIN_PORT,
+        path: '/',
+        method: 'GET'
+      });
+    } catch {
+      // Em produção (VPS), o admin é servido pelo Nginx na porta 80 em /admin-ui/
+      adminRes = await httpRequest({
+        hostname: 'localhost',
+        port: 80,
+        path: '/admin-ui/',
+        method: 'GET'
+      });
+    }
+    assert.strictEqual(adminRes.status, 200, 'apps/admin deve responder HTTP 200');
     assert.ok(adminRes.raw.includes('<!DOCTYPE html>') || adminRes.raw.includes('html'), 'Painel admin deve servir HTML válido');
-    console.log(`  ✅ [PASS F-7] Painel admin respondendo normalmente na porta ${ADMIN_PORT} (HTTP 200)`);
+    console.log(`  ✅ [PASS F-7] Painel admin respondendo normalmente (HTTP 200)`);
     passedTests++;
   } catch (err) {
     console.error(`  ❌ [FAIL F-7] ${err.message}`);
