@@ -35,4 +35,33 @@ async function healthRoutes(fastify) {
             return reply.status(503).send({ status: "not_ready", error: message });
         }
     });
+    // 3. GET /metrics (Prometheus / OpenMetrics - Subetapa 6)
+    fastify.get("/metrics", async (_request, reply) => {
+        try {
+            const res = await pool.query(`
+        SELECT symbol, updated_at, last_sequence 
+        FROM index_state;
+      `);
+            const now = Date.now();
+            const lines = [];
+            lines.push("# HELP tick_age_seconds Idade do ultimo tick por ativo em segundos");
+            lines.push("# TYPE tick_age_seconds gauge");
+            for (const row of res.rows) {
+                const ageSec = ((now - new Date(row.updated_at).getTime()) / 1000).toFixed(3);
+                lines.push(`tick_age_seconds{symbol="${row.symbol}"} ${ageSec}`);
+            }
+            lines.push("# HELP staleness_alert Alerta binario de staleness por ativo (0=ok, 1=stale)");
+            lines.push("# TYPE staleness_alert gauge");
+            for (const row of res.rows) {
+                const ageSec = (now - new Date(row.updated_at).getTime()) / 1000;
+                lines.push(`staleness_alert{symbol="${row.symbol}"} ${ageSec > 4 ? 1 : 0}`);
+            }
+            reply.header("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+            return lines.join("\n") + "\n";
+        }
+        catch {
+            reply.header("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+            return "# Erro ao consultar index_state\n";
+        }
+    });
 }

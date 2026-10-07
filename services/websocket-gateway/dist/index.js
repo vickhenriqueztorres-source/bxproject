@@ -80,18 +80,21 @@ async function main() {
         let isAuthenticated = false;
         let currentUserId = null;
         const clientSubscriptions = new Set();
-        let lastPong = Date.now();
+        let pongTimeoutTimer = null;
+        const HEARTBEAT_INTERVAL_MS = 30000;
+        const HEARTBEAT_TIMEOUT_MS = 5000;
         const pingInterval = setInterval(() => {
-            if (Date.now() - lastPong > 45000) {
-                // Sem pong há mais de 45s => fecha com 4408
-                socket.close(4408, "Ping timeout");
-                clearInterval(pingInterval);
-                return;
-            }
             if (socket.readyState === 1) {
                 socket.send(JSON.stringify({ type: "ping" }));
+                // Timeout estrito de 5s para o recebimento do pong (RFC 6455 / Padrão Indústria)
+                if (pongTimeoutTimer)
+                    clearTimeout(pongTimeoutTimer);
+                pongTimeoutTimer = setTimeout(() => {
+                    socket.close(4408, "Heartbeat timeout");
+                    clearInterval(pingInterval);
+                }, HEARTBEAT_TIMEOUT_MS);
             }
-        }, 15000);
+        }, HEARTBEAT_INTERVAL_MS);
         // Timeout de 5s para autenticação na primeira mensagem (S-02)
         const authTimeout = setTimeout(() => {
             if (!isAuthenticated) {
@@ -102,7 +105,10 @@ async function main() {
             try {
                 const msg = JSON.parse(raw.toString());
                 if (msg.type === "pong") {
-                    lastPong = Date.now();
+                    if (pongTimeoutTimer) {
+                        clearTimeout(pongTimeoutTimer);
+                        pongTimeoutTimer = null;
+                    }
                     return;
                 }
                 // 1. Mensagem de Autenticação
@@ -114,12 +120,31 @@ async function main() {
                         return;
                     }
                     currentUserId = authData.userId;
-                    // Limite de 5 conexões por usuário (B-16)
-                    const userConns = activeConnectionsByUser.get(currentUserId) || new Set();
-                    if (userConns.size >= 5) {
+                    // Limite de 5 conexões por usuário compartilhado no Redis (V-11)
+                    let allowed = true;
+                    try {
+                        const count = await redisClient.incr(`ws:conn:${currentUserId}`);
+                        if (count === 1) {
+                            await redisClient.expire(`ws:conn:${currentUserId}`, 60);
+                        }
+                        else if (count > 5) {
+                            await redisClient.decr(`ws:conn:${currentUserId}`);
+                            allowed = false;
+                        }
+                        else {
+                            await redisClient.expire(`ws:conn:${currentUserId}`, 60);
+                        }
+                    }
+                    catch {
+                        const userConns = activeConnectionsByUser.get(currentUserId) || new Set();
+                        if (userConns.size >= 5)
+                            allowed = false;
+                    }
+                    if (!allowed) {
                         socket.close(4429, "Too many concurrent connections for user");
                         return;
                     }
+                    const userConns = activeConnectionsByUser.get(currentUserId) || new Set();
                     userConns.add(socket);
                     activeConnectionsByUser.set(currentUserId, userConns);
                     isAuthenticated = true;
@@ -171,8 +196,11 @@ async function main() {
         });
         socket.on("close", () => {
             clearInterval(pingInterval);
+            if (pongTimeoutTimer)
+                clearTimeout(pongTimeoutTimer);
             clearTimeout(authTimeout);
             if (currentUserId) {
+                redisClient.decr(`ws:conn:${currentUserId}`).catch(() => { });
                 const userConns = activeConnectionsByUser.get(currentUserId);
                 if (userConns) {
                     userConns.delete(socket);

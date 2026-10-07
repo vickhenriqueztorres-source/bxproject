@@ -1,12 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getCandles, type Contract, type Candle } from '../api/client';
 import { PriceChart } from './PriceChart';
+import { StalenessOverlay } from './StalenessOverlay';
+import { useVisibilityPause } from './useVisibilityPause';
 import { tradingFeedManager } from '../feed/TradingFeedManager';
 import type { Tick } from '../feed/protocol';
 import { ASSET_CATALOG, type AssetCategory } from '../catalog/assets';
 
-export type GridLayout = '1x1' | '2x1' | '2x2';
+import { MAX_CHARTS } from './constants';
+export { MAX_CHARTS };
+
+export type GridLayout = '1x1' | '2x1' | '2x2' | '3x2';
 
 export interface MultiChartGridProps {
   activeSymbol: string;
@@ -16,19 +21,21 @@ export interface MultiChartGridProps {
 }
 
 const DEFAULT_SYMBOLS = ASSET_CATALOG.map((a) => a.symbol);
+const EMPTY_CANDLES: Candle[] = [];
 
 interface CellState {
   id: string;
   symbol: string;
 }
 
-function GridCell({
+const GridCell = React.memo(function GridCell({
   symbol,
   isActive,
   onFocus,
   onSymbolChange,
   contracts,
   availableSymbols,
+  onTickUpdate,
 }: {
   symbol: string;
   isActive: boolean;
@@ -36,17 +43,32 @@ function GridCell({
   onSymbolChange: (newSymbol: string) => void;
   contracts: Contract[];
   availableSymbols: string[];
+  onTickUpdate?: (symbol: string, eventTime: number) => void;
 }) {
+  const cellRef = useRef<HTMLDivElement>(null);
+  const isVisible = useVisibilityPause(cellRef);
   const [tick, setTick] = useState<Tick | null>(null);
+  const [isStale, setIsStale] = useState(false);
+  const [tickAgeMs, setTickAgeMs] = useState(0);
 
-  // Subscribe to symbol ticks via single WebSocket manager (De-duplication in browser)
+  // Subscribe to symbol ticks & per-symbol staleness via single WebSocket manager
   useEffect(() => {
     tradingFeedManager.connect();
-    const unsubscribe = tradingFeedManager.subscribeSymbol(symbol, (incomingTick) => {
+    const unsubscribeTick = tradingFeedManager.subscribeSymbol(symbol, (incomingTick) => {
       setTick(incomingTick);
+      if (onTickUpdate) {
+        onTickUpdate(symbol, incomingTick.event_time ?? Date.now());
+      }
+    });
+    const unsubscribeStale = tradingFeedManager.onSymbolStaleness(symbol, (stale, age) => {
+      setIsStale(stale);
+      setTickAgeMs(age);
     });
     return () => {
-      unsubscribe();
+      unsubscribeTick();
+      unsubscribeStale();
+      setTick(null);
+      setIsStale(false);
     };
   }, [symbol]);
 
@@ -57,10 +79,14 @@ function GridCell({
     staleTime: 60_000,
   });
 
-  const relevantContracts = contracts.filter((c) => c.status === 'OPEN' && c.symbol === symbol);
+  const relevantContracts = useMemo(
+    () => contracts.filter((c) => c.status === 'OPEN' && c.symbol === symbol),
+    [contracts, symbol]
+  );
 
   return (
     <div
+      ref={cellRef}
       onClick={onFocus}
       style={{
         display: 'flex',
@@ -141,27 +167,58 @@ function GridCell({
               ATIVO
             </span>
           )}
+          {isStale && (
+            <span
+              style={{
+                fontSize: '9px',
+                background: 'rgba(239, 68, 68, 0.25)',
+                color: '#ff6b6b',
+                padding: '2px 5px',
+                borderRadius: '3px',
+                fontWeight: 800,
+                border: '1px solid rgba(239, 68, 68, 0.45)',
+              }}
+            >
+              ⚠️ COTAÇÃO CONGELADA
+            </span>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: '#8597b4', fontSize: '10px' }}>
-            {tick ? tick.price : '—'}
+          <span
+            style={{
+              fontSize: '10px',
+              color: (tick?.latency_ms ?? 0) > 200 ? '#ffab00' : '#4ade80',
+              fontWeight: 600,
+              background: 'rgba(255, 255, 255, 0.05)',
+              padding: '1px 5px',
+              borderRadius: '3px',
+            }}
+            title="Latência estimada (Monotonic Arrival - Event Time)"
+          >
+            ⚡ {tick?.latency_ms ?? 0}ms
+          </span>
+          <span style={{ color: isStale ? '#ff6b6b' : '#8597b4', fontSize: '10px', fontWeight: isStale ? 700 : 400 }}>
+            {tick ? tick.price : '—'} {isStale && '(stale)'}
           </span>
         </div>
       </div>
 
       {/* Chart Canvas */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        <StalenessOverlay isStale={isStale} symbol={symbol} tickAgeMs={tickAgeMs} />
         <PriceChart
-          candles={candlesQuery.data ?? []}
+          candles={candlesQuery.data ?? EMPTY_CANDLES}
           tick={tick}
           symbol={symbol}
           activeContracts={relevantContracts}
+          isStale={isStale}
+          isVisible={isVisible}
         />
       </div>
     </div>
   );
-}
+});
 
 export function MultiChartGrid({
   activeSymbol,
@@ -171,15 +228,19 @@ export function MultiChartGrid({
 }: MultiChartGridProps) {
   const [layout, setLayout] = useState<GridLayout>('1x1');
 
-  // Maintain cell symbols for up to 4 grid viewports with real distinct fallbacks
+  // Maintain cell symbols for up to 6 grid viewports (MAX_CHARTS) with distinct fallbacks
   const [cells, setCells] = useState<CellState[]>([
     { id: 'cell-0', symbol: activeSymbol },
     { id: 'cell-1', symbol: 'EURUSD_OTC' },
     { id: 'cell-2', symbol: 'BTCUSD_OTC' },
     { id: 'cell-3', symbol: 'XAUUSD_OTC' },
+    { id: 'cell-4', symbol: 'ETHUSD_OTC' },
+    { id: 'cell-5', symbol: 'SOLUSD_OTC' },
   ]);
 
   const [activeCellIndex, setActiveCellIndex] = useState(0);
+  const [maxSkewMs, setMaxSkewMs] = useState(0);
+  const cellEventTimes = useRef(new Map<string, number>());
 
   // Keep cell 0 synchronized if activeSymbol changes from outside (e.g., top tabs)
   useEffect(() => {
@@ -192,7 +253,28 @@ export function MultiChartGrid({
     });
   }, [activeSymbol, activeCellIndex]);
 
-  const handleCellSymbolChange = (cellIndex: number, newSymbol: string) => {
+  const handleCellTickUpdate = (sym: string, eventTime: number) => {
+    cellEventTimes.current.set(sym, eventTime);
+    const visibleSyms = cells.slice(0, visibleCellsCount).map((c) => c.symbol);
+    if (visibleSyms.length > 1) {
+      let minT = Infinity;
+      let maxT = -Infinity;
+      for (const s of visibleSyms) {
+        const t = cellEventTimes.current.get(s);
+        if (t) {
+          if (t < minT) minT = t;
+          if (t > maxT) maxT = t;
+        }
+      }
+      if (minT !== Infinity && maxT !== -Infinity) {
+        setMaxSkewMs(Math.max(0, maxT - minT));
+      }
+    } else {
+      setMaxSkewMs(0);
+    }
+  };
+
+  const handleCellSymbolChange = useCallback((cellIndex: number, newSymbol: string) => {
     setCells((prev) => {
       const next = [...prev];
       next[cellIndex] = { ...next[cellIndex], symbol: newSymbol };
@@ -201,17 +283,17 @@ export function MultiChartGrid({
     if (cellIndex === activeCellIndex) {
       onActiveSymbolChange(newSymbol);
     }
-  };
+  }, [activeCellIndex, onActiveSymbolChange]);
 
-  const handleFocusCell = (index: number) => {
+  const handleFocusCell = useCallback((index: number) => {
     setActiveCellIndex(index);
     const sym = cells[index]?.symbol;
     if (sym && sym !== activeSymbol) {
       onActiveSymbolChange(sym);
     }
-  };
+  }, [cells, activeSymbol, onActiveSymbolChange]);
 
-  const visibleCellsCount = layout === '1x1' ? 1 : layout === '2x1' ? 2 : 4;
+  const visibleCellsCount = Math.min(layout === '1x1' ? 1 : layout === '2x1' ? 2 : layout === '2x2' ? 4 : 6, MAX_CHARTS);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', position: 'relative' }}>
@@ -282,8 +364,62 @@ export function MultiChartGrid({
             >
               [ 4 ]
             </button>
+            <button
+              type="button"
+              onClick={() => setLayout('3x2')}
+              style={{
+                background: layout === '3x2' ? '#1c2d4a' : '#0e1626',
+                border: layout === '3x2' ? '1px solid #00e676' : '1px solid #243555',
+                color: layout === '3x2' ? '#00e676' : '#8597b4',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+              title="6 Gráficos (Grade 3x2 - Limite Institucional Máximo)"
+            >
+              [ 6 ]
+            </button>
           </div>
+
+          {layout === '3x2' && (
+            <span
+              style={{
+                fontSize: '10px',
+                color: '#00e676',
+                background: 'rgba(0, 230, 118, 0.12)',
+                border: '1px solid rgba(0, 230, 118, 0.3)',
+                borderRadius: '3px',
+                padding: '2px 6px',
+                fontWeight: 600,
+              }}
+              title="Máximo de 6 gráficos simultâneos para manter fluidez e estabilidade"
+            >
+              🛡️ Limite Máximo (6)
+            </span>
+          )}
         </div>
+
+        {/* Indicador de Sincronização Cross-Asset entre os Gráficos Visíveis */}
+        {visibleCellsCount > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: '4px',
+                background: maxSkewMs > 2000 ? 'rgba(239, 68, 68, 0.2)' : maxSkewMs > 1000 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                color: maxSkewMs > 2000 ? '#ef4444' : maxSkewMs > 1000 ? '#f59e0b' : '#10b981',
+                border: `1px solid ${maxSkewMs > 2000 ? 'rgba(239, 68, 68, 0.4)' : maxSkewMs > 1000 ? 'rgba(245, 158, 11, 0.4)' : 'rgba(16, 185, 129, 0.4)'}`,
+              }}
+              title="Diferença máxima de tempo de evento entre os gráficos visíveis"
+            >
+              {maxSkewMs > 2000 ? `🔴 DESSINCRONIZADO (Δ ${maxSkewMs}ms)` : maxSkewMs > 1000 ? `🟡 SKEW LEVE (Δ ${maxSkewMs}ms)` : `🟢 SINCRONIZADO (Δ ${maxSkewMs}ms)`}
+            </span>
+          </div>
+        )}
 
         <span style={{ fontSize: '11px', color: '#8597b4' }}>
           Ativo em Foco: <strong style={{ color: '#00e676' }}>{activeSymbol}</strong>
@@ -299,8 +435,8 @@ export function MultiChartGrid({
           boxSizing: 'border-box',
           display: 'grid',
           gap: '6px',
-          gridTemplateColumns: layout === '1x1' ? '1fr' : '1fr 1fr',
-          gridTemplateRows: layout === '2x2' ? '1fr 1fr' : '1fr',
+          gridTemplateColumns: layout === '1x1' ? '1fr' : layout === '3x2' ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
+          gridTemplateRows: layout === '1x1' ? '1fr' : layout === '2x1' ? '1fr' : 'repeat(2, 1fr)',
         }}
       >
         {cells.slice(0, visibleCellsCount).map((cell, index) => (
@@ -312,6 +448,7 @@ export function MultiChartGrid({
             onSymbolChange={(sym) => handleCellSymbolChange(index, sym)}
             contracts={allContracts}
             availableSymbols={availableSymbols}
+            onTickUpdate={handleCellTickUpdate}
           />
         ))}
       </div>

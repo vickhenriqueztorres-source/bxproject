@@ -1,0 +1,83 @@
+-- Migration 0010_seed_multi_assets.down.sql
+BEGIN;
+
+DROP TRIGGER IF EXISTS indices_precision_guard ON indices;
+DROP FUNCTION IF EXISTS indices_precision_immutable_guard();
+
+DELETE FROM index_state WHERE symbol IN (
+  'EURUSD_OTC',
+  'GBPUSD_OTC',
+  'USDJPY_OTC',
+  'USDCHF_OTC',
+  'AUDUSD_OTC',
+  'USDCAD_OTC',
+  'NZDUSD_OTC',
+  'EURGBP_OTC',
+  'EURJPY_OTC',
+  'GBPJPY_OTC',
+  'EURCAD_OTC',
+  'EURAUD_OTC',
+  'GBPAUD_OTC',
+  'GBPCAD_OTC',
+  'AUDCAD_OTC',
+  'AUDJPY_OTC',
+  'CADJPY_OTC',
+  'NZDJPY_OTC',
+  'BTCUSD_OTC',
+  'ETHUSD_OTC',
+  'SOLUSD_OTC',
+  'BNBUSD_OTC',
+  'XRPUSD_OTC',
+  'ADAUSD_OTC',
+  'DOGEUSD_OTC',
+  'AVAXUSD_OTC',
+  'XAUUSD_OTC',
+  'XAGUSD_OTC',
+  'USOIL_OTC',
+  'UKOIL_OTC',
+  'SYNTH_VOL_10',
+  'SYNTH_VOL_25',
+  'SYNTH_VOL_75',
+  'SYNTH_VOL_100',
+  'SYNTH_CRASH_BOOM_100'
+);
+
+DELETE FROM indices WHERE symbol IN (
+  'EURUSD_OTC',
+  'GBPUSD_OTC',
+  'USDJPY_OTC',
+  'USDCHF_OTC',
+  'AUDUSD_OTC',
+  'USDCAD_OTC',
+  'NZDUSD_OTC',
+  'EURGBP_OTC',
+  'EURJPY_OTC',
+  'GBPJPY_OTC',
+  'EURCAD_OTC',
+  'EURAUD_OTC',
+  'GBPAUD_OTC',
+  'GBPCAD_OTC',
+  'AUDCAD_OTC',
+  'AUDJPY_OTC',
+  'CADJPY_OTC',
+  'NZDJPY_OTC',
+  'BTCUSD_OTC',
+  'ETHUSD_OTC',
+  'SOLUSD_OTC',
+  'BNBUSD_OTC',
+  'XRPUSD_OTC',
+  'ADAUSD_OTC',
+  'DOGEUSD_OTC',
+  'AVAXUSD_OTC',
+  'XAUUSD_OTC',
+  'XAGUSD_OTC',
+  'USOIL_OTC',
+  'UKOIL_OTC',
+  'SYNTH_VOL_10',
+  'SYNTH_VOL_25',
+  'SYNTH_VOL_75',
+  'SYNTH_VOL_100',
+  'SYNTH_CRASH_BOOM_100'
+);
+
+COMMIT;

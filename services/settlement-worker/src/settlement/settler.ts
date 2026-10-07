@@ -4,6 +4,7 @@ type Pool = pg.Pool;
 import { Redis } from "ioredis";
 import { PayoutCalculator, Direction } from "./payout-calculator.js";
 import { BlnkClient } from "@broker/wallet-adapter";
+import { isMarketOpen } from "./calendar.js";
 
 export class ContractSettler {
   private pool: Pool;
@@ -54,7 +55,13 @@ export class ContractSettler {
         return { success: true, reason: "ALREADY_SETTLED" };
       }
 
-      // 2. Busca rigorosa do primeiro tick oficial gravado no PostgreSQL onde ts >= expires_at (B-08)
+      // 2. Validação de Sessão de Mercado (Perigo 7 / Técnica 4)
+      if (!isMarketOpen(contract.symbol, contract.expires_at)) {
+        await client.query("ROLLBACK");
+        return { success: false, reason: "MARKET_CLOSED_AT_EXPIRY" };
+      }
+
+      // 3. Busca rigorosa do primeiro tick oficial gravado no PostgreSQL onde ts >= expires_at (B-08)
       const tickRes = await client.query(
         `SELECT sequence, price, ts
          FROM ticks
@@ -72,6 +79,11 @@ export class ContractSettler {
       }
 
       const exitTick = tickRes.rows[0];
+      if (!isMarketOpen(contract.symbol, exitTick.ts)) {
+        await client.query("ROLLBACK");
+        return { success: false, reason: "TICK_OUT_OF_SESSION" };
+      }
+
       const exitPrice = exitTick.price.toString();
       const exitSeq = BigInt(exitTick.sequence);
 

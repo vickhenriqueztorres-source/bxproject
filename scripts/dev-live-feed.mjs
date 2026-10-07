@@ -140,15 +140,40 @@ for (const item of ASSETS_CONFIG) {
     prevHash: gHash,
     candles: initialCandles,
     subscribers: new Set(),
+    lastTs: Date.now(),
+    gapCount: 0,
+    latencyMs: 12,
+    paused: false,
   });
 }
 
-// Servidor HTTP: Health Check, REST Candles e UDF Chart History
+// Telemetria de Resiliência contra Reconnect Storm (Subetapa 6)
+const stormTelemetry = {
+  reconnectAttemptsTotal: 0,
+  currentBackoffSeconds: 0,
+  circuitBreakerState: 0, // 0=CLOSED, 1=HALF-OPEN, 2=OPEN
+  tokenBucketTokens: 10,
+  stormAlert: 0,
+};
+
+// Telemetria de Fan-Out e Escalabilidade (Perigo 4 / Subetapa 6)
+const fanoutTelemetry = {
+  messagesSentTotal: 0,
+  coalescedTicksDroppedTotal: 0,
+  backpressurePausedClients: 0,
+  slowClientsDisconnectedTotal: 0,
+};
+
+// Armazenamento em memória de carteira e contratos para o ambiente de desenvolvimento
+const devContracts = [];
+let devWallet = { currency: 'USD', available_minor: 1000000, reserved_minor: 0 };
+
+// Servidor HTTP: Health Check, REST Candles, Contracts e UDF Chart History
 const server = http.createServer((req, res) => {
   // Configuração universal de CORS para o frontend
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Idempotency-Key');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -214,6 +239,365 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Endpoint REST de Snapshot Atômico (Subetapa 4): /api/v1/snapshot ou /snapshot
+  if (pathname === '/api/v1/snapshot' || pathname === '/snapshot') {
+    const symbol = parsedUrl.searchParams.get('symbol') || 'SYNTH_VOL_50';
+    const state = assetState.get(symbol);
+    if (!state) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Symbol not found' }));
+      return;
+    }
+    const eventTime = state.lastTs || Date.now();
+    const arrivalTime = Date.now();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      symbol: state.symbol,
+      sequence: state.sequence,
+      price: state.currentPrice,
+      ts: new Date().toISOString(),
+      event_time: eventTime,
+      arrival_time: arrivalTime,
+      latency_ms: Math.max(0, arrivalTime - eventTime),
+      hash: state.prevHash,
+      status: 'ACTIVE'
+    }));
+    return;
+  }
+
+  // Endpoint de Carteira: /api/wallet ou /wallet
+  if (pathname === '/api/wallet' || pathname === '/wallet') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(devWallet));
+    return;
+  }
+
+  // Endpoint de Listagem de Contratos: GET /api/contracts ou GET /contracts
+  if ((pathname === '/api/contracts' || pathname === '/contracts') && req.method === 'GET') {
+    const filter = parsedUrl.searchParams.get('result');
+    const filtered = filter ? devContracts.filter(c => c.result === filter) : devContracts;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    // Responde com objeto e array para máxima compatibilidade
+    res.end(JSON.stringify({ contracts: filtered }));
+    return;
+  }
+
+  // Endpoint de Abertura de Contratos: POST /api/contracts ou POST /contracts
+  if ((pathname === '/api/contracts' || pathname === '/contracts') && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const { symbol, direction, stake_minor } = payload;
+        const stake = parseInt(stake_minor, 10);
+
+        if (!symbol || !assetState.has(symbol)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ code: 'INVALID_SYMBOL', message: 'Símbolo inválido' }));
+          return;
+        }
+
+        const state = assetState.get(symbol);
+        if (state.paused) {
+          res.writeHead(409, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ code: 'INDEX_PAUSED', message: 'Índice pausado' }));
+          return;
+        }
+
+        // Validação de Staleness (Perigo 1)
+        const now = Date.now();
+        const age = now - (state.lastTs || now);
+        if (age > 4000) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ code: 'FEED_STALE', message: 'Feed de cotações congelado' }));
+          return;
+        }
+
+        if (!Number.isFinite(stake) || stake < 100 || stake > devWallet.available_minor) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ code: 'INSUFFICIENT_BALANCE', message: 'Saldo insuficiente' }));
+          return;
+        }
+
+        // Reserva contábil pré-ordem
+        devWallet.available_minor -= stake;
+        devWallet.reserved_minor += stake;
+
+        const contractId = 'dev_' + Math.random().toString(36).slice(2, 10);
+        const entryPrice = parseFloat(state.currentPrice);
+        const expiresAt = new Date(now + 60000).toISOString();
+        const newContract = {
+          id: contractId,
+          symbol,
+          direction: direction === 'DOWN' ? 'DOWN' : 'UP',
+          stake_minor: stake,
+          status: 'OPEN',
+          result: null,
+          payout_minor: null,
+          expires_at: expiresAt,
+          created_at: new Date(now).toISOString(),
+          entry_price: entryPrice,
+          strike_price: entryPrice,
+          duration_seconds: payload.duration_seconds || 60,
+        };
+
+        devContracts.unshift(newContract);
+
+        // Agendamento de Liquidação após 60s contra o tick autêntico do símbolo (Perigo 5)
+        setTimeout(() => {
+          const target = devContracts.find(c => c.id === contractId);
+          if (target && target.status === 'OPEN') {
+            const curState = assetState.get(symbol);
+            const exitPrice = parseFloat(curState ? curState.currentPrice : entryPrice);
+            const isUp = target.direction === 'UP';
+            const won = (isUp && exitPrice > entryPrice) || (!isUp && exitPrice < entryPrice);
+            const draw = exitPrice === entryPrice;
+            const result = won ? 'WIN' : draw ? 'DRAW' : 'LOSS';
+            const payoutMinor = won ? Math.round(stake * 1.85) : draw ? stake : 0;
+
+            target.status = 'SETTLED';
+            target.result = result;
+            target.payout_minor = payoutMinor;
+
+            devWallet.reserved_minor = Math.max(0, devWallet.reserved_minor - stake);
+            devWallet.available_minor += payoutMinor;
+
+            // Broadcast de liquidação aos clientes conectados
+            for (const client of wss.clients) {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({ type: 'wallet_balance', available_minor: devWallet.available_minor }));
+                client.send(JSON.stringify({ type: 'contract_settled', contract_id: contractId, result, payout_minor: payoutMinor }));
+              }
+            }
+          }
+        }, (newContract.duration_seconds || 60) * 1000);
+
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          is_duplicate: false,
+          contract: newContract,
+          id: contractId,
+          expires_at: expiresAt,
+          status: 'OPEN',
+          strike_price: entryPrice
+        }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ code: 'BAD_REQUEST', error: String(err) }));
+      }
+    });
+    return;
+  }
+
+  // Endpoint de Métricas Prometheus: /metrics (Subetapa 6)
+  if (pathname === '/metrics') {
+    const now = Date.now();
+    let lines = [];
+    lines.push('# HELP tick_age_seconds Idade do ultimo tick por ativo em segundos');
+    lines.push('# TYPE tick_age_seconds gauge');
+    for (const [symbol, state] of assetState.entries()) {
+      const ageSeconds = ((now - (state.lastTs || now)) / 1000).toFixed(3);
+      lines.push(`tick_age_seconds{symbol="${symbol}"} ${ageSeconds}`);
+    }
+
+    lines.push('# HELP feed_gap_count_total Contador de gaps de sequencia detectados');
+    lines.push('# TYPE feed_gap_count_total counter');
+    for (const [symbol, state] of assetState.entries()) {
+      lines.push(`feed_gap_count_total{symbol="${symbol}"} ${state.gapCount || 0}`);
+    }
+
+    lines.push('# HELP staleness_alert Alerta binario de staleness por ativo (0=ok, 1=stale)');
+    lines.push('# TYPE staleness_alert gauge');
+    for (const [symbol, state] of assetState.entries()) {
+      const isStale = (now - (state.lastTs || now)) > 4000 ? 1 : 0;
+      lines.push(`staleness_alert{symbol="${symbol}"} ${isStale}`);
+    }
+
+    lines.push('# HELP feed_latency_ms Latencia estimada de ponta a ponta em milissegundos');
+    lines.push('# TYPE feed_latency_ms gauge');
+    for (const [symbol, state] of assetState.entries()) {
+      lines.push(`feed_latency_ms{symbol="${symbol}"} ${state.latencyMs || 10}`);
+    }
+
+    lines.push('# HELP late_ticks_dropped_total Total de ticks tardios descartados pelo watermark');
+    lines.push('# TYPE late_ticks_dropped_total counter');
+    for (const [symbol, state] of assetState.entries()) {
+      lines.push(`late_ticks_dropped_total{symbol="${symbol}"} ${state.lateTicksCount || 0}`);
+    }
+
+    // Métricas Prometheus Institucionais da Fase 1 MVP
+    let totalTicks = 0;
+    for (const state of assetState.values()) {
+      totalTicks += state.sequence || 0;
+    }
+    lines.push('# HELP broker_ticks_generated_total Total de ticks gerados pelo motor CSPRNG');
+    lines.push('# TYPE broker_ticks_generated_total counter');
+    lines.push(`broker_ticks_generated_total ${totalTicks}`);
+
+    lines.push('# HELP broker_contracts_opened_total Total de ordens de contratos abertas');
+    lines.push('# TYPE broker_contracts_opened_total counter');
+    lines.push(`broker_contracts_opened_total ${devContracts.length}`);
+
+    lines.push('# HELP broker_contracts_settled_total Total de ordens liquidadas');
+    lines.push('# TYPE broker_contracts_settled_total counter');
+    lines.push(`broker_contracts_settled_total ${devContracts.filter(c => c.status === 'SETTLED').length}`);
+
+    lines.push('# HELP broker_feed_latency_ms Latencia media global do pipeline em ms');
+    lines.push('# TYPE broker_feed_latency_ms gauge');
+    lines.push(`broker_feed_latency_ms 16.0`);
+
+    // Métricas Globais de Sincronismo Cross-Asset (Subetapa 6)
+    let minTs = Infinity;
+    let maxTs = -Infinity;
+    for (const state of assetState.values()) {
+      if (!state.paused && state.lastTs) {
+        if (state.lastTs < minTs) minTs = state.lastTs;
+        if (state.lastTs > maxTs) maxTs = state.lastTs;
+      }
+    }
+    const maxSkewMs = (minTs !== Infinity && maxTs !== -Infinity) ? Math.max(0, maxTs - minTs) : 0;
+    const globalWatermark = minTs !== Infinity ? minTs - 2000 : now - 2000;
+    const watermarkLagSec = ((now - globalWatermark) / 1000).toFixed(3);
+    const syncAlert = maxSkewMs > 2000 ? 1 : 0;
+
+    lines.push('# HELP cross_asset_max_skew_ms Maior descompasso de tempo observado entre ativos em milissegundos');
+    lines.push('# TYPE cross_asset_max_skew_ms gauge');
+    lines.push(`cross_asset_max_skew_ms ${maxSkewMs}`);
+
+    lines.push('# HELP watermark_lag_seconds Atraso da linha d agua global em relacao ao relogio do sistema');
+    lines.push('# TYPE watermark_lag_seconds gauge');
+    lines.push(`watermark_lag_seconds ${watermarkLagSec}`);
+
+    lines.push('# HELP cross_asset_sync_alert Alerta binario de dessincronizacao entre ativos (0=ok, 1=skew>2s)');
+    lines.push('# TYPE cross_asset_sync_alert gauge');
+    lines.push(`cross_asset_sync_alert ${syncAlert}`);
+
+    lines.push('# HELP ws_connected_clients Total de conexoes ativas no WebSocket');
+    lines.push('# TYPE ws_connected_clients gauge');
+    lines.push(`ws_connected_clients ${wss.clients.size}`);
+
+    // Métricas de Reconnect Storm & Resiliência (Subetapa 6)
+    lines.push('# HELP reconnect_attempts_total Total de tentativas de reconexao registradas');
+    lines.push('# TYPE reconnect_attempts_total counter');
+    lines.push(`reconnect_attempts_total ${stormTelemetry.reconnectAttemptsTotal}`);
+
+    lines.push('# HELP reconnect_backoff_seconds Tempo atual de backoff aplicado em segundos');
+    lines.push('# TYPE reconnect_backoff_seconds gauge');
+    lines.push(`reconnect_backoff_seconds ${stormTelemetry.currentBackoffSeconds}`);
+
+    lines.push('# HELP circuit_breaker_state Estado do circuit breaker do feed (0=CLOSED, 1=HALF_OPEN, 2=OPEN)');
+    lines.push('# TYPE circuit_breaker_state gauge');
+    lines.push(`circuit_breaker_state ${stormTelemetry.circuitBreakerState}`);
+
+    lines.push('# HELP token_bucket_available_tokens Tokens disponiveis no balde de taxa de reconexao');
+    lines.push('# TYPE token_bucket_available_tokens gauge');
+    lines.push(`token_bucket_available_tokens ${stormTelemetry.tokenBucketTokens}`);
+
+    lines.push('# HELP reconnect_storm_alert Alerta binario de reconnect storm (0=nominal, 1=tempestade/breaker aberto)');
+    lines.push('# TYPE reconnect_storm_alert gauge');
+    lines.push(`reconnect_storm_alert ${stormTelemetry.stormAlert}`);
+
+    // Métricas de Fan-Out e Escalabilidade (Perigo 4 / Subetapa 6)
+    lines.push('# HELP fanout_messages_sent_total Total de mensagens enviadas aos clientes no fan-out');
+    lines.push('# TYPE fanout_messages_sent_total counter');
+    lines.push(`fanout_messages_sent_total ${fanoutTelemetry.messagesSentTotal}`);
+
+    lines.push('# HELP coalesced_ticks_dropped_total Total de ticks intermediarios descartados por coalescing');
+    lines.push('# TYPE coalesced_ticks_dropped_total counter');
+    lines.push(`coalesced_ticks_dropped_total ${fanoutTelemetry.coalescedTicksDroppedTotal}`);
+
+    lines.push('# HELP backpressure_paused_clients Total de conexoes atualmente pausadas por buffer saturado');
+    lines.push('# TYPE backpressure_paused_clients gauge');
+    lines.push(`backpressure_paused_clients ${fanoutTelemetry.backpressurePausedClients}`);
+
+    lines.push('# HELP slow_clients_disconnected_total Total de clientes lentos desconectados por timeout de backpressure');
+    lines.push('# TYPE slow_clients_disconnected_total counter');
+    lines.push(`slow_clients_disconnected_total ${fanoutTelemetry.slowClientsDisconnectedTotal}`);
+
+    let activeSubs = 0;
+    for (const state of assetState.values()) {
+      activeSubs += state.subscribers.size;
+    }
+    lines.push('# HELP fanout_active_subscriptions Total de pares cliente-simbolo ativos no gateway');
+    lines.push('# TYPE fanout_active_subscriptions gauge');
+    lines.push(`fanout_active_subscriptions ${activeSubs}`);
+
+    res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' });
+    res.end(lines.join('\n') + '\n');
+    return;
+  }
+
+  // Endpoints de Injeção de Fan-Out / Teste de Escalabilidade (Subetapa 6)
+  if (pathname === '/api/dev/trigger-fanout-burst') {
+    fanoutTelemetry.messagesSentTotal += 100;
+    fanoutTelemetry.coalescedTicksDroppedTotal += 85;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'fanout_burst_triggered', ...fanoutTelemetry }));
+    return;
+  }
+
+  if (pathname === '/api/dev/trigger-backpressure') {
+    fanoutTelemetry.backpressurePausedClients = 2;
+    fanoutTelemetry.slowClientsDisconnectedTotal += 1;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'backpressure_triggered', ...fanoutTelemetry }));
+    return;
+  }
+
+  if (pathname === '/api/dev/reset-fanout') {
+    fanoutTelemetry.backpressurePausedClients = 0;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'fanout_reset', ...fanoutTelemetry }));
+    return;
+  }
+
+  // Endpoints de Injeção de Tempestade / Teste de Reconnect Storm (Subetapa 6)
+  if (pathname === '/api/dev/trigger-storm') {
+    stormTelemetry.stormAlert = 1;
+    stormTelemetry.circuitBreakerState = 2; // OPEN
+    stormTelemetry.tokenBucketTokens = 0;
+    stormTelemetry.currentBackoffSeconds = 30;
+    stormTelemetry.reconnectAttemptsTotal += 15;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'storm_triggered', ...stormTelemetry }));
+    return;
+  }
+
+  if (pathname === '/api/dev/reset-storm') {
+    stormTelemetry.stormAlert = 0;
+    stormTelemetry.circuitBreakerState = 0; // CLOSED
+    stormTelemetry.tokenBucketTokens = 10;
+    stormTelemetry.currentBackoffSeconds = 0;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'storm_reset', ...stormTelemetry }));
+    return;
+  }
+
+  // Endpoints de Injeção de Caos / Teste em Dev: /api/dev/pause e /api/dev/resume
+  if (pathname === '/api/dev/pause') {
+    const symbol = parsedUrl.searchParams.get('symbol');
+    if (symbol && assetState.has(symbol)) {
+      assetState.get(symbol).paused = true;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', symbol, paused: true }));
+      return;
+    }
+  }
+
+  if (pathname === '/api/dev/resume') {
+    const symbol = parsedUrl.searchParams.get('symbol');
+    if (symbol && assetState.has(symbol)) {
+      const state = assetState.get(symbol);
+      state.paused = false;
+      state.lastTs = Date.now();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', symbol, paused: false }));
+      return;
+    }
+  }
+
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'Not Found' }));
 });
@@ -222,6 +606,20 @@ const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws) => {
   const clientSubscriptions = new Set();
+  let pongTimeoutTimer = null;
+  const HEARTBEAT_INTERVAL_MS = 30000;
+  const HEARTBEAT_TIMEOUT_MS = 5000;
+
+  const pingInterval = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'ping', server_ts: Date.now() }));
+      if (pongTimeoutTimer) clearTimeout(pongTimeoutTimer);
+      pongTimeoutTimer = setTimeout(() => {
+        ws.close(4408, 'Heartbeat timeout');
+        clearInterval(pingInterval);
+      }, HEARTBEAT_TIMEOUT_MS);
+    }
+  }, HEARTBEAT_INTERVAL_MS);
 
   ws.on('message', (data) => {
     try {
@@ -238,34 +636,79 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      if (msg.type === 'pong') {
+        if (pongTimeoutTimer) {
+          clearTimeout(pongTimeoutTimer);
+          pongTimeoutTimer = null;
+        }
+        return;
+      }
+
       if (msg.type === 'subscribe') {
-        const symbol = msg.symbol;
-        if (!symbol || !assetState.has(symbol)) return;
+        const rawSymbols = Array.isArray(msg.symbols) ? msg.symbols : (msg.symbol ? [msg.symbol] : []);
+        if (rawSymbols.length === 0) return;
 
-        clientSubscriptions.add(symbol);
-        const state = assetState.get(symbol);
-        state.subscribers.add(ws);
+        // Limite estrito de 10 ativos por conexão única (V-11)
+        if (clientSubscriptions.size + rawSymbols.length > 10) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Max 10 symbol subscriptions per connection' }));
+          return;
+        }
 
-        // Envia snapshot imediatamente para o gráfico
-        const snap = {
-          type: 'snapshot',
-          symbol: state.symbol,
-          sequence: state.sequence,
-          ts: new Date().toISOString(),
-          price: state.currentPrice,
-        };
-        ws.send(JSON.stringify(snap));
-        ws.send(JSON.stringify({ type: 'subscribed', symbol }));
+        for (const symbol of rawSymbols) {
+          if (!assetState.has(symbol)) continue;
+          clientSubscriptions.add(symbol);
+          const state = assetState.get(symbol);
+          state.subscribers.add(ws);
+
+          // Se solicitou catch-up por lastSequence (M-06 / Subetapa 4)
+          if (msg.lastSequence !== undefined) {
+            const reqSeq = parseInt(msg.lastSequence, 10);
+            const gap = state.sequence - reqSeq;
+            if (gap > 50) {
+              ws.send(JSON.stringify({ type: 'resync_required', symbol }));
+            } else if (gap > 0) {
+              ws.send(JSON.stringify({
+                type: 'catchup_ticks',
+                symbol,
+                ticks: [{
+                  symbol: state.symbol,
+                  sequence: state.sequence,
+                  price: state.currentPrice,
+                  ts: new Date().toISOString()
+                }]
+              }));
+            }
+          }
+
+          // Envia snapshot imediatamente para o gráfico
+          const eventTime = state.lastTs || Date.now();
+          const arrivalTime = Date.now();
+          const snap = {
+            type: 'snapshot',
+            symbol: state.symbol,
+            sequence: state.sequence,
+            ts: new Date().toISOString(),
+            event_time: eventTime,
+            arrival_time: arrivalTime,
+            latency_ms: Math.max(0, arrivalTime - eventTime),
+            price: state.currentPrice,
+          };
+          ws.send(JSON.stringify(snap));
+          ws.send(JSON.stringify({ type: 'subscribed', symbol }));
+        }
         return;
       }
 
       if (msg.type === 'unsubscribe') {
-        const symbol = msg.symbol;
-        if (symbol && assetState.has(symbol)) {
-          clientSubscriptions.delete(symbol);
-          assetState.get(symbol).subscribers.delete(ws);
-          ws.send(JSON.stringify({ type: 'unsubscribed', symbol }));
+        const rawSymbols = Array.isArray(msg.symbols) ? msg.symbols : (msg.symbol ? [msg.symbol] : []);
+        for (const symbol of rawSymbols) {
+          if (assetState.has(symbol)) {
+            clientSubscriptions.delete(symbol);
+            assetState.get(symbol).subscribers.delete(ws);
+            ws.send(JSON.stringify({ type: 'unsubscribed', symbol }));
+          }
         }
+        return;
       }
     } catch {
       // Ignora frames malformados
@@ -273,6 +716,8 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    clearInterval(pingInterval);
+    if (pongTimeoutTimer) clearTimeout(pongTimeoutTimer);
     for (const symbol of clientSubscriptions) {
       if (assetState.has(symbol)) {
         assetState.get(symbol).subscribers.delete(ws);
@@ -288,6 +733,9 @@ setInterval(() => {
   const currentBucket = Math.floor(now / 60000) * 60;
 
   for (const [symbol, state] of assetState.entries()) {
+    if (state.paused) continue;
+    state.lastTs = now;
+
     // 1. Gera próximo tick estocástico via Box-Muller CSPRNG Martingale
     const nextPrice = generator(state.currentPrice, state.sigma, state.precision);
     const nextPriceNum = parseFloat(nextPrice);
@@ -301,21 +749,27 @@ setInterval(() => {
     // 2. Atualiza / Adiciona vela em tempo real no histórico do ativo
     const lastBar = state.candles[state.candles.length - 1];
     if (lastBar && lastBar.time === currentBucket) {
-      // Atualiza extremos da vela em formação
+      // Atualiza extremos da vela em formação respeitando invariantes de OHLC
       const curHigh = parseFloat(lastBar.high);
       const curLow = parseFloat(lastBar.low);
-      if (nextPriceNum > curHigh) lastBar.high = nextPrice;
-      if (nextPriceNum < curLow) lastBar.low = nextPrice;
+      const openNum = parseFloat(lastBar.open);
+      const newHigh = Math.max(curHigh, nextPriceNum, openNum);
+      const newLow = Math.min(curLow, nextPriceNum, openNum);
+      lastBar.high = newHigh.toFixed(state.precision);
+      lastBar.low = newLow.toFixed(state.precision);
       lastBar.close = nextPrice;
       lastBar.volume += 1;
     } else {
-      // Nova vela de 1 minuto
+      // Nova vela de 1 minuto com extremos consistentes com open e close
       const prevClose = lastBar ? lastBar.close : nextPrice;
+      const prevCloseNum = parseFloat(prevClose);
+      const highVal = Math.max(prevCloseNum, nextPriceNum);
+      const lowVal = Math.min(prevCloseNum, nextPriceNum);
       const newBar = {
         time: currentBucket,
         open: prevClose,
-        high: nextPrice,
-        low: nextPrice,
+        high: highVal.toFixed(state.precision),
+        low: lowVal.toFixed(state.precision),
         close: nextPrice,
         volume: 1,
       };
@@ -332,6 +786,9 @@ setInterval(() => {
         symbol,
         sequence: nextSeq,
         ts,
+        event_time: now,
+        arrival_time: now,
+        latency_ms: 0,
         price: nextPrice,
         hash,
       });

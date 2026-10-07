@@ -12,6 +12,8 @@ const messages: Record<string, string> = {
   RATE_LIMITED: 'Muitas ordens em sequência. Aguarde alguns segundos.',
   TICK_UNAVAILABLE: 'Cotação indisponível no momento.',
   AUTH_REQUIRED: 'Sua sessão expirou. Entre novamente.',
+  FEED_STALE: 'Feed de cotações desatualizado. Ordem bloqueada por segurança.',
+  KILLSWITCH_ACTIVE: 'Kill switch de risco ativo. Operação suspensa temporariamente para este ativo.',
 };
 
 export interface OrderTicketProps {
@@ -130,6 +132,24 @@ export function OrderTicket({
       setBusy(false);
     }
   }
+
+  // Atalhos de teclado seguros com supressão sob feed stale ou bloqueio (Passo 5.5)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+      if (blocked || busy || stakeMinor === null) return;
+
+      if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'u') {
+        e.preventDefault();
+        handleExecute('UP');
+      } else if (e.key === 'ArrowDown' || e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        handleExecute('DOWN');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [blocked, busy, stakeMinor]);
 
   return (
     <div

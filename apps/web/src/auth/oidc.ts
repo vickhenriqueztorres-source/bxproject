@@ -1,12 +1,12 @@
 import { InMemoryWebStorage, UserManager, WebStorageStateStore,
   type User } from 'oidc-client-ts';
 
-const authority = import.meta.env.VITE_OIDC_AUTHORITY ?? 'http://localhost:8080/realms/indices';
+const authority = import.meta.env.VITE_OIDC_AUTHORITY ?? 'http://localhost:8080/realms/broker-demo';
 const origin = window.location.origin;
 
 export const userManager = new UserManager({
   authority,
-  client_id: 'frontend',
+  client_id: import.meta.env.VITE_OIDC_CLIENT_ID ?? 'broker-web',
   redirect_uri: `${origin}/callback`,
   post_logout_redirect_uri: origin,
   response_type: 'code',

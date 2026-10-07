@@ -82,18 +82,22 @@ async function main() {
     let currentUserId: string | null = null;
     const clientSubscriptions = new Set<string>();
 
-    let lastPong = Date.now();
+    let pongTimeoutTimer: any = null;
+    const HEARTBEAT_INTERVAL_MS = 30000;
+    const HEARTBEAT_TIMEOUT_MS = 5000;
+
     const pingInterval = setInterval(() => {
-      if (Date.now() - lastPong > 45000) {
-        // Sem pong há mais de 45s => fecha com 4408
-        socket.close(4408, "Ping timeout");
-        clearInterval(pingInterval);
-        return;
-      }
       if (socket.readyState === 1) {
         socket.send(JSON.stringify({ type: "ping" }));
+        
+        // Timeout estrito de 5s para o recebimento do pong (RFC 6455 / Padrão Indústria)
+        if (pongTimeoutTimer) clearTimeout(pongTimeoutTimer);
+        pongTimeoutTimer = setTimeout(() => {
+          socket.close(4408, "Heartbeat timeout");
+          clearInterval(pingInterval);
+        }, HEARTBEAT_TIMEOUT_MS);
       }
-    }, 15000);
+    }, HEARTBEAT_INTERVAL_MS);
 
     // Timeout de 5s para autenticação na primeira mensagem (S-02)
     const authTimeout = setTimeout(() => {
@@ -107,7 +111,10 @@ async function main() {
         const msg = JSON.parse(raw.toString());
 
         if (msg.type === "pong") {
-          lastPong = Date.now();
+          if (pongTimeoutTimer) {
+            clearTimeout(pongTimeoutTimer);
+            pongTimeoutTimer = null;
+          }
           return;
         }
 
@@ -121,13 +128,29 @@ async function main() {
           }
 
           currentUserId = authData.userId;
-          // Limite de 5 conexões por usuário (B-16)
-          const userConns = activeConnectionsByUser.get(currentUserId) || new Set();
-          if (userConns.size >= 5) {
+          // Limite de 5 conexões por usuário compartilhado no Redis (V-11)
+          let allowed = true;
+          try {
+            const count = await redisClient.incr(`ws:conn:${currentUserId}`);
+            if (count === 1) {
+              await redisClient.expire(`ws:conn:${currentUserId}`, 60);
+            } else if (count > 5) {
+              await redisClient.decr(`ws:conn:${currentUserId}`);
+              allowed = false;
+            } else {
+              await redisClient.expire(`ws:conn:${currentUserId}`, 60);
+            }
+          } catch {
+            const userConns = activeConnectionsByUser.get(currentUserId) || new Set();
+            if (userConns.size >= 5) allowed = false;
+          }
+
+          if (!allowed) {
             socket.close(4429, "Too many concurrent connections for user");
             return;
           }
 
+          const userConns = activeConnectionsByUser.get(currentUserId) || new Set();
           userConns.add(socket);
           activeConnectionsByUser.set(currentUserId, userConns);
           isAuthenticated = true;
@@ -141,42 +164,47 @@ async function main() {
           return;
         }
 
-        // 2. Mensagem de Subscrição de Ativo
+        // 2. Mensagem de Subscrição de Ativo (Suporta símbolo único ou lote multiplexado)
         if (msg.type === "subscribe") {
-          const symbol = msg.symbol;
-          if (!symbol) return;
+          const rawSymbols: string[] = Array.isArray(msg.symbols) ? msg.symbols : (msg.symbol ? [msg.symbol] : []);
+          if (rawSymbols.length === 0) return;
 
-          if (clientSubscriptions.size >= 10) {
+          if (clientSubscriptions.size + rawSymbols.length > 10) {
             socket.send(JSON.stringify({ type: "error", message: "Max 10 symbol subscriptions per connection" }));
             return;
           }
 
-          clientSubscriptions.add(symbol);
-          if (!subscriptionsBySymbol.has(symbol)) {
-            subscriptionsBySymbol.set(symbol, new Set());
-          }
-          subscriptionsBySymbol.get(symbol)!.add(socket);
-
-          // Se solicitou catch-up por lastSequence (M-06)
-          if (msg.lastSequence !== undefined) {
-            const catchup = await catchupHandler.getCatchupTicks(symbol, BigInt(msg.lastSequence));
-            if (catchup.resyncRequired) {
-              socket.send(JSON.stringify({ type: "resync_required", symbol }));
-            } else if (catchup.ticks.length > 0) {
-              socket.send(JSON.stringify({ type: "catchup_ticks", symbol, ticks: catchup.ticks }));
+          for (const symbol of rawSymbols) {
+            clientSubscriptions.add(symbol);
+            if (!subscriptionsBySymbol.has(symbol)) {
+              subscriptionsBySymbol.set(symbol, new Set());
             }
-          }
+            subscriptionsBySymbol.get(symbol)!.add(socket);
 
-          socket.send(JSON.stringify({ type: "subscribed", symbol }));
+            // Se solicitou catch-up por lastSequence (M-06)
+            if (msg.lastSequence !== undefined) {
+              const catchup = await catchupHandler.getCatchupTicks(symbol, BigInt(msg.lastSequence));
+              if (catchup.resyncRequired) {
+                socket.send(JSON.stringify({ type: "resync_required", symbol }));
+              } else if (catchup.ticks.length > 0) {
+                socket.send(JSON.stringify({ type: "catchup_ticks", symbol, ticks: catchup.ticks }));
+              }
+            }
+
+            socket.send(JSON.stringify({ type: "subscribed", symbol }));
+          }
           return;
         }
 
-        // 3. Unsubscribe
+        // 3. Unsubscribe (Suporta símbolo único ou lote multiplexado)
         if (msg.type === "unsubscribe") {
-          const symbol = msg.symbol;
-          clientSubscriptions.delete(symbol);
-          subscriptionsBySymbol.get(symbol)?.delete(socket);
-          socket.send(JSON.stringify({ type: "unsubscribed", symbol }));
+          const rawSymbols: string[] = Array.isArray(msg.symbols) ? msg.symbols : (msg.symbol ? [msg.symbol] : []);
+          for (const symbol of rawSymbols) {
+            clientSubscriptions.delete(symbol);
+            subscriptionsBySymbol.get(symbol)?.delete(socket);
+            socket.send(JSON.stringify({ type: "unsubscribed", symbol }));
+          }
+          return;
         }
       } catch (err) {
         socket.send(JSON.stringify({ type: "error", message: "Malformed message" }));
@@ -185,9 +213,11 @@ async function main() {
 
     socket.on("close", () => {
       clearInterval(pingInterval);
+      if (pongTimeoutTimer) clearTimeout(pongTimeoutTimer);
       clearTimeout(authTimeout);
 
       if (currentUserId) {
+        redisClient.decr(`ws:conn:${currentUserId}`).catch(() => {});
         const userConns = activeConnectionsByUser.get(currentUserId);
         if (userConns) {
           userConns.delete(socket);

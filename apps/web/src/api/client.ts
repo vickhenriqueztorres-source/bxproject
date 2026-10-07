@@ -1,4 +1,5 @@
 import { accessToken, isGuestMode, signIn, userManager } from '../auth/oidc';
+import { ASSET_CATALOG } from '../catalog/assets';
 
 export type Wallet = { currency: 'USD'; available_minor: number; reserved_minor: number };
 export type Index = { symbol: string; status: 'ACTIVE' | 'PAUSED' };
@@ -34,7 +35,7 @@ function broadcastMockPrivate(event: { type: string; [key: string]: unknown }) {
 
 function getStoredMock(): MockStore {
   const defaultWallet: Wallet = { currency: 'USD', available_minor: 1000000, reserved_minor: 0 };
-  const raw = typeof window !== 'undefined' ? sessionStorage.getItem('synth_mock_store_v4') : null;
+  const raw = typeof window !== 'undefined' ? sessionStorage.getItem('synth_mock_store') : null;
   if (raw) {
     try { return JSON.parse(raw); } catch { /* ignore */ }
   }
@@ -43,7 +44,7 @@ function getStoredMock(): MockStore {
 
 function saveStoredMock(store: MockStore) {
   if (typeof window !== 'undefined') {
-    sessionStorage.setItem('synth_mock_store_v4', JSON.stringify(store));
+    sessionStorage.setItem('synth_mock_store', JSON.stringify(store));
   }
 }
 
@@ -98,139 +99,45 @@ export const getIndex = async (symbol: string): Promise<Index> => {
   return api<Index>(`/indices/${encodeURIComponent(symbol)}`);
 };
 
-// Base prices, precision and calibrated volatility for realistic historical generation
-const BASE_PRICES: Record<string, { price: number; precision: number; sigma: number }> = {
-  // Forex OTC (18)
-  EURUSD_OTC: { price: 1.08542, precision: 5, sigma: 0.00018 },
-  GBPUSD_OTC: { price: 1.29415, precision: 5, sigma: 0.00020 },
-  USDJPY_OTC: { price: 153.820, precision: 3, sigma: 0.00018 },
-  USDCHF_OTC: { price: 0.86510, precision: 5, sigma: 0.00017 },
-  AUDUSD_OTC: { price: 0.65820, precision: 5, sigma: 0.00019 },
-  USDCAD_OTC: { price: 1.38450, precision: 5, sigma: 0.00018 },
-  NZDUSD_OTC: { price: 0.59820, precision: 5, sigma: 0.00019 },
-  EURGBP_OTC: { price: 0.83850, precision: 5, sigma: 0.00016 },
-  EURJPY_OTC: { price: 166.950, precision: 3, sigma: 0.00020 },
-  GBPJPY_OTC: { price: 199.120, precision: 3, sigma: 0.00022 },
-  EURCAD_OTC: { price: 1.50280, precision: 5, sigma: 0.00019 },
-  EURAUD_OTC: { price: 1.64890, precision: 5, sigma: 0.00020 },
-  GBPAUD_OTC: { price: 1.96620, precision: 5, sigma: 0.00021 },
-  GBPCAD_OTC: { price: 1.79210, precision: 5, sigma: 0.00020 },
-  AUDCAD_OTC: { price: 0.91120, precision: 5, sigma: 0.00018 },
-  AUDJPY_OTC: { price: 101.250, precision: 3, sigma: 0.00019 },
-  CADJPY_OTC: { price: 111.120, precision: 3, sigma: 0.00019 },
-  NZDJPY_OTC: { price: 92.050, precision: 3, sigma: 0.00019 },
+export const getCandles = async (symbol: string, interval: string = '1m'): Promise<Candle[]> => {
+  const apiInterval = /^[1-9]\d{0,6}[mhd]$/.test(interval) ? interval : '1m';
+  const url = `/api/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(apiInterval)}&limit=100`;
 
-  // Cripto OTC (8)
-  BTCUSD_OTC: { price: 64850.00, precision: 2, sigma: 0.00065 },
-  ETHUSD_OTC: { price: 3450.00, precision: 2, sigma: 0.00075 },
-  SOLUSD_OTC: { price: 152.40, precision: 2, sigma: 0.00090 },
-  BNBUSD_OTC: { price: 585.00, precision: 2, sigma: 0.00055 },
-  XRPUSD_OTC: { price: 0.5420, precision: 4, sigma: 0.00085 },
-  ADAUSD_OTC: { price: 0.3540, precision: 4, sigma: 0.00085 },
-  DOGEUSD_OTC: { price: 0.1240, precision: 4, sigma: 0.00110 },
-  AVAXUSD_OTC: { price: 28.40, precision: 2, sigma: 0.00095 },
-
-  // Commodities OTC (4)
-  XAUUSD_OTC: { price: 2652.80, precision: 2, sigma: 0.00030 },
-  XAGUSD_OTC: { price: 31.750, precision: 3, sigma: 0.00045 },
-  USOIL_OTC: { price: 72.40, precision: 2, sigma: 0.00040 },
-  UKOIL_OTC: { price: 76.20, precision: 2, sigma: 0.00040 },
-
-  // Sintéticos (6)
-  SYNTH_VOL_10: { price: 100.5420, precision: 4, sigma: 0.00015 },
-  SYNTH_VOL_25: { price: 250.8410, precision: 4, sigma: 0.00030 },
-  SYNTH_VOL_50: { price: 500.1250, precision: 4, sigma: 0.00060 },
-  SYNTH_VOL_75: { price: 750.3200, precision: 4, sigma: 0.00085 },
-  SYNTH_VOL_100: { price: 1000.4500, precision: 4, sigma: 0.00110 },
-  SYNTH_CRASH_BOOM_100: { price: 1000.8200, precision: 4, sigma: 0.00130 },
-};
-
-function createSeededRandom(seedStr: string) {
-  let h = 2166136261 >>> 0;
-  for (let i = 0; i < seedStr.length; i++) {
-    h = Math.imul(h ^ seedStr.charCodeAt(i), 16777619) >>> 0;
-  }
-  return function() {
-    let t = (h += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function nextGaussian(rand: () => number) {
-  const u1 = Math.max(1e-9, rand());
-  const u2 = rand();
-  return Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
-}
-
-function generateInitialCandles(symbol: string): Candle[] {
-  const meta = BASE_PRICES[symbol] ?? { price: 500, precision: 4, sigma: 0.0005 };
-  const base = meta.price;
-  const prec = meta.precision;
-  const sigma = meta.sigma;
-  const rand = createSeededRandom(symbol + '_prime_market_v3');
-  const nowMinute = Math.floor(Date.now() / 60000) * 60;
-  const bars: Candle[] = [];
-  let currentClose = base;
-
-  for (let i = 0; i < 80; i++) {
-    const t = nowMinute - (i * 60);
-    const z = nextGaussian(rand);
-    const step = z * (currentClose * sigma);
-    const openVal = Math.max(currentClose * 0.01, currentClose - step);
-    const bodyTop = Math.max(openVal, currentClose);
-    const bodyBottom = Math.min(openVal, currentClose);
-
-    const wickHigh = Math.abs(nextGaussian(rand)) * (currentClose * sigma * 0.7);
-    const wickLow = Math.abs(nextGaussian(rand)) * (currentClose * sigma * 0.7);
-    const highVal = bodyTop + wickHigh;
-    const lowVal = Math.max(currentClose * 0.01, bodyBottom - wickLow);
-
-    bars.unshift({
-      time: t,
-      open: openVal.toFixed(prec),
-      high: highVal.toFixed(prec),
-      low: lowVal.toFixed(prec),
-      close: currentClose.toFixed(prec),
-      volume: Math.floor(80 + rand() * 240),
-    });
-
-    currentClose = openVal;
-  }
-  return bars;
-}
-
-export const getCandles = async (symbol: string): Promise<Candle[]> => {
-  // 1. Tenta obter o histórico sincronizado do servidor oficial
+  // 1. Busca direta no endpoint público de velas (disponível tanto no gateway quanto em dev)
   try {
-    const res = await fetch(`/api/candles?symbol=${encodeURIComponent(symbol)}&interval=1m&limit=100`);
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         if (isGuestMode()) {
           const store = getStoredMock();
+          store.candles[`${symbol}:${interval}`] = data;
           store.candles[symbol] = data;
           saveStoredMock(store);
         }
-        return data;
+        return data as Candle[];
       }
     }
-  } catch {
-    // Falha silenciosa no fetch
+  } catch (err) {
+    console.warn(`[getCandles] Falha ao buscar velas remotas para ${symbol}:`, err);
   }
 
-  // 2. Fallback resiliente com gerador estocástico realista seeded
+  // 2. Se for modo autenticado e a requisição direta falhar, tentar via cliente autenticado
+  if (!isGuestMode()) {
+    try {
+      return await api<Candle[]>(url.replace('/api', ''));
+    } catch {
+      // Ignora erro e recorre ao fallback
+    }
+  }
+
+  // 3. Fallback para cache em sessionStorage se em modo convidado
   if (isGuestMode()) {
     const store = getStoredMock();
-    if (!store.candles[symbol] || store.candles[symbol].length === 0) {
-      store.candles[symbol] = generateInitialCandles(symbol);
-      saveStoredMock(store);
-    }
-    return store.candles[symbol];
+    return store.candles[`${symbol}:${interval}`] ?? store.candles[symbol] ?? [];
   }
-  return api<Candle[]>(
-    `/candles?symbol=${encodeURIComponent(symbol)}&interval=1m&limit=100`);
+
+  return [];
 };
 
 export const getContracts = async (filter: string): Promise<Contract[]> => {
@@ -260,6 +167,7 @@ export const openContract = async (symbol: string, direction: 'UP' | 'DOWN',
     if (store.wallet.available_minor < stakeMinor) {
       throw new ApiError(400, 'INSUFFICIENT_BALANCE');
     }
+
     store.wallet.available_minor -= stakeMinor;
     store.wallet.reserved_minor += stakeMinor;
     const contractId = 'guest_' + crypto.randomUUID().slice(0, 8);
@@ -267,6 +175,7 @@ export const openContract = async (symbol: string, direction: 'UP' | 'DOWN',
     const expiresAt = new Date(Date.now() + 60_000).toISOString();
 
     const lastCandle = store.candles[symbol]?.slice(-1)[0];
+    const assetMeta = ASSET_CATALOG.find((a) => a.symbol === symbol);
     const entryPrice = lastCandle ? Number(lastCandle.close) : 500;
 
     const newContract: Contract = {
@@ -282,6 +191,7 @@ export const openContract = async (symbol: string, direction: 'UP' | 'DOWN',
       entry_price: entryPrice,
       strike_price: entryPrice,
     };
+
     store.contracts.unshift(newContract);
     saveStoredMock(store);
     broadcastMockPrivate({ type: 'wallet_balance', available_minor: store.wallet.available_minor });
@@ -297,7 +207,8 @@ export const openContract = async (symbol: string, direction: 'UP' | 'DOWN',
                     (direction === 'DOWN' && exitPrice < entryPrice);
         const draw = exitPrice === entryPrice;
         const result = won ? 'WIN' : draw ? 'DRAW' : 'LOSS';
-        const payoutMinor = won ? Math.round(stakeMinor * 1.85) : draw ? stakeMinor : 0;
+        const payoutPct = assetMeta?.payout ?? 85;
+        const payoutMinor = won ? Math.round(stakeMinor * (1 + payoutPct / 100)) : draw ? stakeMinor : 0;
 
         target.status = 'SETTLED';
         target.result = result;
@@ -319,6 +230,7 @@ export const openContract = async (symbol: string, direction: 'UP' | 'DOWN',
 
     return { id: contractId, expires_at: expiresAt, status: 'OPEN' };
   }
+
   return api<Receipt>('/contracts', { method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
     body: JSON.stringify({ symbol, direction, stake_minor: stakeMinor }),

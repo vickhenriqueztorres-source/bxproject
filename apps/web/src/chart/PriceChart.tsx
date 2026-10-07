@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ColorType,
   createChart,
@@ -13,23 +13,40 @@ import {
 import type { Candle, Contract } from '../api/client';
 import type { Tick } from '../feed/protocol';
 import { formatMinor } from '../lib/money';
-import { candleData, candleFromTick } from './candle-adapter';
+import {
+  candleData,
+  candleFromTick,
+  resampleCandles,
+  timeframeSeconds,
+  isSubMinuteTimeframe,
+  type Timeframe,
+} from './candle-adapter';
 import { TimeLinesOverlay } from './TimeLinesOverlay';
 import { OrderFlagsOverlay } from './OrderFlagsOverlay';
 import { TradersMoodBar } from './TradersMoodBar';
 import { useTickPulse } from './useTickPulse';
+import { RafChartUpdater } from './raf-updater';
 
 export type ChartType = 'candles' | 'line';
-export type Timeframe = '5s' | '15s' | '30s' | '1m' | '5m';
+export type { Timeframe };
 
 export interface PriceChartProps {
   candles: Candle[];
   tick: Tick | null;
   symbol?: string;
   activeContracts?: Contract[];
+  isStale?: boolean;
+  isVisible?: boolean;
 }
 
-export function PriceChart({ candles, tick, symbol = 'SYNTH_VOL_50', activeContracts = [] }: PriceChartProps) {
+export function PriceChart({
+  candles,
+  tick,
+  symbol = 'SYNTH_VOL_50',
+  activeContracts = [],
+  isStale = false,
+  isVisible = true,
+}: PriceChartProps) {
   const host = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<IChartApi | null>(null);
   const candleSeries = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -37,6 +54,7 @@ export function PriceChart({ candles, tick, symbol = 'SYNTH_VOL_50', activeContr
   const currentPriceLine = useRef<IPriceLine | null>(null);
   const strikeLinesMap = useRef<Map<string, IPriceLine>>(new Map());
   const latestCandle = useRef<CandlestickData<UTCTimestamp> | null>(null);
+  const rafUpdaterRef = useRef<RafChartUpdater>(new RafChartUpdater());
 
   const [chartType, setChartType] = useState<ChartType>('candles');
   const [timeframe, setTimeframe] = useState<Timeframe>('1m');
@@ -64,12 +82,17 @@ export function PriceChart({ candles, tick, symbol = 'SYNTH_VOL_50', activeContr
     }
   }, [tick]);
 
+  // Reset de referência de preço ao alternar ativo
+  useEffect(() => {
+    lastPrice.current = null;
+  }, [symbol]);
+
   // Instanciação inicial do gráfico
   useEffect(() => {
     if (!host.current) return;
 
     const chart = createChart(host.current, {
-      autoSize: true,
+      autoSize: false,
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: '#8e9ebc',
@@ -123,14 +146,26 @@ export function PriceChart({ candles, tick, symbol = 'SYNTH_VOL_50', activeContr
       candleSeries.current = null;
       areaSeries.current = null;
       latestCandle.current = null;
+      currentPriceLine.current = null;
+      lastPrice.current = null;
       strikeLinesMap.current.clear();
+      rafUpdaterRef.current.cancel();
     };
   }, []);
 
-  // Criar/Trocar Series conforme o chartType
+  const resampledCandles = useMemo(() => {
+    return resampleCandles(candles, timeframe);
+  }, [candles, timeframe]);
+
+  // Criar/Trocar Series conforme o chartType e timeframe ativo
   useEffect(() => {
     const chart = chartInstance.current;
     if (!chart) return;
+
+    // Atualizar opções do timeScale conforme o timeframe (exibir segundos para 5s, 15s, 30s)
+    chart.timeScale().applyOptions({
+      secondsVisible: isSubMinuteTimeframe(timeframe),
+    });
 
     // Remover series antigas e linhas associadas
     const prevSeries = candleSeries.current ?? areaSeries.current;
@@ -174,66 +209,85 @@ export function PriceChart({ candles, tick, symbol = 'SYNTH_VOL_50', activeContr
       });
     }
 
-    // Carregar dados históricos na nova série
-    const rows = candles.map(candleData).sort((a, b) => a.time - b.time);
-    const unique = rows.filter((row, index) => index === 0 || row.time > rows[index - 1].time);
-
+    // Carregar dados históricos reamostrados na nova série
     if (chartType === 'candles' && candleSeries.current) {
-      candleSeries.current.setData(unique);
-      latestCandle.current = unique.at(-1) ?? null;
+      candleSeries.current.setData(resampledCandles);
+      latestCandle.current = resampledCandles.at(-1) ?? null;
     } else if (chartType === 'line' && areaSeries.current) {
-      const lineData: AreaData<UTCTimestamp>[] = unique.map((c) => ({
+      const lineData: AreaData<UTCTimestamp>[] = resampledCandles.map((c) => ({
         time: c.time,
         value: c.close,
       }));
       areaSeries.current.setData(lineData);
+      latestCandle.current = resampledCandles.at(-1) ?? null;
     }
-  }, [chartType, candles]);
 
-  // Atualização em tempo real de novos ticks
+    // Posicionar no tempo mais recente
+    chart.timeScale().scrollToRealTime();
+  }, [chartType, resampledCandles, timeframe]);
+
+  // Atualização em tempo real de novos ticks com Throttling rAF a 60fps (Subetapa 4)
   useEffect(() => {
     if (!tick) return;
-    const price = Number(tick.price);
 
-    if (chartType === 'candles' && candleSeries.current) {
-      const next = candleFromTick(tick, latestCandle.current);
-      if (next) {
-        candleSeries.current.update(next);
-        latestCandle.current = next;
+    rafUpdaterRef.current.push(tick, (targetTick) => {
+      const price = Number(targetTick.price);
+
+      if (chartType === 'candles' && candleSeries.current) {
+        const next = candleFromTick(targetTick, latestCandle.current, timeframe);
+        if (next) {
+          candleSeries.current.update(next);
+          latestCandle.current = next;
+        }
+      } else if (chartType === 'line' && areaSeries.current) {
+        const epoch = Date.parse(targetTick.ts);
+        if (Number.isFinite(epoch) && Number.isFinite(price)) {
+          const step = timeframeSeconds(timeframe);
+          const tsSeconds = Math.floor(epoch / 1000);
+          const bucket = (Math.floor(tsSeconds / step) * step) as UTCTimestamp;
+          areaSeries.current.update({ time: bucket, value: price });
+        }
       }
-    } else if (chartType === 'line' && areaSeries.current) {
-      const epoch = Date.parse(tick.ts);
-      if (Number.isFinite(epoch) && Number.isFinite(price)) {
-        const bucket = Math.floor(epoch / 60_000) * 60 as UTCTimestamp;
-        areaSeries.current.update({ time: bucket, value: price });
+
+      // Atualizar Linha de Preço Atual do TradingView
+      const activeSeries = candleSeries.current ?? areaSeries.current;
+      if (activeSeries && Number.isFinite(price)) {
+        const isUp = priceDirection === 'UP' || priceDirection === 'NEUTRAL';
+        const color = isUp ? '#00e676' : '#ff3d71';
+        const title = isUp ? '▲ Cotação' : '▼ Cotação';
+
+        if (currentPriceLine.current) {
+          currentPriceLine.current.applyOptions({
+            price,
+            color,
+            title,
+          });
+        } else {
+          currentPriceLine.current = activeSeries.createPriceLine({
+            price,
+            color,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title,
+          });
+        }
       }
+    });
+
+    return () => {
+      rafUpdaterRef.current.cancel();
+    };
+  }, [tick, chartType, priceDirection, timeframe]);
+
+  // Pausa e Retomada de Renderização sob Segundo Plano / Fora de Viewport (Subetapa 5)
+  useEffect(() => {
+    if (!isVisible) {
+      rafUpdaterRef.current.pause();
+    } else {
+      rafUpdaterRef.current.resume();
     }
-
-    // Atualizar Linha de Preço Atual do TradingView
-    const activeSeries = candleSeries.current ?? areaSeries.current;
-    if (activeSeries && Number.isFinite(price)) {
-      const isUp = priceDirection === 'UP' || priceDirection === 'NEUTRAL';
-      const color = isUp ? '#00e676' : '#ff3d71';
-      const title = isUp ? '▲ Cotação' : '▼ Cotação';
-
-      if (currentPriceLine.current) {
-        currentPriceLine.current.applyOptions({
-          price,
-          color,
-          title,
-        });
-      } else {
-        currentPriceLine.current = activeSeries.createPriceLine({
-          price,
-          color,
-          lineWidth: 1,
-          lineStyle: LineStyle.Dashed,
-          axisLabelVisible: true,
-          title,
-        });
-      }
-    }
-  }, [tick, chartType, priceDirection]);
+  }, [isVisible]);
 
   // Sincronizar linhas de strike para ordens ativas (Strike Price Lines)
   useEffect(() => {
@@ -374,20 +428,25 @@ export function PriceChart({ candles, tick, symbol = 'SYNTH_VOL_50', activeContr
         {/* Tag Pulsante de Preço em Tempo Real */}
         <div
           className={`price-tag-pulse ${priceDirection === 'DOWN' ? 'down' : 'up'} ${
-            tickPulse === 'UP' ? 'tick-pulse-green' : tickPulse === 'DOWN' ? 'tick-pulse-red' : ''
+            isStale ? 'stale' : tickPulse === 'UP' ? 'tick-pulse-green' : tickPulse === 'DOWN' ? 'tick-pulse-red' : ''
           }`}
-          style={{ pointerEvents: 'auto' }}
+          style={{
+            pointerEvents: 'auto',
+            background: isStale ? 'rgba(50, 60, 75, 0.85)' : undefined,
+            borderColor: isStale ? '#5a6b82' : undefined,
+            color: isStale ? '#a0b0c5' : undefined,
+          }}
         >
           <span
             style={{
               width: '8px',
               height: '8px',
               borderRadius: '50%',
-              background: priceDirection === 'DOWN' ? '#ff3d71' : '#00e676',
+              background: isStale ? '#8898a8' : priceDirection === 'DOWN' ? '#ff3d71' : '#00e676',
             }}
           />
           <span>{tick?.price ?? '—'} USD</span>
-          <span>{priceDirection === 'DOWN' ? '▼' : '▲'}</span>
+          <span>{isStale ? '⏸️' : priceDirection === 'DOWN' ? '▼' : '▲'}</span>
         </div>
 
         {/* Trader Sentiment Bar (Sentimento da Comunidade) */}

@@ -48,6 +48,24 @@ export const contractRoutes: FastifyPluginAsync = async (server) => {
           contract
         });
       } catch (err: any) {
+        if (err.message?.includes("KILLSWITCH_ACTIVE")) {
+          return reply.status(503).send({
+            error: "KILLSWITCH_ACTIVE",
+            message: "Kill switch ativo: feed de cotações instável ou desatualizado. Abertura bloqueada."
+          });
+        }
+        if (err.message?.includes("FEED_STALE")) {
+          return reply.status(503).send({
+            error: "FEED_STALE",
+            message: "Cotação desatualizada. Abertura bloqueada por segurança."
+          });
+        }
+        if (err.message?.includes("TICK_UNAVAILABLE")) {
+          return reply.status(503).send({
+            error: "TICK_UNAVAILABLE",
+            message: "Cotação indisponível para o ativo solicitado."
+          });
+        }
         if (err.message?.includes("RISK_LIMIT_EXCEEDED")) {
           return reply.status(422).send({
             error: "RISK_LIMIT_EXCEEDED",

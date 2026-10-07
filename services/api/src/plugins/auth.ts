@@ -47,6 +47,18 @@ const authPluginCallback: FastifyPluginAsync<AuthPluginOptions> = async (fastify
       return reply.status(401).send({ error: "UNAUTHORIZED", message: "Token validation failed or expired" });
     }
   });
+
+  // S-03: Decorator RBAC - Negar por padrão
+  fastify.decorate("requireRole", (requiredRole: string) => {
+    return async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!request.user || !request.user.roles.includes(requiredRole)) {
+        return reply.status(403).send({
+          error: "FORBIDDEN",
+          message: `Access denied: missing required role '${requiredRole}'`
+        });
+      }
+    };
+  });
 };
 
 export const authPlugin = fp(authPluginCallback, {

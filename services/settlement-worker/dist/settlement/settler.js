@@ -7,6 +7,7 @@ exports.ContractSettler = void 0;
 const pg_1 = __importDefault(require("pg"));
 const { Pool } = pg_1.default;
 const payout_calculator_js_1 = require("./payout-calculator.js");
+const calendar_js_1 = require("./calendar.js");
 class ContractSettler {
     pool;
     redis;
@@ -44,7 +45,12 @@ class ContractSettler {
                 await this.redis.zrem("contracts:pending", contractId);
                 return { success: true, reason: "ALREADY_SETTLED" };
             }
-            // 2. Busca rigorosa do primeiro tick oficial gravado no PostgreSQL onde ts >= expires_at (B-08)
+            // 2. Validação de Sessão de Mercado (Perigo 7 / Técnica 4)
+            if (!(0, calendar_js_1.isMarketOpen)(contract.symbol, contract.expires_at)) {
+                await client.query("ROLLBACK");
+                return { success: false, reason: "MARKET_CLOSED_AT_EXPIRY" };
+            }
+            // 3. Busca rigorosa do primeiro tick oficial gravado no PostgreSQL onde ts >= expires_at (B-08)
             const tickRes = await client.query(`SELECT sequence, price, ts
          FROM ticks
          WHERE symbol = $1
@@ -57,6 +63,10 @@ class ContractSettler {
                 return { success: false, reason: "EXIT_TICK_NOT_YET_AVAILABLE" };
             }
             const exitTick = tickRes.rows[0];
+            if (!(0, calendar_js_1.isMarketOpen)(contract.symbol, exitTick.ts)) {
+                await client.query("ROLLBACK");
+                return { success: false, reason: "TICK_OUT_OF_SESSION" };
+            }
             const exitPrice = exitTick.price.toString();
             const exitSeq = BigInt(exitTick.sequence);
             // 3. Determinação de resultado e cálculo de payout com inteiros (D-19)

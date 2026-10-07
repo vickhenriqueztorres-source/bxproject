@@ -64,12 +64,28 @@ export class RiskManager {
     }
   }
 
+  async activateKillSwitch(symbol: string, reason = "STALE_FEED", ttlSeconds = 10): Promise<void> {
+    const key = `risk:killswitch:${symbol}`;
+    await this.redis.set(key, reason, "EX", ttlSeconds);
+  }
+
+  async isKillSwitchActive(symbol: string): Promise<boolean> {
+    const key = `risk:killswitch:${symbol}`;
+    const val = await this.redis.get(key);
+    return Boolean(val);
+  }
+
   getRiskKey(symbol: string, expiryBucket: Date, direction: string): string {
     const bucketStartMs = Math.floor(expiryBucket.getTime() / 60000) * 60000;
     return `risk:candle:${symbol}:${bucketStartMs}:${direction}`;
   }
 
   async checkAndReserveRisk(params: ReserveRiskParams): Promise<{ approved: boolean; reason?: string }> {
+    // 1. Verificação preliminar ultrarrápida de Kill Switch no Redis (<1ms) - Subetapa 5
+    if (await this.isKillSwitchActive(params.symbol)) {
+      return { approved: false, reason: "KILLSWITCH_ACTIVE" };
+    }
+
     await this.ensureDepositFloat();
 
     const floatKey = "broker:deposit_float_minor";

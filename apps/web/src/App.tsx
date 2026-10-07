@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { User } from 'oidc-client-ts';
-import { getCandles, getContracts, getIndex, getWallet, resetMockWallet, type Wallet } from './api/client';
+import { getCandles, getContracts, getIndex, getWallet, onMockPrivateEvent, resetMockWallet, type Wallet } from './api/client';
 import { finishSignin, guestUser, isGuestMode, setGuestMode, signIn, signOut, userManager } from './auth/oidc';
 import { MultiChartGrid } from './chart/MultiChartGrid';
 import { useFeed, type PrivateEvent } from './feed/use-feed';
@@ -50,6 +50,15 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
       void queryClient.invalidateQueries({ queryKey: ['wallet'] });
     }
   }, [queryClient]);
+
+  useEffect(() => {
+    if (isGuestMode()) {
+      return onMockPrivateEvent((event) => {
+        onPrivate(event as PrivateEvent);
+      });
+    }
+  }, [onPrivate]);
+
   const onResync = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['candles', activeSymbol] });
   }, [queryClient, activeSymbol]);

@@ -16,9 +16,12 @@ export function useFeed(
   useEffect(() => {
     tradingFeedManager.connect();
 
-    const unsubscribeStatus = tradingFeedManager.onStatusChange((conn, st) => {
+    const unsubscribeStatus = tradingFeedManager.onStatusChange((conn) => {
       setConnected(conn);
-      setStale(st);
+    });
+
+    const unsubscribeStaleness = tradingFeedManager.onSymbolStaleness(symbol, (isStale) => {
+      setStale(isStale);
     });
 
     const unsubscribePrivate = tradingFeedManager.subscribePrivate(onPrivate);
@@ -30,6 +33,7 @@ export function useFeed(
     return () => {
       unsubscribeSymbol();
       unsubscribePrivate();
+      unsubscribeStaleness();
       unsubscribeStatus();
     };
   }, [symbol, onPrivate, onResync]);

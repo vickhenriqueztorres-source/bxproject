@@ -7,6 +7,7 @@ exports.ContractService = void 0;
 const pg_1 = __importDefault(require("pg"));
 const { Pool } = pg_1.default;
 const risk_manager_js_1 = require("./risk-manager.js");
+const trading_calendar_js_1 = require("./trading-calendar.js");
 class ContractService {
     pool;
     redis;
@@ -43,14 +44,36 @@ class ContractService {
                 isDuplicate: true
             };
         }
-        // 2. Obtém o último tick oficial gravado no PostgreSQL (ou cache)
-        const tickRes = await this.pool.query(`SELECT price, ts FROM ticks WHERE symbol = $1 ORDER BY sequence DESC LIMIT 1;`, [dto.symbol]);
-        let entryPrice = "100.000000";
-        let baseTime = new Date();
-        if (tickRes.rows.length > 0) {
-            entryPrice = tickRes.rows[0].price.toString();
-            baseTime = new Date(tickRes.rows[0].ts);
+        // 2. Verificação imediata de Kill Switch no Redis (<1ms) - Subetapa 5
+        if (await this.riskManager.isKillSwitchActive(dto.symbol)) {
+            throw new Error(`KILLSWITCH_ACTIVE: Kill switch ativo para ${dto.symbol} por instabilidade no feed.`);
         }
+        // 2.1. Validação de Sessão de Mercado (Perigo 7 / Técnica 4)
+        if (!(0, trading_calendar_js_1.isMarketOpen)(dto.symbol, new Date())) {
+            throw new Error(`MARKET_CLOSED: Mercado fechado para o ativo ${dto.symbol} no momento da abertura.`);
+        }
+        // Obtém o último estado atômico gravado em index_state com validação estrita de staleness (M-02, B-01)
+        const stateRes = await this.pool.query(`SELECT last_sequence, last_price, last_ts FROM index_state WHERE symbol = $1;`, [dto.symbol]);
+        if (stateRes.rows.length === 0 || Number(stateRes.rows[0].last_sequence) <= 0) {
+            throw new Error(`TICK_UNAVAILABLE: Nenhum tick oficial registrado para o ativo ${dto.symbol}`);
+        }
+        const lastTs = new Date(stateRes.rows[0].last_ts);
+        const tickAgeMs = Date.now() - lastTs.getTime();
+        const MAX_TICK_AGE_MS = 5000;
+        if (tickAgeMs > MAX_TICK_AGE_MS) {
+            // Dispara Kill Switch automático por 10s no Redis e emite auditoria estruturada
+            await this.riskManager.activateKillSwitch(dto.symbol, "STALE_FEED", 10);
+            console.warn(JSON.stringify({
+                event: "KILL_SWITCH_TRIGGERED",
+                symbol: dto.symbol,
+                reason: "STALE_FEED",
+                tick_age_ms: tickAgeMs,
+                timestamp: new Date().toISOString()
+            }));
+            throw new Error(`KILLSWITCH_ACTIVE: Cotação para ${dto.symbol} desatualizada há ${tickAgeMs}ms (limite: ${MAX_TICK_AGE_MS}ms). Kill switch acionado.`);
+        }
+        const entryPrice = stateRes.rows[0].last_price.toString();
+        const baseTime = lastTs;
         // Expiração em 60 segundos (D-10)
         const expiresAt = new Date(baseTime.getTime() + 60000);
         // 3. Validação do teto de risco de 3% no Redis
@@ -61,6 +84,9 @@ class ContractService {
             stakeMinor: dto.stake_minor
         });
         if (!riskCheck.approved) {
+            if (riskCheck.reason === "KILLSWITCH_ACTIVE") {
+                throw new Error(`KILLSWITCH_ACTIVE: Kill switch ativo para ${dto.symbol}`);
+            }
             throw new Error(`RISK_LIMIT_EXCEEDED: ${riskCheck.reason}`);
         }
         // Payout fixo em 85% de lucro (total retorno = stake + 85% stake = 185% de stake)

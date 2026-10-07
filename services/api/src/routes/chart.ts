@@ -138,4 +138,45 @@ export const chartRoutes: FastifyPluginAsync = async (server) => {
       return reply.status(500).send({ s: "error", errmsg: "Internal server error" });
     }
   });
+
+  // 5. GET /api/v1/snapshot (Atomic Snapshot for Clean Rebuild on Gap - Subetapa 4)
+  server.get<{ Querystring: { symbol?: string } }>("/api/v1/snapshot", async (request, reply) => {
+    const symbol = request.query.symbol;
+    if (!symbol) {
+      return reply.status(400).send({ error: "Missing 'symbol' parameter" });
+    }
+
+    try {
+      const res = await server.pg.query(
+        `SELECT s.symbol, s.last_sequence, s.last_price, s.updated_at as last_ts, s.last_hash, i.status
+         FROM index_state s
+         JOIN indices i ON s.symbol = i.symbol
+         WHERE s.symbol = $1`,
+        [symbol]
+      );
+
+      if (res.rows.length === 0) {
+        return reply.status(404).send({ error: "Symbol not found in index_state" });
+      }
+
+      const row = res.rows[0];
+      const eventTime = new Date(row.last_ts).getTime();
+      const arrivalTime = Date.now();
+      return {
+        symbol: row.symbol,
+        sequence: Number(row.last_sequence),
+        price: row.last_price,
+        ts: new Date(row.last_ts).toISOString(),
+        event_time: eventTime,
+        arrival_time: arrivalTime,
+        latency_ms: Math.max(0, arrivalTime - eventTime),
+        hash: row.last_hash,
+        status: row.status
+      };
+    } catch (err: any) {
+      server.log.error(err, "Error fetching symbol snapshot");
+      return reply.status(500).send({ error: "Internal server error" });
+    }
+  });
 };
+
