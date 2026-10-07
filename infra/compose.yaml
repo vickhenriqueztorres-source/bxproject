@@ -70,7 +70,7 @@ services:
       - broker_net
 
   blnk:
-    image: blnkfinance/blnk:0.15.4
+    image: ghcr.io/blnkfinance/blnk:latest
     container_name: broker-blnk-core
     restart: unless-stopped
     depends_on:
