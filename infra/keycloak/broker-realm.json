@@ -2,7 +2,7 @@
   "realm": "broker-demo",
   "displayName": "Plataforma de Índices Sintéticos - Demo",
   "enabled": true,
-  "sslRequired": "external",
+  "sslRequired": "none",
   "registrationAllowed": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
@@ -41,13 +41,17 @@
       "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
-      "rootUrl": "http://localhost:5173",
-      "baseUrl": "http://localhost:5173",
+      "rootUrl": "http://169.58.159.77",
+      "baseUrl": "http://169.58.159.77",
       "redirectUris": [
-        "http://localhost:5173/*"
+        "http://169.58.159.77/*",
+        "http://localhost:5173/*",
+        "/*"
       ],
       "webOrigins": [
-        "http://localhost:5173"
+        "http://169.58.159.77",
+        "http://localhost:5173",
+        "+"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256"
@@ -66,12 +70,16 @@
       "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
-      "rootUrl": "http://localhost:5174",
+      "rootUrl": "http://169.58.159.77/admin/",
       "redirectUris": [
-        "http://localhost:5174/*"
+        "http://169.58.159.77/*",
+        "http://localhost:5174/*",
+        "/*"
       ],
       "webOrigins": [
-        "http://localhost:5174"
+        "http://169.58.159.77",
+        "http://localhost:5174",
+        "+"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256"
