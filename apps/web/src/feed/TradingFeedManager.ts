@@ -325,8 +325,9 @@ export class TradingFeedManager {
     this.symbolLastTickAt.set(incoming.symbol, eventTime);
 
     // De-staleness imediata no recebimento de tick
-    if (this.symbolStaleStates.get(incoming.symbol) === true) {
+    if (this.symbolStaleStates.get(incoming.symbol) !== false) {
       this.symbolStaleStates.set(incoming.symbol, false);
+      this.stale = false;
       const staleCbs = this.symbolStaleListeners.get(incoming.symbol);
       if (staleCbs) {
         for (const cb of staleCbs) cb(false, 0);
@@ -385,8 +386,9 @@ export class TradingFeedManager {
     this.symbolLatencies.set(symbol, latencyMs);
 
     // De-staleness imediata
-    if (this.symbolStaleStates.get(symbol) === true) {
+    if (this.symbolStaleStates.get(symbol) !== false) {
       this.symbolStaleStates.set(symbol, false);
+      this.stale = false;
       const staleCbs = this.symbolStaleListeners.get(symbol);
       if (staleCbs) {
         for (const cb of staleCbs) cb(false, 0);

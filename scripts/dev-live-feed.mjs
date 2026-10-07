@@ -265,6 +265,37 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Endpoint de Metadados de Índice: GET /api/indices/:symbol ou GET /indices/:symbol
+  const indexMatch = pathname.match(/^\/(api\/)?indices\/([a-zA-Z0-9_-]+)$/);
+  if (indexMatch && req.method === 'GET') {
+    const symbol = indexMatch[2];
+    const state = assetState.get(symbol);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      symbol,
+      status: state ? (state.paused ? 'PAUSED' : 'ACTIVE') : 'ACTIVE',
+      name: state ? state.name : symbol,
+      precision: state ? state.precision : 4,
+      payout_pct: 85
+    }));
+    return;
+  }
+
+  // Endpoint de Consulta de Contrato por ID: GET /api/contracts/:id ou GET /contracts/:id
+  const contractMatch = pathname.match(/^\/(api\/)?contracts\/([a-zA-Z0-9_-]+)$/);
+  if (contractMatch && req.method === 'GET') {
+    const contractId = contractMatch[2];
+    const found = devContracts.find(c => c.id === contractId);
+    if (!found) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ code: 'CONTRACT_NOT_FOUND', error: 'Contrato não encontrado' }));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(found));
+    return;
+  }
+
   // Endpoint de Carteira: /api/wallet ou /wallet
   if (pathname === '/api/wallet' || pathname === '/wallet') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -277,8 +308,7 @@ const server = http.createServer((req, res) => {
     const filter = parsedUrl.searchParams.get('result');
     const filtered = filter ? devContracts.filter(c => c.result === filter) : devContracts;
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    // Responde com objeto e array para máxima compatibilidade
-    res.end(JSON.stringify({ contracts: filtered }));
+    res.end(JSON.stringify(filtered));
     return;
   }
 

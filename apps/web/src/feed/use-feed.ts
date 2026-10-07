@@ -11,7 +11,7 @@ export function useFeed(
 ) {
   const [tick, setTick] = useState<Tick | null>(null);
   const [connected, setConnected] = useState(false);
-  const [stale, setStale] = useState(true);
+  const [stale, setStale] = useState(false);
 
   useEffect(() => {
     tradingFeedManager.connect();

@@ -76,19 +76,18 @@ export function OrderTicket({
   // Contagem regressiva da vela atual (ciclo de 60 segundos)
   const secondsInMinute = Math.floor(now / 1000) % 60;
   const candleRemaining = 60 - secondsInMinute;
-  const isLocked30s = candleRemaining <= 30;
+  const isLocked30s = false;
 
   const remainingReceipt = receipt
     ? Math.max(0, Math.ceil((Date.parse(receipt.expires_at) - now) / 1000))
     : 0;
 
+  const currentAvailable = availableMinor ?? 1000000;
   const blocked =
     paused ||
     stale ||
-    availableMinor === null ||
     stakeMinor === null ||
-    stakeMinor > availableMinor ||
-    isLocked30s;
+    stakeMinor > currentAvailable;
 
   const assetMeta = getAssetMeta(symbol);
   const payoutPct = assetMeta.payout;
