@@ -1,8 +1,11 @@
 import { InMemoryWebStorage, UserManager, WebStorageStateStore,
   type User } from 'oidc-client-ts';
 
-const authority = import.meta.env.VITE_OIDC_AUTHORITY ?? 'http://localhost:8080/realms/broker-demo';
-const origin = window.location.origin;
+const defaultAuthority = typeof window !== 'undefined' && window.location
+  ? `${window.location.origin}/realms/broker-demo`
+  : 'http://localhost:8080/realms/broker-demo';
+const authority = import.meta.env.VITE_OIDC_AUTHORITY ?? defaultAuthority;
+const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
 
 export const userManager = new UserManager({
   authority,

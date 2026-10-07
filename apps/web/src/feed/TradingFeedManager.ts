@@ -45,7 +45,11 @@ export class TradingFeedManager {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private staleInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private wsUrl = import.meta.env.VITE_WS_URL ?? 'ws://localhost:3001/ticks') {
+  constructor(private wsUrl = import.meta.env.VITE_WS_URL ?? (
+    typeof window !== 'undefined' && window.location
+      ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
+      : 'ws://localhost:3001/ws'
+  )) {
     this.startStaleChecker();
   }
 
@@ -350,7 +354,9 @@ export class TradingFeedManager {
 
     // Tenta via REST snapshot endpoint (Subetapa 4)
     try {
-      const restBase = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+      const restBase = import.meta.env.VITE_API_URL ?? (
+        typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost:3001'
+      );
       const res = await fetch(`${restBase}/api/v1/snapshot?symbol=${encodeURIComponent(symbol)}`);
       if (res.ok) {
         const snap = await res.json();

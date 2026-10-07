@@ -1,0 +1,14 @@
+{
+  "project_name": "Broker Ledger",
+  "data_source": {
+    "dns": "postgres://blnk_user:blnk_secret_123@blnk-postgres:5432/blnk_ledger?sslmode=disable",
+    "dsn": "postgres://blnk_user:blnk_secret_123@blnk-postgres:5432/blnk_ledger?sslmode=disable"
+  },
+  "redis": {
+    "dns": "redis:6379",
+    "dsn": "redis:6379"
+  },
+  "server": {
+    "port": "5001"
+  }
+}

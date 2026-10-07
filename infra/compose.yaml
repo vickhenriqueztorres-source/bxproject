@@ -76,9 +76,8 @@ services:
     depends_on:
       blnk-postgres:
         condition: service_healthy
-    environment:
-      BLNK_DATA_SOURCE: postgres://${BLNK_POSTGRES_USER:-blnk_user}:${BLNK_POSTGRES_PASSWORD:-blnk_secret_123}@blnk-postgres:5432/${BLNK_POSTGRES_DB:-blnk_ledger}?sslmode=disable
-      BLNK_REDIS_URL: redis://redis:6379/1
+    volumes:
+      - ./blnk.json:/blnk.json
     ports:
       - "5001:5001"
     networks:
