@@ -4,6 +4,9 @@ import { ApiError, getContract, openContract, type Receipt } from '../api/client
 import { formatMinor, parseStakeInput } from '../lib/money';
 import { soundEngine } from '../lib/sound-engine';
 import { getAssetMeta } from '../catalog/assets';
+import { safeRandomUUID } from '../lib/uuid';
+import { ExpiryDropdown } from './ExpiryDropdown';
+import { calculateExecutionExpiry, type ExpirySlot, type ExpiryMode } from './expiry-calculator';
 
 const messages: Record<string, string> = {
   INDEX_PAUSED: 'Índice pausado pela operação.',
@@ -38,6 +41,8 @@ export function OrderTicket({
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [selectedSlotId, setSelectedSlotId] = useState<string>('candle_1m');
+  const [selectedSlot, setSelectedSlot] = useState<ExpirySlot | null>(null);
   const intent = useRef<{ key: string; direction: 'UP' | 'DOWN'; stakeMinor: number } | null>(null);
   const notified = useRef<string | null>(null);
 
@@ -108,14 +113,28 @@ export function OrderTicket({
 
   async function handleExecute(direction: 'UP' | 'DOWN') {
     if (blocked || busy || stakeMinor === null) return;
-    const current = { key: crypto.randomUUID(), direction, stakeMinor };
-    intent.current = current;
     setBusy(true);
     setError('');
     soundEngine.playOrderOpen();
 
     try {
-      const opened = await openContract(symbol, current.direction, current.stakeMinor, current.key);
+      const key = safeRandomUUID();
+      const current = { key, direction, stakeMinor };
+      intent.current = current;
+      const mode: ExpiryMode = selectedSlot?.mode ?? '1M_FIXED';
+      const { durationMs, targetEpochMs } = calculateExecutionExpiry(mode, Date.now());
+      const durationSeconds = Math.max(30, Math.round(durationMs / 1000));
+      const targetExpiresAt = new Date(targetEpochMs).toISOString();
+
+      const opened = await openContract(
+        symbol,
+        current.direction,
+        current.stakeMinor,
+        current.key,
+        durationSeconds,
+        targetExpiresAt,
+        mode
+      );
       setReceipt(opened);
       intent.current = null;
       onChanged();
@@ -125,7 +144,7 @@ export function OrderTicket({
         if (cause.status < 500 && cause.status !== 429) intent.current = null;
         if (cause.code === 'INDEX_PAUSED') onChanged();
       } else {
-        setError('Sem conexão. Tente novamente com a mesma ordem.');
+        setError(cause instanceof Error ? cause.message : 'Falha ao processar ordem. Tente novamente.');
       }
     } finally {
       setBusy(false);
@@ -202,34 +221,14 @@ export function OrderTicket({
           </span>
         </div>
       </div>
-      {/* Card 1: Tempo de Expiração da Vela */}
-      <div
-        style={{
-          background: '#101a2f',
-          border: '1px solid #1f2e4b',
-          borderRadius: '10px',
-          padding: '12px 14px',
+      {/* Card 1: Seletor de Tempo de Expiração Estilo IQ Option */}
+      <ExpiryDropdown
+        selectedSlotId={selectedSlotId}
+        onSelectSlot={(slot) => {
+          setSelectedSlotId(slot.id);
+          setSelectedSlot(slot);
         }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-          <span style={{ fontSize: '11px', color: '#8898b8', fontWeight: 600 }}>TEMPO DE EXPIRAÇÃO</span>
-          <span
-            style={{
-              fontSize: '11px',
-              fontWeight: 700,
-              color: isLocked30s ? '#ffab00' : '#00e676',
-            }}
-          >
-            {isLocked30s ? '🔒 TRAVADO (:30s)' : 'ABERTO'}
-          </span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <strong style={{ fontSize: '20px', fontFamily: "'Space Grotesk', sans-serif", color: '#fff' }}>
-            00:{candleRemaining < 10 ? `0${candleRemaining}` : candleRemaining}
-          </strong>
-          <small style={{ fontSize: '11px', color: '#687b99' }}>Vela de 1 Minuto</small>
-        </div>
-      </div>
+      />
 
       {/* Card 2: Valor do Investimento (Stake) com Steppers & Presets */}
       <div

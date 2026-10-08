@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 
-export type SidebarTab = 'history' | 'portfolio' | 'alerts' | 'settings' | null;
+export type SidebarTab = 'history' | 'portfolio' | 'alerts' | 'news' | 'settings' | null;
 
 export interface SidebarDockProps {
   activeTab: SidebarTab;
@@ -12,6 +12,7 @@ export interface SidebarDockProps {
   onToggleTimeZone: () => void;
   historyContent?: React.ReactNode;
   portfolioContent?: React.ReactNode;
+  newsContent?: React.ReactNode;
 }
 
 export function SidebarDock({
@@ -24,6 +25,7 @@ export function SidebarDock({
   onToggleTimeZone,
   historyContent,
   portfolioContent,
+  newsContent,
 }: SidebarDockProps) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -141,6 +143,28 @@ export function SidebarDock({
           🔔
         </button>
 
+        {/* Notícias do Mercado */}
+        <button
+          type="button"
+          onClick={() => toggleTab('news')}
+          style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '8px',
+            background: activeTab === 'news' ? '#192b4a' : 'transparent',
+            border: activeTab === 'news' ? '1px solid #2d4677' : '1px solid transparent',
+            color: activeTab === 'news' ? '#00e676' : '#8295b3',
+            cursor: 'pointer',
+            display: 'grid',
+            placeItems: 'center',
+            fontSize: '16px',
+            transition: 'all 0.15s ease',
+          }}
+          title="Notícias do Mercado"
+        >
+          📰
+        </button>
+
         <div style={{ flex: 1 }} />
 
         {/* Configurações */}
@@ -219,12 +243,14 @@ export function SidebarDock({
                   {activeTab === 'history' && '📊'}
                   {activeTab === 'portfolio' && '💼'}
                   {activeTab === 'alerts' && '🔔'}
+                  {activeTab === 'news' && '📰'}
                   {activeTab === 'settings' && '⚙️'}
                 </span>
                 <strong style={{ fontSize: '14px', color: '#fff', letterSpacing: '0.3px' }}>
                   {activeTab === 'history' && 'Histórico de Trades'}
                   {activeTab === 'portfolio' && 'Posições Ativas'}
                   {activeTab === 'alerts' && 'Alertas & Notificações'}
+                  {activeTab === 'news' && 'Notícias do Mercado'}
                   {activeTab === 'settings' && 'Ajustes da Plataforma'}
                 </strong>
               </div>
@@ -246,7 +272,7 @@ export function SidebarDock({
             </div>
 
             {/* Conteúdo do Drawer */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '16px', boxSizing: 'border-box' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: activeTab === 'news' ? 0 : '16px', boxSizing: 'border-box' }}>
               {activeTab === 'history' && (
                 <div>{historyContent ?? <p style={{ color: '#7a8ba7' }}>Nenhum trade finalizado.</p>}</div>
               )}
@@ -261,6 +287,10 @@ export function SidebarDock({
                     </div>
                   )}
                 </div>
+              )}
+
+              {activeTab === 'news' && (
+                <div>{newsContent}</div>
               )}
 
               {activeTab === 'alerts' && (

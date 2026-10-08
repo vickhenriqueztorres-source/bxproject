@@ -60,6 +60,25 @@ const ASSETS_CONFIG = [
   { symbol: 'SYNTH_CRASH_BOOM_100', price: 1000.8200, precision: 4, sigma: 0.00130 },
 ];
 
+// Constantes Globais de Capacidade de Velas (Histórico Macro de 7 Dias - Subetapa 1)
+const CANDLE_BUFFER_MAX_SIZE = 10080; // 7 dias de velas de 1 minuto em RAM (10.080 minutos)
+const CANDLE_BUFFER_INITIAL_SEED = 10080; // 7 dias de histórico no arranque
+
+// Busca binária O(log N) para localizar o índice de corte temporal por 'before'
+function findCutoffIndexBefore(candles, beforeSec) {
+  let low = 0, high = candles.length - 1, ans = -1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (candles[mid].time < beforeSec) {
+      ans = mid;
+      low = mid + 1; // Busca mais à direita
+    } else {
+      high = mid - 1;
+    }
+  }
+  return ans;
+}
+
 // PRNG determinístico por seed (Mulberry32)
 function createSeededRandom(seedStr) {
   let h = 2166136261 >>> 0;
@@ -80,8 +99,8 @@ function nextGaussian(rand) {
   return Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
 }
 
-// Gera histórico de velas realista com passeio estocástico individual por ativo
-function generateSeededHistoricalCandles(symbol, basePrice, precision, sigma, count = 80) {
+// Gera histórico de velas realista com passeio estocástico individual por ativo (24 horas)
+function generateSeededHistoricalCandles(symbol, basePrice, precision, sigma, count = CANDLE_BUFFER_INITIAL_SEED) {
   const rand = createSeededRandom(symbol + '_prime_market_v3');
   const nowMinute = Math.floor(Date.now() / 60000) * 60;
   const bars = [];
@@ -128,7 +147,7 @@ for (const item of ASSETS_CONFIG) {
     item.price,
     item.precision,
     item.sigma,
-    80
+    CANDLE_BUFFER_INITIAL_SEED
   );
 
   assetState.set(item.symbol, {
@@ -168,6 +187,97 @@ const fanoutTelemetry = {
 const devContracts = [];
 let devWallet = { currency: 'USD', available_minor: 1000000, reserved_minor: 0 };
 
+let newsCache = null;
+let newsCacheExpiresAt = 0;
+
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+}
+
+function getCachedNews() {
+  const now = Date.now();
+  if (newsCache && now < newsCacheExpiresAt) {
+    return newsCache;
+  }
+
+  const baseArticles = [
+    {
+      id: 'news_live_1',
+      title: 'Mercado de Derivativos e Índices Sintéticos registra volume recorde',
+      summary: 'Operações em contratos rápidos de volatilidade mantêm expansão acelerada impulsionadas por reversão à média e modelos estocásticos.',
+      source: 'Global Markets Daily',
+      url: 'https://finance.yahoo.com',
+      category: 'INDICES',
+      sentiment: 'BULLISH',
+      published_at: new Date(now - 1000 * 60 * 8).toISOString(),
+    },
+    {
+      id: 'news_live_2',
+      title: 'Bitcoin e Ethereum sustentam suportes técnicos em meio a entrada de fluxo institucional',
+      summary: 'Grandes detentores e tesourarias corporativas mantêm acumulação, estabilizando as taxas de volatilidade implícita.',
+      source: 'CryptoPulse',
+      url: 'https://coindesk.com',
+      category: 'CRYPTO',
+      sentiment: 'BULLISH',
+      published_at: new Date(now - 1000 * 60 * 22).toISOString(),
+    },
+    {
+      id: 'news_live_3',
+      title: 'Bancos Centrais globais adotam postura cautelosa sobre política monetária',
+      summary: 'Mercados de câmbio operam com cautela e spreads ajustados aguardando próximos dados de inflação e emprego nos EUA.',
+      source: 'Reuters Economics',
+      url: 'https://reuters.com',
+      category: 'FOREX',
+      sentiment: 'NEUTRAL',
+      published_at: new Date(now - 1000 * 60 * 45).toISOString(),
+    },
+    {
+      id: 'news_live_4',
+      title: 'Commodities energéticas registram recuo com aumento de reservas estratégicas',
+      summary: 'Contratos futuros de petróleo operam com desvalorização moderada de 1,2% acompanhando expectativas de desaceleração industrial.',
+      source: 'Bloomberg Energy',
+      url: 'https://bloomberg.com',
+      category: 'GLOBAL',
+      sentiment: 'BEARISH',
+      published_at: new Date(now - 1000 * 60 * 90).toISOString(),
+    },
+    {
+      id: 'news_live_5',
+      title: 'Índices de Volatilidade 75 e 100 apresentam padrões de compressão técnica',
+      summary: 'Traders de curto prazo utilizam ferramentas de Fibonacci e bandas de volatilidade para identificar rompimentos iminentes.',
+      source: 'Technical Trading Review',
+      url: 'https://investing.com',
+      category: 'INDICES',
+      sentiment: 'NEUTRAL',
+      published_at: new Date(now - 1000 * 60 * 140).toISOString(),
+    },
+    {
+      id: 'news_live_6',
+      title: 'Dólar e Moedas Globais têm dia de oscilação moderada no Forex',
+      summary: 'Pares com iene e euro registram movimentos técnicos consistentes com o balanço comercial asiático.',
+      source: 'ForexLive',
+      url: 'https://forexlive.com',
+      category: 'FOREX',
+      sentiment: 'BULLISH',
+      published_at: new Date(now - 1000 * 60 * 190).toISOString(),
+    },
+  ];
+
+  newsCache = baseArticles.map(a => ({
+    ...a,
+    title: escapeHtml(a.title),
+    summary: escapeHtml(a.summary),
+    source: escapeHtml(a.source),
+  }));
+  newsCacheExpiresAt = now + 300_000;
+  return newsCache;
+}
+
 // Servidor HTTP: Health Check, REST Candles, Contracts e UDF Chart History
 const server = http.createServer((req, res) => {
   // Configuração universal de CORS para o frontend
@@ -195,7 +305,51 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Endpoint REST de velas: /candles ou /api/candles
+// Resolução de intervalo em segundos (Subetapa 2)
+function parseIntervalSeconds(intervalStr) {
+  if (!intervalStr) return 60;
+  if (intervalStr === '5s') return 5;
+  if (intervalStr === '15s') return 15;
+  if (intervalStr === '30s') return 30;
+  if (intervalStr === '1m') return 60;
+  if (intervalStr === '5m') return 300;
+  if (intervalStr === '15m') return 900;
+  if (intervalStr === '30m') return 1800;
+  if (intervalStr === '1h') return 3600;
+  return 60;
+}
+
+// Agrega velas base (1m) para timeframe superior em alta velocidade (Subetapa 2)
+function aggregateCandlesToInterval(baseBars, intervalSec) {
+  if (!baseBars || baseBars.length === 0 || intervalSec <= 60) return baseBars;
+  const map = new Map();
+  for (const b of baseBars) {
+    const bucket = Math.floor(b.time / intervalSec) * intervalSec;
+    const existing = map.get(bucket);
+    if (!existing) {
+      map.set(bucket, {
+        time: bucket,
+        open: b.open,
+        high: b.high,
+        low: b.low,
+        close: b.close,
+        volume: b.volume,
+      });
+    } else {
+      const curHigh = parseFloat(existing.high);
+      const curLow = parseFloat(existing.low);
+      const bHigh = parseFloat(b.high);
+      const bLow = parseFloat(b.low);
+      if (bHigh > curHigh) existing.high = b.high;
+      if (bLow < curLow) existing.low = b.low;
+      existing.close = b.close;
+      existing.volume += b.volume;
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => a.time - b.time);
+}
+
+  // Endpoint REST de velas: /candles ou /api/candles (com suporte a paginação 'before', 'interval' e 'limit' ampliado)
   if (pathname === '/candles' || pathname === '/api/candles') {
     const symbol = parsedUrl.searchParams.get('symbol') || 'SYNTH_VOL_50';
     const state = assetState.get(symbol);
@@ -204,9 +358,34 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ error: 'Asset not found' }));
       return;
     }
-    const limit = parseInt(parsedUrl.searchParams.get('limit') || '100', 10);
-    const data = state.candles.slice(-limit);
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    const intervalStr = parsedUrl.searchParams.get('interval') || '1m';
+    const intervalSec = parseIntervalSeconds(intervalStr);
+    const rawLimit = parseInt(parsedUrl.searchParams.get('limit') || '1440', 10);
+    const limit = Math.min(Math.max(1, isNaN(rawLimit) ? 1440 : rawLimit), CANDLE_BUFFER_MAX_SIZE);
+
+    let matched = state.candles;
+    const beforeParam = parsedUrl.searchParams.get('before');
+    if (beforeParam) {
+      const beforeSec = parseInt(beforeParam, 10);
+      if (!isNaN(beforeSec) && beforeSec > 0) {
+        const cutIdx = findCutoffIndexBefore(state.candles, beforeSec);
+        matched = cutIdx >= 0 ? state.candles.slice(0, cutIdx + 1) : [];
+      }
+    }
+
+    if (intervalSec > 60) {
+      matched = aggregateCandlesToInterval(matched, intervalSec);
+    }
+
+    const data = matched.slice(-limit);
+    const hasMore = matched.length > limit;
+
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'X-Total-Bars': String(data.length),
+      'X-Has-More': String(hasMore),
+      'Cache-Control': 'public, max-age=5',
+    });
     res.end(JSON.stringify(data));
     return;
   }
@@ -220,13 +399,30 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ s: 'error', errmsg: 'Asset not found' }));
       return;
     }
+
+    let matched = state.candles;
+    const fromParam = parsedUrl.searchParams.get('from');
+    const toParam = parsedUrl.searchParams.get('to');
+    if (fromParam) {
+      const fromSec = parseInt(fromParam, 10);
+      if (!isNaN(fromSec)) matched = matched.filter((b) => b.time >= fromSec);
+    }
+    if (toParam) {
+      const toSec = parseInt(toParam, 10);
+      if (!isNaN(toSec)) matched = matched.filter((b) => b.time <= toSec);
+    }
+    const countback = parseInt(parsedUrl.searchParams.get('countback') || '0', 10);
+    if (countback > 0) {
+      matched = matched.slice(-countback);
+    }
+
     const t = [];
     const o = [];
     const h = [];
     const l = [];
     const c = [];
     const v = [];
-    for (const b of state.candles) {
+    for (const b of matched) {
       t.push(b.time);
       o.push(parseFloat(b.open));
       h.push(parseFloat(b.high));
@@ -312,6 +508,18 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Endpoint de Notícias de Mercado: GET /api/news ou GET /news
+  if ((pathname === '/api/news' || pathname === '/news') && req.method === 'GET') {
+    const category = parsedUrl.searchParams.get('category') || 'ALL';
+    let newsData = getCachedNews();
+    if (category !== 'ALL') {
+      newsData = newsData.filter(n => n.category === category);
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(newsData));
+    return;
+  }
+
   // Endpoint de Abertura de Contratos: POST /api/contracts ou POST /contracts
   if ((pathname === '/api/contracts' || pathname === '/contracts') && req.method === 'POST') {
     let body = '';
@@ -356,7 +564,31 @@ const server = http.createServer((req, res) => {
 
         const contractId = 'dev_' + Math.random().toString(36).slice(2, 10);
         const entryPrice = parseFloat(state.currentPrice);
-        const expiresAt = new Date(now + 60000).toISOString();
+
+        // Cálculo autêntico no servidor baseado no modo de expiração
+        const expiryMode = payload.expiry_mode || (payload.duration_seconds === 300 ? 'CANDLE_5M' : '1M_FIXED');
+        let calculatedDurationMs;
+
+        if (expiryMode === 'CANDLE_1M') {
+          const cur1mEnd = Math.ceil(now / 60_000) * 60_000;
+          const remSec = Math.floor((cur1mEnd - now) / 1000);
+          calculatedDurationMs = (remSec < 30 ? cur1mEnd + 60_000 : cur1mEnd) - now;
+        } else if (expiryMode === 'CANDLE_5M') {
+          const cur5mEnd = Math.ceil(now / 300_000) * 300_000;
+          const remSec = Math.floor((cur5mEnd - now) / 1000);
+          calculatedDurationMs = (remSec < 30 ? cur5mEnd + 300_000 : cur5mEnd) - now;
+        } else {
+          // 1M_FIXED: 60 segundos corridos a partir da recepção
+          const requestedSec = parseInt(payload.duration_seconds, 10) || 60;
+          calculatedDurationMs = requestedSec * 1000;
+        }
+
+        // PISO INVIOLÁVEL: NUNCA MENOS DE 30 SEGUNDOS (REGRA 02-FINANCIAL-INVARIANTS)
+        const safeDurationMs = Math.max(30_000, calculatedDurationMs);
+        const targetExpiryEpoch = now + safeDurationMs;
+        const expiresAt = new Date(targetExpiryEpoch).toISOString();
+        const durationSeconds = Math.round(safeDurationMs / 1000);
+
         const newContract = {
           id: contractId,
           symbol,
@@ -369,12 +601,14 @@ const server = http.createServer((req, res) => {
           created_at: new Date(now).toISOString(),
           entry_price: entryPrice,
           strike_price: entryPrice,
-          duration_seconds: payload.duration_seconds || 60,
+          duration_seconds: durationSeconds,
+          expiry_mode: expiryMode,
         };
 
         devContracts.unshift(newContract);
 
-        // Agendamento de Liquidação após 60s contra o tick autêntico do símbolo (Perigo 5)
+        // Agendamento de Liquidação oficial contra o tick autêntico do símbolo (mínimo de 30s)
+        const settlementDelayMs = safeDurationMs;
         setTimeout(() => {
           const target = devContracts.find(c => c.id === contractId);
           if (target && target.status === 'OPEN') {
@@ -401,7 +635,7 @@ const server = http.createServer((req, res) => {
               }
             }
           }
-        }, (newContract.duration_seconds || 60) * 1000);
+        }, settlementDelayMs);
 
         res.writeHead(201, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
@@ -804,7 +1038,7 @@ setInterval(() => {
         volume: 1,
       };
       state.candles.push(newBar);
-      if (state.candles.length > 120) {
+      if (state.candles.length > CANDLE_BUFFER_MAX_SIZE) {
         state.candles.shift();
       }
     }

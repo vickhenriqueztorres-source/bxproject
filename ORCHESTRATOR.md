@@ -218,6 +218,9 @@ A skill `09-ai-failure-map` é carregada pelo próprio orquestrador **antes de d
 | `security-reviewer` | Revisa auth, autorização, BOLA/IDOR, segredos | Somente leitura | 01, 04, 08, 09 |
 | `qa-resilience-agent` | Cria testes, roda testes, testes de caos, testes de carga | Escreve apenas testes | 01, 05, 06, 07, 08, 09 |
 | `bug-fix-agent` | Triagem, causa raiz, correção mínima, teste de regressão de defeitos já entregues | Escreve código (só na cadeia causal) | 01, 02, 03, 04, 05, 06, 07, 08 |
+| `broker-architect-agent` | Arquiteto Chefe de Sistemas de Trading, FMEA, ADRs, Invariantes | Architecture & Code | 01, 02, 03, 05, 08, 09 |
+| `post-implementation-verifier` | Verificador pós-implementação, provas SQL/Redis, fecha gates V-01 a V-13 | Somente leitura | 01, 02, 03, 06, 08, 09, 10 |
+| `chart-trading-engineer` | Ferramentas gráficas de trading, overlays SVG/Canvas a 60 FPS, Fibonacci, indicadores matemáticos, testes geométricos | Escreve código (chart & feeds) | 01, 03, 06, 11 |
 
 Registro no catálogo:
 
@@ -254,6 +257,24 @@ Registro no catálogo:
 
 - name: bug-fix-agent
   capabilities: [triage, root-cause-analysis, bug-fix, regression-test]
+  permission: write-code
+  health: { status: online, load: 0 }
+  historical_accuracy: {}
+
+- name: broker-architect-agent
+  capabilities: [architecture-design, fmea-forensics, trading-systems-validation, adr-governance]
+  permission: write-code
+  health: { status: online, load: 0 }
+  historical_accuracy: {}
+
+- name: post-implementation-verifier
+  capabilities: [post-conditions-verification, gate-audit, sql-redis-proof, invariant-proof]
+  permission: read-only
+  health: { status: online, load: 0 }
+  historical_accuracy: {}
+
+- name: chart-trading-engineer
+  capabilities: [trading-drawings, technical-indicators, svg-canvas-overlays, coordinate-projection, 60fps-engine, chart-stress-chaos-tests]
   permission: write-code
   health: { status: online, load: 0 }
   historical_accuracy: {}

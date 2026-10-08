@@ -178,5 +178,62 @@ export const chartRoutes: FastifyPluginAsync = async (server) => {
       return reply.status(500).send({ error: "Internal server error" });
     }
   });
+
+  // 6. GET /api/candles & GET /candles (Public Historical Candles with before & limit pagination - Subetapa 5)
+  interface CandlesQuery {
+    symbol?: string;
+    interval?: string;
+    limit?: string;
+    before?: string;
+  }
+
+  const handleCandlesRequest = async (request: any, reply: any) => {
+    const symbol = request.query.symbol || "SYNTH_VOL_50";
+    const interval = request.query.interval || "1m";
+    const rawLimit = parseInt(request.query.limit || "1440", 10);
+    const limit = Math.min(Math.max(1, isNaN(rawLimit) ? 1440 : rawLimit), 10080);
+    const beforeSec = request.query.before ? parseInt(request.query.before, 10) : null;
+
+    try {
+      let query = `
+        SELECT bucket_start, open, high, low, close, volume
+        FROM candles
+        WHERE symbol = $1 AND interval = $2
+      `;
+      const params: any[] = [symbol, interval];
+
+      if (beforeSec && !isNaN(beforeSec) && beforeSec > 0) {
+        query += ` AND bucket_start < $3 ORDER BY bucket_start DESC LIMIT $4;`;
+        params.push(new Date(beforeSec * 1000), limit);
+      } else {
+        query += ` ORDER BY bucket_start DESC LIMIT $3;`;
+        params.push(limit);
+      }
+
+      const res = await server.pg.query(query, params);
+      const rows = res.rows.reverse(); // Ordem cronológica ASC
+
+      const data = rows.map((r: any) => ({
+        time: Math.floor(new Date(r.bucket_start).getTime() / 1000),
+        open: r.open,
+        high: r.high,
+        low: r.low,
+        close: r.close,
+        volume: parseInt(r.volume, 10) || 1,
+      }));
+
+      reply.header("X-Total-Bars", String(data.length));
+      reply.header("X-Has-More", String(data.length >= limit));
+      reply.header("Cache-Control", "public, max-age=5");
+
+      return data;
+    } catch (err: any) {
+      server.log.error(err, "Error fetching candles from database");
+      return reply.status(500).send({ error: "Internal server error" });
+    }
+  };
+
+  server.get<{ Querystring: CandlesQuery }>("/api/candles", handleCandlesRequest);
+  server.get<{ Querystring: CandlesQuery }>("/candles", handleCandlesRequest);
 };
 

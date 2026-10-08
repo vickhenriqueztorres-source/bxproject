@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { safeRandomUUID } from "../../lib/uuid";
 
 interface TradeTicketProps {
   symbol: string;
@@ -37,7 +38,7 @@ export const TradeTicket: React.FC<TradeTicketProps> = ({ symbol, onContractOpen
     setErrorMessage(null);
 
     // Geração de UUIDv4 exclusivo como Idempotency-Key para cada clique (F-10, B-05)
-    const idempotencyKey = crypto.randomUUID();
+    const idempotencyKey = safeRandomUUID();
 
     try {
       const res = await fetch("/api/v1/contracts", {

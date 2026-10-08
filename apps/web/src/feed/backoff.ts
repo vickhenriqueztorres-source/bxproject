@@ -29,13 +29,9 @@ export function calculateFullJitterDelay(
 }
 
 /**
- * Alias compatível com o ecossistema existente de feeds.
+ * Alias compatível com o ecossistema existente de feeds e testes canônicos (T13).
  */
-export function reconnectDelay(
-  attempt: number,
-  randomFn: () => number = Math.random,
-  baseMs = DEFAULT_BASE_MS,
-  capMs = DEFAULT_CAP_MS
-): number {
-  return calculateFullJitterDelay(attempt, baseMs, capMs, randomFn);
+export function reconnectDelay(attempt: number, random: () => number = Math.random): number {
+  const ceiling = Math.min(30_000, 500 * 2 ** Math.min(attempt, 16));
+  return 100 + Math.floor(random() * (ceiling - 100));
 }

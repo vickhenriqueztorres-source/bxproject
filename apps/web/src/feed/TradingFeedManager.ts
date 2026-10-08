@@ -28,6 +28,7 @@ export class TradingFeedManager {
   private symbolLatencies = new Map<string, number>();
   private symbolResyncing = new Map<string, boolean>();
   private symbolTickBuffers = new Map<string, Tick[]>();
+  private symbolLastPrices = new Map<string, string>();
   private privateListeners = new Set<PrivateCallback>();
   private statusListeners = new Set<StatusCallback>();
   private circuitBreakerListeners = new Set<CircuitBreakerCallback>();
@@ -323,6 +324,7 @@ export class TradingFeedManager {
 
     this.symbolLastSequences.set(incoming.symbol, incoming.sequence);
     this.symbolLastTickAt.set(incoming.symbol, eventTime);
+    this.symbolLastPrices.set(incoming.symbol, incoming.price);
 
     // De-staleness imediata no recebimento de tick
     if (this.symbolStaleStates.get(incoming.symbol) !== false) {
@@ -384,6 +386,7 @@ export class TradingFeedManager {
     this.symbolLastSequences.set(symbol, snap.sequence);
     this.symbolLastTickAt.set(symbol, eventTime);
     this.symbolLatencies.set(symbol, latencyMs);
+    this.symbolLastPrices.set(symbol, snap.price);
 
     // De-staleness imediata
     if (this.symbolStaleStates.get(symbol) !== false) {
@@ -615,6 +618,10 @@ export class TradingFeedManager {
 
   public getCalibratedNow(): number {
     return Date.now() + this.serverClockOffsetMs;
+  }
+
+  public getLastPrice(symbol: string): string | null {
+    return this.symbolLastPrices.get(symbol) ?? null;
   }
 }
 

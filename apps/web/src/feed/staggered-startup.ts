@@ -1,3 +1,5 @@
+import { calculateFullJitterDelay } from './backoff';
+
 /**
  * Staggered Startup (Padrão de Resiliência contra Reconnect Storm no Deploy/Restart)
  * 
@@ -13,13 +15,16 @@ export const MAX_STAGGERED_DELAY_MS = 10000; // 10 segundos
  * Calcula o atraso inicial escalonado para arranque a frio.
  * @param maxDelayMs Atraso máximo permitido (default: 10000ms = 10s)
  * @param forceImmediate Se verdadeiro, retorna 0ms imediatamente (bypass para ação do usuário)
- * @param randomFn Função geradora pseudo-aleatória
+ * @param randomFn Função geradora pseudo-aleatória opcional
  */
 export function getStaggeredDelay(
   maxDelayMs = MAX_STAGGERED_DELAY_MS,
   forceImmediate = false,
-  randomFn: () => number = Math.random
+  randomFn?: () => number
 ): number {
   if (forceImmediate) return 0;
-  return Math.floor(randomFn() * maxDelayMs);
+  if (randomFn) {
+    return Math.floor(randomFn() * maxDelayMs);
+  }
+  return calculateFullJitterDelay(0, maxDelayMs, maxDelayMs);
 }

@@ -13,6 +13,7 @@ import { TerminalHeader } from './components/header/TerminalHeader';
 import { SidebarDock, type SidebarTab } from './components/sidebar/SidebarDock';
 import { PortfolioDrawer } from './components/drawer/PortfolioDrawer';
 import { useTickPulse } from './chart/useTickPulse';
+import { MarketNewsDrawer } from './news/MarketNewsDrawer';
 
 const candidate = new URLSearchParams(window.location.search).get('symbol');
 const symbol = candidate && /^[A-Z0-9_]{3,32}$/.test(candidate)
@@ -36,7 +37,7 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
   const index = useQuery({ queryKey: ['index', activeSymbol],
     queryFn: () => getIndex(activeSymbol), refetchInterval: 30_000 });
   const candles = useQuery({ queryKey: ['candles', activeSymbol],
-    queryFn: () => getCandles(activeSymbol) });
+    queryFn: () => getCandles(activeSymbol, '1m', 2880) });
   const onPrivate = useCallback((event: PrivateEvent) => {
     if (event.type === 'wallet_balance' && Number.isSafeInteger(event.available_minor)) {
       queryClient.setQueryData<Wallet>(['wallet'], (previous) => previous
@@ -126,6 +127,7 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
           timeZone={timeZone}
           onToggleTimeZone={() => setTimeZone((t) => t === 'UTC-3' ? 'UTC' : 'UTC-3')}
           historyContent={<History />}
+          newsContent={<MarketNewsDrawer isOpen={true} onClose={() => setSidebarTab(null)} />}
         />
       }
       center={

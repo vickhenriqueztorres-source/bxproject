@@ -1,5 +1,7 @@
 import { accessToken, isGuestMode, signIn, userManager } from '../auth/oidc';
 import { ASSET_CATALOG } from '../catalog/assets';
+import { safeRandomUUID } from '../lib/uuid';
+import { tradingFeedManager } from '../feed/TradingFeedManager';
 
 export type Wallet = { currency: 'USD'; available_minor: number; reserved_minor: number };
 export type Index = { symbol: string; status: 'ACTIVE' | 'PAUSED' };
@@ -57,7 +59,12 @@ export function resetMockWallet(): Wallet {
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = await accessToken();
+  let token: string;
+  try {
+    token = await accessToken();
+  } catch {
+    throw new ApiError(401, 'AUTH_REQUIRED');
+  }
   const send = (bearer: string) => fetch(`/api${path}`, { ...init,
     headers: { ...init.headers, Authorization: `Bearer ${bearer}` },
     signal: init.signal ?? AbortSignal.timeout(8000),
@@ -99,13 +106,27 @@ export const getIndex = async (symbol: string): Promise<Index> => {
   return api<Index>(`/indices/${encodeURIComponent(symbol)}`);
 };
 
-export const getCandles = async (symbol: string, interval: string = '1m'): Promise<Candle[]> => {
+export const getCandles = async (
+  symbol: string,
+  interval: string = '1m',
+  limit: number = 2880,
+  before?: number
+): Promise<Candle[]> => {
   const apiInterval = /^[1-9]\d{0,6}[mhd]$/.test(interval) ? interval : '1m';
-  const url = `/api/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(apiInterval)}&limit=100`;
+  const safeLimit = Math.min(Math.max(1, limit || 2880), 10080);
+  const params = new URLSearchParams({
+    symbol,
+    interval: apiInterval,
+    limit: String(safeLimit),
+  });
+  if (before && Number.isFinite(before) && before > 0) {
+    params.set('before', String(Math.floor(before)));
+  }
+  const url = `/api/candles?${params.toString()}`;
 
   // 1. Busca direta no endpoint público de velas (disponível tanto no gateway quanto em dev)
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
@@ -134,10 +155,22 @@ export const getCandles = async (symbol: string, interval: string = '1m'): Promi
   // 3. Fallback para cache em sessionStorage se em modo convidado
   if (isGuestMode()) {
     const store = getStoredMock();
-    return store.candles[`${symbol}:${interval}`] ?? store.candles[symbol] ?? [];
+    let all = store.candles[`${symbol}:${interval}`] ?? store.candles[symbol] ?? [];
+    if (before && Number.isFinite(before)) {
+      all = all.filter((c) => Number(c.time) < before);
+    }
+    return all.slice(-safeLimit);
   }
 
   return [];
+};
+
+export const fetchHistoricalCandlesChunk = async (
+  symbol: string,
+  beforeTimestamp: number,
+  count: number = 1000
+): Promise<Candle[]> => {
+  return getCandles(symbol, '1m', count, beforeTimestamp);
 };
 
 export const getContracts = async (filter: string): Promise<Contract[]> => {
@@ -160,8 +193,19 @@ export const getContract = async (id: string): Promise<Contract> => {
   return api<Contract>(`/contracts/${encodeURIComponent(id)}`);
 };
 
-export const openContract = async (symbol: string, direction: 'UP' | 'DOWN',
-  stakeMinor: number, key: string): Promise<Receipt> => {
+export const openContract = async (
+  symbol: string,
+  direction: 'UP' | 'DOWN',
+  stakeMinor: number,
+  key: string,
+  durationSeconds: number = 60,
+  targetExpiresAt?: string,
+  expiryMode: string = '1M_FIXED'
+): Promise<Receipt> => {
+  // PISO INVIOLÁVEL: NUNCA MENOS DE 30 SEGUNDOS
+  const durationMs = Math.max(30_000, durationSeconds * 1000);
+  const expiresAt = targetExpiresAt || new Date(Date.now() + durationMs).toISOString();
+
   if (isGuestMode()) {
     const store = getStoredMock();
     if (store.wallet.available_minor < stakeMinor) {
@@ -170,13 +214,13 @@ export const openContract = async (symbol: string, direction: 'UP' | 'DOWN',
 
     store.wallet.available_minor -= stakeMinor;
     store.wallet.reserved_minor += stakeMinor;
-    const contractId = 'guest_' + crypto.randomUUID().slice(0, 8);
+    const contractId = 'guest_' + safeRandomUUID().slice(0, 8);
     const nowIso = new Date().toISOString();
-    const expiresAt = new Date(Date.now() + 60_000).toISOString();
 
+    const lastTickPrice = tradingFeedManager.getLastPrice(symbol);
     const lastCandle = store.candles[symbol]?.slice(-1)[0];
     const assetMeta = ASSET_CATALOG.find((a) => a.symbol === symbol);
-    const entryPrice = lastCandle ? Number(lastCandle.close) : 500;
+    const entryPrice = lastTickPrice ? Number(lastTickPrice) : (lastCandle ? Number(lastCandle.close) : 500);
 
     const newContract: Contract = {
       id: contractId,
@@ -196,13 +240,15 @@ export const openContract = async (symbol: string, direction: 'UP' | 'DOWN',
     saveStoredMock(store);
     broadcastMockPrivate({ type: 'wallet_balance', available_minor: store.wallet.available_minor });
 
-    // Liquidação automática após a expiração (60s)
+    // Liquidação automática após o vencimento exato do contrato (mínimo absoluto 30s)
+    const delayMs = Math.max(30_000, Date.parse(expiresAt) - Date.now());
     setTimeout(() => {
       const curStore = getStoredMock();
       const target = curStore.contracts.find((c) => c.id === contractId);
       if (target && target.status === 'OPEN') {
+        const exitTickPrice = tradingFeedManager.getLastPrice(symbol);
         const curCandle = curStore.candles[symbol]?.slice(-1)[0];
-        const exitPrice = curCandle ? Number(curCandle.close) : entryPrice;
+        const exitPrice = exitTickPrice ? Number(exitTickPrice) : (curCandle ? Number(curCandle.close) : entryPrice);
         const won = (direction === 'UP' && exitPrice > entryPrice) ||
                     (direction === 'DOWN' && exitPrice < entryPrice);
         const draw = exitPrice === entryPrice;
@@ -226,13 +272,37 @@ export const openContract = async (symbol: string, direction: 'UP' | 'DOWN',
           payout_minor: payoutMinor,
         });
       }
-    }, 60_000);
+    }, delayMs);
 
     return { id: contractId, expires_at: expiresAt, status: 'OPEN' };
   }
 
   return api<Receipt>('/contracts', { method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
-    body: JSON.stringify({ symbol, direction, stake_minor: stakeMinor }),
+    body: JSON.stringify({
+      symbol,
+      direction,
+      stake_minor: stakeMinor,
+      duration_seconds: durationSeconds,
+      expires_at: expiresAt,
+      expiry_mode: expiryMode,
+    }),
   });
 };
+
+export const getMarketNews = async (category: string = 'ALL'): Promise<import('../news/news-types').MarketNewsArticle[]> => {
+  try {
+    const res = await api<import('../news/news-types').MarketNewsArticle[]>(
+      `/news${category && category !== 'ALL' ? `?category=${encodeURIComponent(category)}` : ''}`
+    );
+    if (Array.isArray(res) && res.length > 0) return res;
+  } catch {
+    // Fallback gracioso offline
+  }
+  const { FALLBACK_MARKET_NEWS } = await import('../news/news-types');
+  if (category && category !== 'ALL') {
+    return FALLBACK_MARKET_NEWS.filter((n) => n.category === category);
+  }
+  return FALLBACK_MARKET_NEWS;
+};
+

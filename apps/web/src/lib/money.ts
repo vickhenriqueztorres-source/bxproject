@@ -8,8 +8,7 @@ export function formatMinor(minor: number | bigint | string): string {
 }
 
 export function parseStakeInput(text: string): number | null {
-  const normalized = text.trim().replace('.', ',');
-  const match = /^(\d{1,3})(?:,(\d{1,2}))?$/.exec(normalized);
+  const match = /^(\d{1,3})(?:,(\d{1,2}))?$/.exec(text.trim());
   if (!match) return null;
   const value = Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'));
   return value >= 100 && value <= 10_000 ? value : null;

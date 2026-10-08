@@ -10,7 +10,7 @@ import {
   type ISeriesApi,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import type { Candle, Contract } from '../api/client';
+import { fetchHistoricalCandlesChunk, type Candle, type Contract } from '../api/client';
 import type { Tick } from '../feed/protocol';
 import { formatMinor } from '../lib/money';
 import {
@@ -26,6 +26,26 @@ import { OrderFlagsOverlay } from './OrderFlagsOverlay';
 import { TradersMoodBar } from './TradersMoodBar';
 import { useTickPulse } from './useTickPulse';
 import { RafChartUpdater } from './raf-updater';
+import { ChartDrawingToolbar } from './ChartDrawingToolbar';
+import { ChartDrawingOverlay } from './ChartDrawingOverlay';
+import {
+  DEFAULT_INDICATORS,
+  type DrawingItem,
+  type DrawingToolType,
+  type IndicatorConfig,
+} from './drawing-types';
+import {
+  calculateSMA,
+  calculateEMA,
+  calculateWMA,
+  calculateBollinger,
+  calculateRSI,
+  calculateMACD,
+  calculateStochastic,
+  calculateATR,
+  calculateVWAP,
+  calculateCCI,
+} from './indicator-calculator';
 
 export type ChartType = 'candles' | 'line';
 export type { Timeframe };
@@ -53,6 +73,7 @@ export function PriceChart({
   const areaSeries = useRef<ISeriesApi<'Area'> | null>(null);
   const currentPriceLine = useRef<IPriceLine | null>(null);
   const strikeLinesMap = useRef<Map<string, IPriceLine>>(new Map());
+  const indicatorSeriesMap = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
   const latestCandle = useRef<CandlestickData<UTCTimestamp> | null>(null);
   const rafUpdaterRef = useRef<RafChartUpdater>(new RafChartUpdater());
 
@@ -63,6 +84,54 @@ export function PriceChart({
   const lastPrice = useRef<number | null>(null);
   const [priceDirection, setPriceDirection] = useState<'UP' | 'DOWN' | 'NEUTRAL'>('NEUTRAL');
   const tickPulse = useTickPulse(tick);
+
+  // Retenção Histórica & Janela Deslizante Macro (Perigo 8 / Subetapas 4 & 6)
+  const MAX_LOADED_BARS = 3500;
+  const [internalCandles, setInternalCandles] = useState<Candle[]>(candles);
+  const isLoadingHistoryRef = useRef(false);
+  const hasMoreHistoryRef = useRef(true);
+  const oldestLoadedTimeRef = useRef<number | null>(null);
+  const shouldScrollToRealTimeRef = useRef(true);
+
+  // Sincronizar quando a prop inicial de candles ou o símbolo mudar
+  useEffect(() => {
+    setInternalCandles(candles);
+    hasMoreHistoryRef.current = true;
+    isLoadingHistoryRef.current = false;
+    oldestLoadedTimeRef.current = null;
+    shouldScrollToRealTimeRef.current = true;
+  }, [candles, symbol]);
+
+  // Ferramentas Gráficas e Indicadores Técnicos
+  const [indicators, setIndicators] = useState<IndicatorConfig[]>(DEFAULT_INDICATORS);
+  const [drawings, setDrawings] = useState<DrawingItem[]>(() => {
+    try {
+      const raw = localStorage.getItem('broker_drawings_' + symbol);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [activeTool, setActiveTool] = useState<DrawingToolType>(null);
+  const [activeColor, setActiveColor] = useState<string>('#00e676');
+
+  // Persistência de desenhos no localStorage por ativo
+  useEffect(() => {
+    try {
+      localStorage.setItem('broker_drawings_' + symbol, JSON.stringify(drawings));
+    } catch {
+      // Ignora falhas de storage restrito
+    }
+  }, [drawings, symbol]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('broker_drawings_' + symbol);
+      setDrawings(raw ? JSON.parse(raw) : []);
+    } catch {
+      setDrawings([]);
+    }
+  }, [symbol]);
 
   // Monitorar direção do preço e atualizar levemente o sentimento da comunidade
   useEffect(() => {
@@ -149,13 +218,14 @@ export function PriceChart({
       currentPriceLine.current = null;
       lastPrice.current = null;
       strikeLinesMap.current.clear();
+      indicatorSeriesMap.current.clear();
       rafUpdaterRef.current.cancel();
     };
   }, []);
 
   const resampledCandles = useMemo(() => {
-    return resampleCandles(candles, timeframe);
-  }, [candles, timeframe]);
+    return resampleCandles(internalCandles, timeframe);
+  }, [internalCandles, timeframe]);
 
   // Criar/Trocar Series conforme o chartType e timeframe ativo
   useEffect(() => {
@@ -222,11 +292,327 @@ export function PriceChart({
       latestCandle.current = resampledCandles.at(-1) ?? null;
     }
 
-    // Posicionar no tempo mais recente
-    chart.timeScale().scrollToRealTime();
+    // Posicionar no tempo mais recente apenas quando apropriado (boot, troca de timeframe ou ativo)
+    if (shouldScrollToRealTimeRef.current) {
+      chart.timeScale().scrollToRealTime();
+      shouldScrollToRealTimeRef.current = false;
+    }
   }, [chartType, resampledCandles, timeframe]);
 
-  // Atualização em tempo real de novos ticks com Throttling rAF a 60fps (Subetapa 4)
+  // Lazy Loading Retroativo no Scroll para a Esquerda (Subetapa 4 & 6)
+  useEffect(() => {
+    const chart = chartInstance.current;
+    if (!chart) return;
+
+    let debounceTimer: any = null;
+
+    const onVisibleLogicalRangeChanged = (logicalRange: any) => {
+      if (!logicalRange || isLoadingHistoryRef.current || !hasMoreHistoryRef.current) return;
+
+      // Se o usuário rolou até perto da borda esquerda (menos de 60 barras visíveis - Prefetch Preditivo)
+      if (logicalRange.from < 60) {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(async () => {
+          if (isLoadingHistoryRef.current || !hasMoreHistoryRef.current) return;
+
+          const sorted = [...internalCandles].sort((a, b) => (Number(a.time) || 0) - (Number(b.time) || 0));
+          const oldest = sorted[0];
+          if (!oldest) return;
+
+          const oldestEpoch = typeof oldest.time === 'number'
+            ? oldest.time
+            : Math.floor(Date.parse(String(oldest.time)) / 1000);
+
+          if (!Number.isFinite(oldestEpoch) || oldestEpoch <= 0) return;
+          if (oldestLoadedTimeRef.current === oldestEpoch) return;
+
+          isLoadingHistoryRef.current = true;
+          try {
+            const olderBars = await fetchHistoricalCandlesChunk(symbol, oldestEpoch, 1000);
+            if (!olderBars || olderBars.length === 0) {
+              hasMoreHistoryRef.current = false;
+              return;
+            }
+
+            oldestLoadedTimeRef.current = oldestEpoch;
+            shouldScrollToRealTimeRef.current = false;
+
+            setInternalCandles((prev) => {
+              const map = new Map<number, Candle>();
+              for (const b of olderBars) {
+                const t = typeof b.time === 'number' ? b.time : Math.floor(Date.parse(String(b.time)) / 1000);
+                if (Number.isFinite(t)) map.set(t, b);
+              }
+              for (const b of prev) {
+                const t = typeof b.time === 'number' ? b.time : Math.floor(Date.parse(String(b.time)) / 1000);
+                if (Number.isFinite(t)) map.set(t, b);
+              }
+
+              let merged = Array.from(map.values()).sort(
+                (a, b) => (Number(a.time) || 0) - (Number(b.time) || 0)
+              );
+
+              // Teto da Janela Deslizante (Subetapa 6: MAX_LOADED_BARS = 3000)
+              if (merged.length > MAX_LOADED_BARS) {
+                merged = merged.slice(merged.length - MAX_LOADED_BARS);
+              }
+
+              const addedCount = merged.length - prev.length;
+              if (addedCount > 0 && chartInstance.current) {
+                const currentRange = chartInstance.current.timeScale().getVisibleLogicalRange();
+                if (currentRange) {
+                  chartInstance.current.timeScale().setVisibleLogicalRange({
+                    from: currentRange.from + addedCount,
+                    to: currentRange.to + addedCount,
+                  });
+                }
+              }
+
+              return merged;
+            });
+          } catch (err) {
+            console.warn('[PriceChart] Falha ao carregar histórico retroativo:', err);
+          } finally {
+            isLoadingHistoryRef.current = false;
+          }
+        }, 200);
+      }
+    };
+
+    chart.timeScale().subscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      try {
+        chart.timeScale().unsubscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
+      } catch { /* ignore */ }
+    };
+  }, [internalCandles, symbol]);
+
+  // Sincronização dos 10 Indicadores Técnicos Nativos
+  useEffect(() => {
+    const chart = chartInstance.current;
+    if (!chart || resampledCandles.length === 0) return;
+
+    for (const ind of indicators) {
+      if (ind.enabled) {
+        if (ind.type === 'SMA') {
+          let series = indicatorSeriesMap.current.get(ind.id);
+          if (!series) {
+            series = chart.addLineSeries({
+              color: ind.color,
+              lineWidth: 2,
+              title: `${ind.type} ${ind.period}`,
+            });
+            indicatorSeriesMap.current.set(ind.id, series);
+          }
+          const data = calculateSMA(resampledCandles, ind.period);
+          series.setData(data);
+        } else if (ind.type === 'EMA') {
+          let series = indicatorSeriesMap.current.get(ind.id);
+          if (!series) {
+            series = chart.addLineSeries({
+              color: ind.color,
+              lineWidth: 2,
+              title: `${ind.type} ${ind.period}`,
+            });
+            indicatorSeriesMap.current.set(ind.id, series);
+          }
+          const data = calculateEMA(resampledCandles, ind.period);
+          series.setData(data);
+        } else if (ind.type === 'WMA') {
+          let series = indicatorSeriesMap.current.get(ind.id);
+          if (!series) {
+            series = chart.addLineSeries({
+              color: ind.color,
+              lineWidth: 2,
+              title: `${ind.type} ${ind.period}`,
+            });
+            indicatorSeriesMap.current.set(ind.id, series);
+          }
+          const data = calculateWMA(resampledCandles, ind.period);
+          series.setData(data);
+        } else if (ind.type === 'BOLLINGER') {
+          const upperKey = `${ind.id}_upper`;
+          const lowerKey = `${ind.id}_lower`;
+          let upperSeries = indicatorSeriesMap.current.get(upperKey);
+          let lowerSeries = indicatorSeriesMap.current.get(lowerKey);
+          if (!upperSeries) {
+            upperSeries = chart.addLineSeries({
+              color: ind.color,
+              lineWidth: 1,
+              lineStyle: LineStyle.Dotted,
+              title: 'BB Superior',
+            });
+            indicatorSeriesMap.current.set(upperKey, upperSeries);
+          }
+          if (!lowerSeries) {
+            lowerSeries = chart.addLineSeries({
+              color: ind.color,
+              lineWidth: 1,
+              lineStyle: LineStyle.Dotted,
+              title: 'BB Inferior',
+            });
+            indicatorSeriesMap.current.set(lowerKey, lowerSeries);
+          }
+          const points = calculateBollinger(resampledCandles, ind.period, ind.stdDev ?? 2);
+          upperSeries.setData(points.map((p) => ({ time: p.time, value: p.upper })));
+          lowerSeries.setData(points.map((p) => ({ time: p.time, value: p.lower })));
+        } else if (ind.type === 'RSI') {
+          let series = indicatorSeriesMap.current.get(ind.id);
+          if (!series) {
+            series = chart.addLineSeries({
+              color: ind.color,
+              lineWidth: 2,
+              title: `RSI ${ind.period}`,
+            });
+            indicatorSeriesMap.current.set(ind.id, series);
+          }
+          const data = calculateRSI(resampledCandles, ind.period);
+          series.setData(data);
+        } else if (ind.type === 'MACD') {
+          const macdKey = `${ind.id}_macd`;
+          const signalKey = `${ind.id}_signal`;
+          let macdSeries = indicatorSeriesMap.current.get(macdKey);
+          let signalSeries = indicatorSeriesMap.current.get(signalKey);
+          if (!macdSeries) {
+            macdSeries = chart.addLineSeries({
+              color: ind.color,
+              lineWidth: 2,
+              title: `MACD (${ind.fastPeriod ?? 12}, ${ind.slowPeriod ?? 26})`,
+            });
+            indicatorSeriesMap.current.set(macdKey, macdSeries);
+          }
+          if (!signalSeries) {
+            signalSeries = chart.addLineSeries({
+              color: ind.signalColor ?? '#f97316',
+              lineWidth: 1,
+              lineStyle: LineStyle.Dashed,
+              title: `Sinal (${ind.signalPeriod ?? 9})`,
+            });
+            indicatorSeriesMap.current.set(signalKey, signalSeries);
+          }
+          const macdData = calculateMACD(
+            resampledCandles,
+            ind.fastPeriod ?? 12,
+            ind.slowPeriod ?? 26,
+            ind.signalPeriod ?? 9
+          );
+          macdSeries.setData(macdData.map((p) => ({ time: p.time, value: p.macd })));
+          signalSeries.setData(macdData.map((p) => ({ time: p.time, value: p.signal })));
+        } else if (ind.type === 'STOCHASTIC') {
+          const kKey = `${ind.id}_k`;
+          const dKey = `${ind.id}_d`;
+          let kSeries = indicatorSeriesMap.current.get(kKey);
+          let dSeries = indicatorSeriesMap.current.get(dKey);
+          if (!kSeries) {
+            kSeries = chart.addLineSeries({
+              color: ind.color,
+              lineWidth: 2,
+              title: `%K (${ind.kPeriod ?? 14})`,
+            });
+            indicatorSeriesMap.current.set(kKey, kSeries);
+          }
+          if (!dSeries) {
+            dSeries = chart.addLineSeries({
+              color: ind.signalColor ?? '#eab308',
+              lineWidth: 1,
+              lineStyle: LineStyle.Dashed,
+              title: `%D (${ind.dPeriod ?? 3})`,
+            });
+            indicatorSeriesMap.current.set(dKey, dSeries);
+          }
+          const stochData = calculateStochastic(
+            resampledCandles,
+            ind.kPeriod ?? 14,
+            ind.dPeriod ?? 3
+          );
+          kSeries.setData(stochData.map((p) => ({ time: p.time, value: p.k })));
+          dSeries.setData(stochData.map((p) => ({ time: p.time, value: p.d })));
+        } else if (ind.type === 'ATR') {
+          let series = indicatorSeriesMap.current.get(ind.id);
+          if (!series) {
+            series = chart.addLineSeries({
+              color: ind.color,
+              lineWidth: 2,
+              title: `ATR ${ind.period}`,
+            });
+            indicatorSeriesMap.current.set(ind.id, series);
+          }
+          const data = calculateATR(resampledCandles, ind.period);
+          series.setData(data);
+        } else if (ind.type === 'VWAP') {
+          let series = indicatorSeriesMap.current.get(ind.id);
+          if (!series) {
+            series = chart.addLineSeries({
+              color: ind.color,
+              lineWidth: 2,
+              title: 'VWAP',
+            });
+            indicatorSeriesMap.current.set(ind.id, series);
+          }
+          const data = calculateVWAP(resampledCandles);
+          series.setData(data);
+        } else if (ind.type === 'CCI') {
+          let series = indicatorSeriesMap.current.get(ind.id);
+          if (!series) {
+            series = chart.addLineSeries({
+              color: ind.color,
+              lineWidth: 2,
+              title: `CCI ${ind.period}`,
+            });
+            indicatorSeriesMap.current.set(ind.id, series);
+          }
+          const data = calculateCCI(resampledCandles, ind.period);
+          series.setData(data);
+        }
+      } else {
+        // Remover séries desativadas
+        if (ind.type === 'BOLLINGER') {
+          const u = indicatorSeriesMap.current.get(`${ind.id}_upper`);
+          if (u) {
+            try { chart.removeSeries(u); } catch { /* ignore */ }
+            indicatorSeriesMap.current.delete(`${ind.id}_upper`);
+          }
+          const l = indicatorSeriesMap.current.get(`${ind.id}_lower`);
+          if (l) {
+            try { chart.removeSeries(l); } catch { /* ignore */ }
+            indicatorSeriesMap.current.delete(`${ind.id}_lower`);
+          }
+        } else if (ind.type === 'MACD') {
+          const m = indicatorSeriesMap.current.get(`${ind.id}_macd`);
+          if (m) {
+            try { chart.removeSeries(m); } catch { /* ignore */ }
+            indicatorSeriesMap.current.delete(`${ind.id}_macd`);
+          }
+          const s = indicatorSeriesMap.current.get(`${ind.id}_signal`);
+          if (s) {
+            try { chart.removeSeries(s); } catch { /* ignore */ }
+            indicatorSeriesMap.current.delete(`${ind.id}_signal`);
+          }
+        } else if (ind.type === 'STOCHASTIC') {
+          const k = indicatorSeriesMap.current.get(`${ind.id}_k`);
+          if (k) {
+            try { chart.removeSeries(k); } catch { /* ignore */ }
+            indicatorSeriesMap.current.delete(`${ind.id}_k`);
+          }
+          const d = indicatorSeriesMap.current.get(`${ind.id}_d`);
+          if (d) {
+            try { chart.removeSeries(d); } catch { /* ignore */ }
+            indicatorSeriesMap.current.delete(`${ind.id}_d`);
+          }
+        } else {
+          const s = indicatorSeriesMap.current.get(ind.id);
+          if (s) {
+            try { chart.removeSeries(s); } catch { /* ignore */ }
+            indicatorSeriesMap.current.delete(ind.id);
+          }
+        }
+      }
+    }
+  }, [indicators, resampledCandles]);
+
+  // Atualização em tempo real de novos ticks com Throttling rAF a 60fps
   useEffect(() => {
     if (!tick) return;
 
@@ -249,7 +635,7 @@ export function PriceChart({
         }
       }
 
-      // Atualizar Linha de Preço Atual do TradingView
+      // Atualizar Linha de Preço Atual
       const activeSeries = candleSeries.current ?? areaSeries.current;
       if (activeSeries && Number.isFinite(price)) {
         const isUp = priceDirection === 'UP' || priceDirection === 'NEUTRAL';
@@ -280,7 +666,7 @@ export function PriceChart({
     };
   }, [tick, chartType, priceDirection, timeframe]);
 
-  // Pausa e Retomada de Renderização sob Segundo Plano / Fora de Viewport (Subetapa 5)
+  // Pausa e Retomada de Renderização sob Segundo Plano
   useEffect(() => {
     if (!isVisible) {
       rafUpdaterRef.current.pause();
@@ -289,7 +675,7 @@ export function PriceChart({
     }
   }, [isVisible]);
 
-  // Sincronizar linhas de strike para ordens ativas (Strike Price Lines)
+  // Sincronizar linhas de strike para ordens ativas
   useEffect(() => {
     const activeSeries = candleSeries.current ?? areaSeries.current;
     if (!activeSeries) return;
@@ -332,6 +718,30 @@ export function PriceChart({
     }
   }, [activeContracts, chartType, tick?.price]);
 
+  const handleToggleIndicator = (id: string) => {
+    setIndicators((prev) =>
+      prev.map((ind) => (ind.id === id ? { ...ind, enabled: !ind.enabled } : ind))
+    );
+  };
+
+  const handleAddDrawing = (drawing: DrawingItem) => {
+    setDrawings((prev) => [...prev, drawing]);
+  };
+
+  const handleUpdateDrawing = (updated: DrawingItem) => {
+    setDrawings((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+  };
+
+  const handleRemoveDrawing = (id: string) => {
+    setDrawings((prev) => prev.filter((d) => d.id !== id));
+  };
+
+  const handleClearDrawings = () => {
+    if (window.confirm('Deseja remover todos os desenhos gráficos deste ativo?')) {
+      setDrawings([]);
+    }
+  };
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       {/* HUD Flutuante Superior */}
@@ -348,82 +758,8 @@ export function PriceChart({
           pointerEvents: 'none',
         }}
       >
-        {/* Ferramentas do Gráfico (Tipo & Timeframe) */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'rgba(10, 16, 30, 0.85)',
-            backdropFilter: 'blur(8px)',
-            border: '1px solid #1f2e4b',
-            borderRadius: '8px',
-            padding: '4px 8px',
-            pointerEvents: 'auto',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
-          }}
-        >
-          {/* Tipo de Gráfico */}
-          <div style={{ display: 'flex', gap: '3px', borderRight: '1px solid #1f2e4b', paddingRight: '8px' }}>
-            <button
-              type="button"
-              onClick={() => setChartType('candles')}
-              style={{
-                background: chartType === 'candles' ? '#1c2d4a' : 'transparent',
-                border: 'none',
-                color: chartType === 'candles' ? '#00e676' : '#8597b4',
-                padding: '4px 8px',
-                borderRadius: '5px',
-                fontSize: '11px',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-              title="Velas Japonesas"
-            >
-              🕯️ Velas
-            </button>
-            <button
-              type="button"
-              onClick={() => setChartType('line')}
-              style={{
-                background: chartType === 'line' ? '#1c2d4a' : 'transparent',
-                border: 'none',
-                color: chartType === 'line' ? '#00e676' : '#8597b4',
-                padding: '4px 8px',
-                borderRadius: '5px',
-                fontSize: '11px',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-              title="Gráfico de Linha"
-            >
-              📈 Linha
-            </button>
-          </div>
-
-          {/* Timeframe */}
-          <div style={{ display: 'flex', gap: '3px' }}>
-            {(['5s', '15s', '30s', '1m', '5m'] as Timeframe[]).map((tf) => (
-              <button
-                key={tf}
-                type="button"
-                onClick={() => setTimeframe(tf)}
-                style={{
-                  background: timeframe === tf ? '#1c2d4a' : 'transparent',
-                  border: 'none',
-                  color: timeframe === tf ? '#65d5ff' : '#8597b4',
-                  padding: '3px 7px',
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                {tf}
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* Espaço reservado para manter o alinhamento com a barra esquerda */}
+        <div style={{ width: '40px' }} />
 
         {/* Tag Pulsante de Preço em Tempo Real */}
         <div
@@ -492,6 +828,30 @@ export function PriceChart({
         </div>
       </div>
 
+      {/* Barra de Ferramentas Gráficas Lateral (Estilo IQ Option) */}
+      <ChartDrawingToolbar
+        chartType={chartType}
+        onSelectChartType={(ct) => {
+          shouldScrollToRealTimeRef.current = true;
+          setChartType(ct);
+        }}
+        timeframe={timeframe}
+        onSelectTimeframe={(tf) => {
+          shouldScrollToRealTimeRef.current = true;
+          setTimeframe(tf);
+        }}
+        activeTool={activeTool}
+        onSelectTool={setActiveTool}
+        activeColor={activeColor}
+        onChangeColor={setActiveColor}
+        drawingsCount={drawings.length}
+        drawings={drawings}
+        onRemoveDrawing={handleRemoveDrawing}
+        onClearDrawings={handleClearDrawings}
+        indicators={indicators}
+        onToggleIndicator={handleToggleIndicator}
+      />
+
       {/* Overlays de Linhas de Tempo: Hora de Compra e Expiração */}
       <TimeLinesOverlay
         containerWidth={dimensions.width}
@@ -508,6 +868,21 @@ export function PriceChart({
         containerWidth={dimensions.width}
         containerHeight={dimensions.height}
         activeSeries={candleSeries.current ?? areaSeries.current}
+      />
+
+      {/* Camada SVG Interativa de Desenho Técnico (Linhas, Fibonacci, etc.) */}
+      <ChartDrawingOverlay
+        chartInstance={chartInstance.current}
+        activeSeries={candleSeries.current ?? areaSeries.current}
+        containerWidth={dimensions.width}
+        containerHeight={dimensions.height}
+        drawings={drawings}
+        onAddDrawing={handleAddDrawing}
+        onUpdateDrawing={handleUpdateDrawing}
+        onRemoveDrawing={handleRemoveDrawing}
+        activeTool={activeTool}
+        onFinishDrawing={() => setActiveTool(null)}
+        activeColor={activeColor}
       />
 
       {/* Barra de Sentimento Vertical (Trader's Mood Bar) */}

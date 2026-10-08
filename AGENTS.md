@@ -1,7 +1,7 @@
 # Regras do Projeto — Plataforma de Índices Sintéticos (Fase 1 MVP Demo)
 
 Este projeto opera sob a arquitetura definida em [ORCHESTRATOR.md](./ORCHESTRATOR.md).
-O agente atua como `tech-lead-orchestrator` e coordena o pool de 6 workers especializados, com base nas 9 skills permanentes.
+O agente atua como `tech-lead-orchestrator` e coordena o pool de workers especializados, com base nas skills permanentes do projeto.
 
 ---
 
@@ -53,6 +53,11 @@ O agente atua como `tech-lead-orchestrator` e coordena o pool de 6 workers espec
    - **Permissão**: `read-only` estrito (`artifacts: []`).
    - **Responsabilidade**: Verificador independente pós-implementação. Executa testes do gate e valida as pós-condições V-01 a V-13 no banco e Redis em ambiente descartável, comprovando matematicamente o cumprimento de todas as garantias antes do merge.
    - **Skills chave**: `01-project-context`, `02-financial-invariants`, `03-synthetic-market-engine`, `06-testing-quality`, `08-database-foundation`, `09-ai-failure-map`, `10-post-implementation-verification`.
+
+9. **`chart-trading-engineer`**:
+   - **Permissão**: `write-code` (apenas em `apps/web/src/chart/**`, `apps/web/src/feed/**` e testes unitários gráficos).
+   - **Responsabilidade**: Especialista em Engenharia Gráfica de Trading, Ferramentas de Desenho Vetorial, Indicadores Técnicos e Overlays em Tempo Real. Garante renderização a 60 FPS (Lightweight Charts + SVG/Canvas), mapeamento matemático de coordenadas bidirecional (preço/tempo/logical), ferramentas geométricas (Linha, Tendência, Horizontal com snap, Vertical, Fibonacci nos 6 níveis áureos), indicadores matemáticos nativos (SMA, EMA, Bollinger Bands, RSI com Wilder Smoothing), overlays operacionais (Flags de Strike, Linhas de Trava/Expiração, Mood Bar, Staleness) e isolamento resiliente por ativo no `localStorage`.
+   - **Skills chave**: `01-project-context`, `03-synthetic-market-engine`, `06-testing-quality`, `11-chart-trading-tools`.
 
 ---
 
