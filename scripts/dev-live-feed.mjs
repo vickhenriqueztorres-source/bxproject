@@ -9,9 +9,68 @@ import {
 
 const require = createRequire(import.meta.url);
 const WebSocket = require('../node_modules/.pnpm/ws@8.22.0/node_modules/ws');
+import crypto from 'node:crypto';
+
+let pgPool = null;
+try {
+  let pgModule;
+  try {
+    pgModule = require('../node_modules/.pnpm/pg@8.23.1/node_modules/pg');
+  } catch {
+    pgModule = require('pg');
+  }
+  const pgClass = pgModule.default || pgModule;
+  const Pool = pgClass.Pool;
+  pgPool = new Pool({
+    connectionString: process.env.DATABASE_URL || 'postgresql://synth_migrator:dev_secret_pw_123@172.18.0.4:5432/broker_platform',
+    max: 10,
+    connectionTimeoutMillis: 3000,
+  });
+  pgPool.on('error', (err) => {
+    console.error('[DB] Erro no pool do PostgreSQL:', err.message);
+  });
+} catch (e) {
+  console.warn('[DB] Fallback em memória para auth/users:', e.message);
+}
+
+const memoryUsers = new Map();
+memoryUsers.set('demo@binmax.com', {
+  id: '00000000-0000-4000-8000-000000000001',
+  name: 'Usuario Demo Binmax',
+  email: 'demo@binmax.com',
+  password_hash: crypto.createHash('sha256').update('Demo1234!' + 'c7a8b9f1d2e3456789abcdef01234567').digest('hex'),
+  password_salt: 'c7a8b9f1d2e3456789abcdef01234567',
+  country_code: 'ES',
+  demo_balance_minor: 1000000
+});
+
+const JWT_SECRET = process.env.JWT_SECRET || 'binmax_jwt_secure_session_key_2026';
+
+function hashPassword(password, salt) {
+  return crypto.createHash('sha256').update(password + salt).digest('hex');
+}
+
+function generateSalt() {
+  return crypto.randomBytes(16).toString('hex');
+}
+
+function createSessionToken(user) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({
+    sub: user.id,
+    name: user.name,
+    email: user.email,
+    country: user.country_code || user.country || 'ES',
+    roles: ['trader'],
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + (7 * 86400)
+  })).toString('base64url');
+  const signature = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest('base64url');
+  return `${header}.${payload}.${signature}`;
+}
 
 const PORT = 3001;
-const HOST = '0.0.0.0';
+const HOST = '127.0.0.1';
 
 // Catálogo com os 36 ativos e configurações calibradas por classe de ativo
 const ASSETS_CONFIG = [
@@ -51,14 +110,28 @@ const ASSETS_CONFIG = [
   { symbol: 'USOIL_OTC', price: 72.40, precision: 2, sigma: 0.00040 },
   { symbol: 'UKOIL_OTC', price: 76.20, precision: 2, sigma: 0.00040 },
 
-  // Sintéticos (6) - Escadas brownianas com regimes de volatilidade calibrados
-  { symbol: 'SYNTH_VOL_10', price: 100.5420, precision: 4, sigma: 0.00015 },
-  { symbol: 'SYNTH_VOL_25', price: 250.8410, precision: 4, sigma: 0.00030 },
-  { symbol: 'SYNTH_VOL_50', price: 500.1250, precision: 4, sigma: 0.00060 },
-  { symbol: 'SYNTH_VOL_75', price: 750.3200, precision: 4, sigma: 0.00085 },
-  { symbol: 'SYNTH_VOL_100', price: 1000.4500, precision: 4, sigma: 0.00110 },
-  { symbol: 'SYNTH_CRASH_BOOM_100', price: 1000.8200, precision: 4, sigma: 0.00130 },
+  // Sintéticos (6) - Padrão Ouro Opções Binárias
+  { symbol: 'VOL_10', price: 100.5420, precision: 4, sigma: 0.00015 },
+  { symbol: 'VOL_25', price: 250.8410, precision: 4, sigma: 0.00030 },
+  { symbol: 'VOL_50', price: 500.1250, precision: 4, sigma: 0.00060 },
+  { symbol: 'VOL_75', price: 750.3200, precision: 4, sigma: 0.00085 },
+  { symbol: 'VOL_100', price: 1000.4500, precision: 4, sigma: 0.00110 },
+  { symbol: 'CRASH_BOOM_100', price: 1000.8200, precision: 4, sigma: 0.00130 },
 ];
+
+const SYMBOL_ALIASES = {
+  SYNTH_VOL_10: 'VOL_10',
+  SYNTH_VOL_25: 'VOL_25',
+  SYNTH_VOL_50: 'VOL_50',
+  SYNTH_VOL_75: 'VOL_75',
+  SYNTH_VOL_100: 'VOL_100',
+  SYNTH_CRASH_BOOM_100: 'CRASH_BOOM_100',
+};
+
+function resolveSymbol(sym) {
+  if (!sym) return 'VOL_50';
+  return SYMBOL_ALIASES[sym] || sym;
+}
 
 // Constantes Globais de Capacidade de Velas (Histórico Macro de 7 Dias - Subetapa 1)
 const CANDLE_BUFFER_MAX_SIZE = 10080; // 7 dias de velas de 1 minuto em RAM (10.080 minutos)
@@ -351,7 +424,8 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
 
   // Endpoint REST de velas: /candles ou /api/candles (com suporte a paginação 'before', 'interval' e 'limit' ampliado)
   if (pathname === '/candles' || pathname === '/api/candles') {
-    const symbol = parsedUrl.searchParams.get('symbol') || 'SYNTH_VOL_50';
+    const rawSymbol = parsedUrl.searchParams.get('symbol') || 'VOL_50';
+    const symbol = resolveSymbol(rawSymbol);
     const state = assetState.get(symbol);
     if (!state) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -392,7 +466,8 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
 
   // Endpoint UDF TradingView History: /api/v1/chart/history
   if (pathname === '/api/v1/chart/history') {
-    const symbol = parsedUrl.searchParams.get('symbol') || 'SYNTH_VOL_50';
+    const rawSymbol = parsedUrl.searchParams.get('symbol') || 'VOL_50';
+    const symbol = resolveSymbol(rawSymbol);
     const state = assetState.get(symbol);
     if (!state) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -437,7 +512,8 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
 
   // Endpoint REST de Snapshot Atômico (Subetapa 4): /api/v1/snapshot ou /snapshot
   if (pathname === '/api/v1/snapshot' || pathname === '/snapshot') {
-    const symbol = parsedUrl.searchParams.get('symbol') || 'SYNTH_VOL_50';
+    const rawSymbol = parsedUrl.searchParams.get('symbol') || 'VOL_50';
+    const symbol = resolveSymbol(rawSymbol);
     const state = assetState.get(symbol);
     if (!state) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -464,11 +540,13 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
   // Endpoint de Metadados de Índice: GET /api/indices/:symbol ou GET /indices/:symbol
   const indexMatch = pathname.match(/^\/(api\/)?indices\/([a-zA-Z0-9_-]+)$/);
   if (indexMatch && req.method === 'GET') {
-    const symbol = indexMatch[2];
+    const rawSymbol = indexMatch[2];
+    const symbol = resolveSymbol(rawSymbol);
     const state = assetState.get(symbol);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
-      symbol,
+      symbol: rawSymbol,
+      canonical_symbol: symbol,
       status: state ? (state.paused ? 'PAUSED' : 'ACTIVE') : 'ACTIVE',
       name: state ? state.name : symbol,
       precision: state ? state.precision : 4,
@@ -489,6 +567,195 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
     }
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(found));
+    return;
+  }
+
+  // Endpoints de Autenticação: /api/v1/auth/register e /v1/auth/register
+  if ((pathname === '/api/v1/auth/register' || pathname === '/v1/auth/register') && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const name = typeof payload.name === 'string' ? payload.name.trim() : '';
+        const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
+        const password = typeof payload.password === 'string' ? payload.password : '';
+        const country = typeof payload.country === 'string' ? payload.country.trim().toUpperCase().slice(0, 2) : 'ES';
+
+        if (!name || name.length < 2) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'El nombre debe tener al menos 2 caracteres' }));
+          return;
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email || !emailRegex.test(email)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'Formato de correo electrónico inválido' }));
+          return;
+        }
+
+        if (!password || password.length < 6) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'La contraseña debe tener al menos 6 caracteres' }));
+          return;
+        }
+
+        const salt = generateSalt();
+        const hash = hashPassword(password, salt);
+        const demoBalance = 1000000; // US$ 10.000,00 demo provisioned
+
+        let createdUser = null;
+
+        if (pgPool) {
+          try {
+            const existing = await pgPool.query('SELECT id FROM users WHERE email = $1', [email]);
+            if (existing.rows.length > 0) {
+              res.writeHead(409, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'EMAIL_ALREADY_EXISTS', message: 'El correo electrónico ya está registrado' }));
+              return;
+            }
+
+            const insertRes = await pgPool.query(
+              `INSERT INTO users (name, email, password_hash, password_salt, country_code, demo_balance_minor)
+               VALUES ($1, $2, $3, $4, $5, $6)
+               RETURNING id, name, email, country_code, demo_balance_minor`,
+              [name, email, hash, salt, country, demoBalance]
+            );
+            if (insertRes.rows.length > 0) {
+              const row = insertRes.rows[0];
+              createdUser = {
+                id: row.id,
+                name: row.name,
+                email: row.email,
+                country: row.country_code,
+                demo_balance_minor: Number(row.demo_balance_minor)
+              };
+            }
+          } catch (dbErr) {
+            console.error('[DB Register Error]', dbErr.message);
+          }
+        }
+
+        if (!createdUser) {
+          if (memoryUsers.has(email)) {
+            res.writeHead(409, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'EMAIL_ALREADY_EXISTS', message: 'El correo electrónico ya está registrado' }));
+            return;
+          }
+          const id = crypto.randomUUID();
+          createdUser = {
+            id,
+            name,
+            email,
+            country,
+            demo_balance_minor: demoBalance
+          };
+          memoryUsers.set(email, {
+            ...createdUser,
+            password_hash: hash,
+            password_salt: salt
+          });
+        }
+
+        const token = createSessionToken(createdUser);
+
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          token,
+          user: createdUser
+        }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'BAD_REQUEST', message: 'Error en los datos de registro' }));
+      }
+    });
+    return;
+  }
+
+  // Endpoints de Autenticação: /api/v1/auth/login e /v1/auth/login
+  if ((pathname === '/api/v1/auth/login' || pathname === '/v1/auth/login') && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
+        const password = typeof payload.password === 'string' ? payload.password : '';
+
+        if (!email || !password) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'BAD_REQUEST', message: 'Email y contraseña requeridos' }));
+          return;
+        }
+
+        let foundUser = null;
+        let passwordValid = false;
+
+        if (pgPool) {
+          try {
+            const queryRes = await pgPool.query(
+              'SELECT id, name, email, password_hash, password_salt, country_code, demo_balance_minor FROM users WHERE email = $1',
+              [email]
+            );
+            if (queryRes.rows.length > 0) {
+              const row = queryRes.rows[0];
+              const testHash = hashPassword(password, row.password_salt);
+              if (testHash === row.password_hash) {
+                passwordValid = true;
+                foundUser = {
+                  id: row.id,
+                  name: row.name,
+                  email: row.email,
+                  country: row.country_code,
+                  demo_balance_minor: Number(row.demo_balance_minor)
+                };
+              }
+            }
+          } catch (dbErr) {
+            console.error('[DB Login Error]', dbErr.message);
+          }
+        }
+
+        if (!foundUser && memoryUsers.has(email)) {
+          const mUser = memoryUsers.get(email);
+          const testHash = hashPassword(password, mUser.password_salt);
+          if (testHash === mUser.password_hash) {
+            passwordValid = true;
+            foundUser = {
+              id: mUser.id,
+              name: mUser.name,
+              email: mUser.email,
+              country: mUser.country_code || mUser.country || 'ES',
+              demo_balance_minor: mUser.demo_balance_minor || 1000000
+            };
+          }
+        }
+
+        if (!foundUser || !passwordValid) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'INVALID_CREDENTIALS', message: 'E-mail ou senha incorretos' }));
+          return;
+        }
+
+        const token = createSessionToken(foundUser);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          token,
+          user: foundUser
+        }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'BAD_REQUEST', message: 'Solicitud inválida' }));
+      }
+    });
+    return;
+  }
+
+  // Endpoint de Recuperação: /api/v1/auth/recovery/request ou /v1/auth/recovery/request
+  if ((pathname === '/api/v1/auth/recovery/request' || pathname === '/v1/auth/recovery/request') && req.method === 'POST') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', message: 'Solicitud procesada con éxito' }));
     return;
   }
 
@@ -527,7 +794,9 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
     req.on('end', () => {
       try {
         const payload = JSON.parse(body || '{}');
-        const { symbol, direction, stake_minor } = payload;
+        const rawSymbol = payload.symbol;
+        const symbol = resolveSymbol(rawSymbol);
+        const { direction, stake_minor } = payload;
         const stake = parseInt(stake_minor, 10);
 
         if (!symbol || !assetState.has(symbol)) {
@@ -918,8 +1187,9 @@ wss.on('connection', (ws) => {
           return;
         }
 
-        for (const symbol of rawSymbols) {
-          if (!assetState.has(symbol)) continue;
+        for (const rawSym of rawSymbols) {
+          const symbol = resolveSymbol(rawSym);
+          if (!symbol || !assetState.has(symbol)) continue;
           clientSubscriptions.add(symbol);
           const state = assetState.get(symbol);
           state.subscribers.add(ws);
@@ -929,13 +1199,13 @@ wss.on('connection', (ws) => {
             const reqSeq = parseInt(msg.lastSequence, 10);
             const gap = state.sequence - reqSeq;
             if (gap > 50) {
-              ws.send(JSON.stringify({ type: 'resync_required', symbol }));
+              ws.send(JSON.stringify({ type: 'resync_required', symbol: rawSym }));
             } else if (gap > 0) {
               ws.send(JSON.stringify({
                 type: 'catchup_ticks',
-                symbol,
+                symbol: rawSym,
                 ticks: [{
-                  symbol: state.symbol,
+                  symbol: rawSym,
                   sequence: state.sequence,
                   price: state.currentPrice,
                   ts: new Date().toISOString()
@@ -949,7 +1219,8 @@ wss.on('connection', (ws) => {
           const arrivalTime = Date.now();
           const snap = {
             type: 'snapshot',
-            symbol: state.symbol,
+            symbol: rawSym,
+            canonical_symbol: symbol,
             sequence: state.sequence,
             ts: new Date().toISOString(),
             event_time: eventTime,
@@ -958,18 +1229,19 @@ wss.on('connection', (ws) => {
             price: state.currentPrice,
           };
           ws.send(JSON.stringify(snap));
-          ws.send(JSON.stringify({ type: 'subscribed', symbol }));
+          ws.send(JSON.stringify({ type: 'subscribed', symbol: rawSym, canonical_symbol: symbol }));
         }
         return;
       }
 
       if (msg.type === 'unsubscribe') {
         const rawSymbols = Array.isArray(msg.symbols) ? msg.symbols : (msg.symbol ? [msg.symbol] : []);
-        for (const symbol of rawSymbols) {
-          if (assetState.has(symbol)) {
+        for (const rawSym of rawSymbols) {
+          const symbol = resolveSymbol(rawSym);
+          if (symbol && assetState.has(symbol)) {
             clientSubscriptions.delete(symbol);
             assetState.get(symbol).subscribers.delete(ws);
-            ws.send(JSON.stringify({ type: 'unsubscribed', symbol }));
+            ws.send(JSON.stringify({ type: 'unsubscribed', symbol: rawSym, canonical_symbol: symbol }));
           }
         }
         return;
