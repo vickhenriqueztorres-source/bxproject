@@ -59,6 +59,41 @@ O agente atua como `tech-lead-orchestrator` e coordena o pool de workers especia
    - **Responsabilidade**: Especialista em Engenharia Gráfica de Trading, Ferramentas de Desenho Vetorial, Indicadores Técnicos e Overlays em Tempo Real. Garante renderização a 60 FPS (Lightweight Charts + SVG/Canvas), mapeamento matemático de coordenadas bidirecional (preço/tempo/logical), ferramentas geométricas (Linha, Tendência, Horizontal com snap, Vertical, Fibonacci nos 6 níveis áureos), indicadores matemáticos nativos (SMA, EMA, Bollinger Bands, RSI com Wilder Smoothing), overlays operacionais (Flags de Strike, Linhas de Trava/Expiração, Mood Bar, Staleness) e isolamento resiliente por ativo no `localStorage`.
    - **Skills chave**: `01-project-context`, `03-synthetic-market-engine`, `06-testing-quality`, `11-chart-trading-tools`.
 
+10. **`codebase-mapper-agent` (`mapeador`)**:
+   - **Permissão**: `read-only` estrito (`artifacts: []`).
+   - **Responsabilidade**: Mapeia a estrutura real do projeto com evidências (`arquivo:linha`), inventaria dependências, rotas, hooks, websockets e delimita zonas sensíveis.
+   - **Skills chave**: `01-project-context`, `16-mapear-projeto`, `18-zonas-sensiveis`.
+
+11. **`iq-fidelity-reviewer` (`fidelidade-iq`)**:
+   - **Permissão**: `read-only` estrito (poder de veto de layout).
+   - **Responsabilidade**: Garante que o traderoom da Binmax seja cópia fiel elemento por elemento da IQ Option (`iq-traderoom-desktop.png`), respeitando exclusivamente as diferenças autorizadas D1 a D10.
+   - **Skills chave**: `14-teste-de-sobreposicao`, `15-chave-sala-nova`, `11-chart-trading-tools`.
+
+12. **`binmax-brand-agent` (`marca-binmax`)**:
+   - **Permissão**: `read-only` estrito (revisão de tokens e identidade).
+   - **Responsabilidade**: Confere aplicação dos tokens Turbo Prata (Noche, Panel, Prata, Verde Ganancia, Rojo Baja, Blanco, Aço), fontes Geist e Geist Mono, logos SVG e microcopy oficial em espanhol neutro sem desvio de layout.
+   - **Skills chave**: `12-tokens-binmax`, `13-textos-es`.
+
+13. **`compliance-risk-reviewer` (`compliance-risco`)**:
+   - **Permissão**: `read-only` estrito (poder de veto de conformidade e integridade financeira).
+   - **Responsabilidade**: Confere simetria de botões SUBE/BAJA (D2), aviso de risco regulatório no rodapé (D8), integridade financeira (valores e payouts vindos do backend sem manipulação local), conta demo clara e prevenção de duplo disparo.
+   - **Skills chave**: `01-project-context`, `02-financial-invariants`, `18-zonas-sensiveis`.
+
+14. **`regression-guardian-agent` (`guardiao-regressao`)**:
+   - **Permissão**: `read-only` estrito (execução de suíte de testes e validação de diffs).
+   - **Responsabilidade**: Valida que nenhuma funcionalidade existente seja danificada, roda linters, typechecks, testes de integração e vitest, e verifica se o comportamento com a feature flag desligada permanece 100% idêntico.
+   - **Skills chave**: `06-testing-quality`, `19-testes-de-regressao-visual`.
+
+15. **`surgical-frontend-agent` (`cirurgiao`)**:
+   - **Permissão**: `write-code` (apenas nos arquivos delimitados de frontend em `apps/web/**`).
+   - **Responsabilidade**: Executa passos autorizados com menor diff possível, mantendo código antigo protegido atrás da flag `NEW_TRADEROOM`, sem quebrar APIs, sem inventar lógica e sem vazar CSS.
+   - **Skills chave**: `15-chave-sala-nova`, `17-mudanca-cirurgica`, `12-tokens-binmax`.
+
+16. **`chief-visual-director` (`designer-senior` / `senior-designer-agent`)**:
+   - **Permissão**: `read-only` / `design-review` (poder de veto estrito via Checklist de 12 itens).
+   - **Responsabilidade**: Diretor de Arte, Product Designer Sênior e Motion Designer Principal da BINMAX. Crítico visual implacável ("A BINMAX é um instrumento de precisão, não um cassino"). Análise brutal em 6 etapas (Veredito, Problemas de percepção, O que deve morrer, Nova direção de composição, Sistema de motion, Brief para implementação), erradicação de cards genéricos, neons, confetes, sons de aposta e spinners. Governança do sistema de superfícies (`--bg-0: #0B0E14`, `--bg-1: #101622`, `--bg-2: #151D2B`, `--bg-3: #1C2738`), escala fixa de espaçamento (4/8/12/16/24/32/48/64px), tipografia tabular-nums, tokens de física de movimento (`--ease: cubic-bezier(0.16, 1, 0.3, 1)`, 100/180/260/500ms) e conformidade por tipo de tela (Sala de trading, Análises, Tutoriais, Login/Onboarding).
+   - **Skills chave**: `01-project-context`, `11-chart-trading-tools`, `12-tokens-binmax`, `13-textos-es`, `14-teste-de-sobreposicao`, `21-designer-senior-binmax`.
+
 ---
 
 ## 2. Invariantes e Regras Invioláveis do Projeto

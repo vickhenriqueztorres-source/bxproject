@@ -1,21 +1,15 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.ContractService = void 0;
-const pg_1 = __importDefault(require("pg"));
-const { Pool } = pg_1.default;
-const risk_manager_js_1 = require("./risk-manager.js");
-const trading_calendar_js_1 = require("./trading-calendar.js");
-class ContractService {
+import pg from "pg";
+const { Pool } = pg;
+import { RiskManager } from "./risk-manager.js";
+import { isMarketOpen } from "./trading-calendar.js";
+export class ContractService {
     pool;
     redis;
     riskManager;
     constructor(pool, redis) {
         this.pool = pool;
         this.redis = redis;
-        this.riskManager = new risk_manager_js_1.RiskManager(redis);
+        this.riskManager = new RiskManager(redis);
     }
     /**
      * Abre um contrato com checagem de idempotência, teto de risco e persistência ACID (B-01, B-05, I-03)
@@ -49,7 +43,7 @@ class ContractService {
             throw new Error(`KILLSWITCH_ACTIVE: Kill switch ativo para ${dto.symbol} por instabilidade no feed.`);
         }
         // 2.1. Validação de Sessão de Mercado (Perigo 7 / Técnica 4)
-        if (!(0, trading_calendar_js_1.isMarketOpen)(dto.symbol, new Date())) {
+        if (!isMarketOpen(dto.symbol, new Date())) {
             throw new Error(`MARKET_CLOSED: Mercado fechado para o ativo ${dto.symbol} no momento da abertura.`);
         }
         // Obtém o último estado atômico gravado em index_state com validação estrita de staleness (M-02, B-01)
@@ -74,8 +68,10 @@ class ContractService {
         }
         const entryPrice = stateRes.rows[0].last_price.toString();
         const baseTime = lastTs;
-        // Expiração em 60 segundos (D-10)
-        const expiresAt = new Date(baseTime.getTime() + 60000);
+        // Expiração com piso inviolável de 30s (D-10 / Modelo Lucrativo IQ Option)
+        const requestedDuration = dto.duration_seconds ?? 60;
+        const safeDurationSeconds = Math.max(30, Math.min(300, requestedDuration));
+        const expiresAt = new Date(baseTime.getTime() + safeDurationSeconds * 1000);
         // 3. Validação do teto de risco de 3% no Redis
         const riskCheck = await this.riskManager.checkAndReserveRisk({
             symbol: dto.symbol,
@@ -210,4 +206,3 @@ class ContractService {
         };
     }
 }
-exports.ContractService = ContractService;

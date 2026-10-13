@@ -3,9 +3,33 @@ export type AssetCategory = 'Forex' | 'Cripto' | 'Commodities' | 'Sintéticos';
 export interface AssetOption {
   symbol: string;
   name: string;
+  subtitle?: string;
   category: AssetCategory;
   payout: number;
   precision: number;
+}
+
+export const LEGACY_SYMBOL_MAP: Record<string, string> = {
+  SYNTH_VOL_10: 'VOL_10',
+  SYNTH_VOL_25: 'VOL_25',
+  SYNTH_VOL_50: 'VOL_50',
+  SYNTH_VOL_75: 'VOL_75',
+  SYNTH_VOL_100: 'VOL_100',
+  SYNTH_CRASH_BOOM_100: 'CRASH_BOOM_100',
+};
+
+export function normalizeSymbol(symbol: string): string {
+  if (!symbol) return '';
+  const trimmed = symbol.trim().toUpperCase();
+  return LEGACY_SYMBOL_MAP[trimmed] || (trimmed.startsWith('SYNTH_') ? trimmed.replace('SYNTH_', '') : trimmed);
+}
+
+export function isSameAsset(symbolA?: string | null, symbolB?: string | null): boolean {
+  if (!symbolA || !symbolB) return false;
+  const a = symbolA.trim();
+  const b = symbolB.trim();
+  if (!a || !b) return false;
+  return normalizeSymbol(a) === normalizeSymbol(b);
 }
 
 export const ASSET_CATALOG: AssetOption[] = [
@@ -45,13 +69,13 @@ export const ASSET_CATALOG: AssetOption[] = [
   { symbol: 'USOIL_OTC', name: 'WTI Crude Oil (OTC)', category: 'Commodities', payout: 85, precision: 2 },
   { symbol: 'UKOIL_OTC', name: 'Brent Crude Oil (OTC)', category: 'Commodities', payout: 85, precision: 2 },
 
-  // Sintéticos (6)
-  { symbol: 'SYNTH_VOL_10', name: 'Volatility 10 Index', category: 'Sintéticos', payout: 85, precision: 4 },
-  { symbol: 'SYNTH_VOL_25', name: 'Volatility 25 Index', category: 'Sintéticos', payout: 85, precision: 4 },
-  { symbol: 'SYNTH_VOL_50', name: 'Volatility 50 Index', category: 'Sintéticos', payout: 85, precision: 4 },
-  { symbol: 'SYNTH_VOL_75', name: 'Volatility 75 Index', category: 'Sintéticos', payout: 85, precision: 4 },
-  { symbol: 'SYNTH_VOL_100', name: 'Volatility 100 Index', category: 'Sintéticos', payout: 85, precision: 4 },
-  { symbol: 'SYNTH_CRASH_BOOM_100', name: 'Crash/Boom 100 Index', category: 'Sintéticos', payout: 85, precision: 4 },
+  // Sintéticos (6) - Padrão Ouro Opções Binárias
+  { symbol: 'VOL_10', name: 'Volatilidad 10', subtitle: 'Índice V-10 (24/7)', category: 'Sintéticos', payout: 85, precision: 4 },
+  { symbol: 'VOL_25', name: 'Volatilidad 25', subtitle: 'Índice V-25 (24/7)', category: 'Sintéticos', payout: 85, precision: 4 },
+  { symbol: 'VOL_50', name: 'Volatilidad 50', subtitle: 'Índice V-50 (24/7)', category: 'Sintéticos', payout: 85, precision: 4 },
+  { symbol: 'VOL_75', name: 'Volatilidad 75', subtitle: 'Índice V-75 (24/7)', category: 'Sintéticos', payout: 85, precision: 4 },
+  { symbol: 'VOL_100', name: 'Volatilidad 100', subtitle: 'Índice V-100 (24/7)', category: 'Sintéticos', payout: 85, precision: 4 },
+  { symbol: 'CRASH_BOOM_100', name: 'Crash & Boom 100', subtitle: 'Índice Crash / Boom (Spikes)', category: 'Sintéticos', payout: 85, precision: 4 },
 ];
 
 export const CATEGORIES: Array<'Todos' | AssetCategory> = [
@@ -63,14 +87,95 @@ export const CATEGORIES: Array<'Todos' | AssetCategory> = [
 ];
 
 export function getAssetMeta(symbol: string): AssetOption {
-  const found = ASSET_CATALOG.find((a) => a.symbol === symbol);
+  const norm = normalizeSymbol(symbol);
+  const found = ASSET_CATALOG.find((a) => a.symbol === norm || a.symbol === symbol);
   return (
     found ?? {
-      symbol,
-      name: symbol,
+      symbol: norm,
+      name: norm,
       category: 'Sintéticos',
       payout: 85,
       precision: 4,
     }
   );
 }
+
+export const ASSET_BASE_PRICES: Record<string, number> = {
+  // Forex OTC (18)
+  EURUSD_OTC: 1.08542,
+  GBPUSD_OTC: 1.29415,
+  USDJPY_OTC: 153.820,
+  USDCHF_OTC: 0.86510,
+  AUDUSD_OTC: 0.65820,
+  USDCAD_OTC: 1.38450,
+  NZDUSD_OTC: 0.59820,
+  EURGBP_OTC: 0.83850,
+  EURJPY_OTC: 166.950,
+  GBPJPY_OTC: 199.120,
+  EURCAD_OTC: 1.50280,
+  EURAUD_OTC: 1.64890,
+  GBPAUD_OTC: 1.96620,
+  GBPCAD_OTC: 1.79210,
+  AUDCAD_OTC: 0.91120,
+  AUDJPY_OTC: 101.250,
+  CADJPY_OTC: 111.120,
+  NZDJPY_OTC: 92.050,
+
+  // Cripto OTC (8)
+  BTCUSD_OTC: 64850.00,
+  ETHUSD_OTC: 3450.00,
+  SOLUSD_OTC: 152.40,
+  BNBUSD_OTC: 585.00,
+  XRPUSD_OTC: 0.5420,
+  ADAUSD_OTC: 0.3540,
+  DOGEUSD_OTC: 0.1240,
+  AVAXUSD_OTC: 28.40,
+
+  // Commodities OTC (4)
+  XAUUSD_OTC: 2652.80,
+  XAGUSD_OTC: 31.750,
+  USOIL_OTC: 72.40,
+  UKOIL_OTC: 76.20,
+
+  // Sintéticos (6) - Padrão Ouro Opções Binárias
+  VOL_10: 100.5420,
+  VOL_25: 250.8410,
+  VOL_50: 500.1250,
+  VOL_75: 750.3200,
+  VOL_100: 1000.4500,
+  CRASH_BOOM_100: 1000.8200,
+  SYNTH_VOL_10: 100.5420,
+  SYNTH_VOL_25: 250.8410,
+  SYNTH_VOL_50: 500.1250,
+  SYNTH_VOL_75: 750.3200,
+  SYNTH_VOL_100: 1000.4500,
+  SYNTH_CRASH_BOOM_100: 1000.8200,
+};
+
+export function getAssetBasePrice(symbol: string): number {
+  const norm = normalizeSymbol(symbol);
+  if (ASSET_BASE_PRICES[norm]) {
+    return ASSET_BASE_PRICES[norm];
+  }
+  if (ASSET_BASE_PRICES[symbol]) {
+    return ASSET_BASE_PRICES[symbol];
+  }
+  const normalized = symbol.endsWith('_OTC') ? symbol : `${symbol}_OTC`;
+  if (ASSET_BASE_PRICES[normalized]) {
+    return ASSET_BASE_PRICES[normalized];
+  }
+
+  // Fallbacks defensivos por classe
+  if (symbol.includes('BTC')) return 64850.0;
+  if (symbol.includes('ETH')) return 3450.0;
+  if (symbol.includes('SOL')) return 152.4;
+  if (symbol.includes('XAU')) return 2652.8;
+  if (symbol.includes('JPY')) return 153.82;
+  if (symbol.startsWith('EUR') || symbol.startsWith('GBP') || symbol.startsWith('AUD') || symbol.startsWith('NZD') || symbol.startsWith('USD')) {
+    return 1.15;
+  }
+  if (symbol.startsWith('VOL_') || symbol.startsWith('SYNTH_VOL_')) return 500.0;
+
+  return 100.0;
+}
+

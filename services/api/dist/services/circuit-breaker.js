@@ -1,13 +1,10 @@
-"use strict";
 /**
  * Circuit Breaker por Feed (Padrão de Resiliência R-04 & Blindagem contra Reconnect Storm)
  *
  * Estados:
  * CLOSED (normal) -> OPEN (falhou 3x consecutivas) -> HALF-OPEN (tenta 1x após 30s de cooldown)
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.FeedCircuitBreaker = void 0;
-class FeedCircuitBreaker {
+export class FeedCircuitBreaker {
     timeFn;
     state = 'CLOSED';
     consecutiveFailures = 0;
@@ -88,4 +85,3 @@ class FeedCircuitBreaker {
         this.recordSuccess();
     }
 }
-exports.FeedCircuitBreaker = FeedCircuitBreaker;

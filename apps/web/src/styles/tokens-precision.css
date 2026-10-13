@@ -1,0 +1,515 @@
+/* ==========================================================================
+   BINMAX CHIEF VISUAL SYSTEMS & MOTION ARCHITECTURE TOKENS
+   "A BINMAX É UM INSTRUMENTO DE PRECISÃO, NÃO UM CASSINO."
+   ========================================================================== */
+
+:root {
+  /* --------------------------------------------------------------------------
+     1. SISTEMA OFICIAL DE SUPERFÍCIES DE PROFUNDIDADE (Luz em vez de linhas)
+     -------------------------------------------------------------------------- */
+  --bg-0: #0B0E14;       /* Fundo profundo */
+  --bg-1: #101622;       /* Zona estrutural / navbar */
+  --bg-2: #151D2B;       /* Painel elevado */
+  --bg-3: #1C2738;       /* Campo, controle ativo */
+  --line: rgba(138, 146, 161, 0.16); /* Divisor sutil e preciso */
+
+  /* Aliases para compatibilidade */
+  --bm-surface-bg: var(--bg-0);
+  --bm-surface-panel: var(--bg-1);
+  --bm-surface-field: var(--bg-3);
+
+  /* --------------------------------------------------------------------------
+     2. CONTEÚDO E TIPOGRAFIA DE DADOS
+     -------------------------------------------------------------------------- */
+  --text-strong: #F4F5F7;
+  --text-main: #DCE1EA;
+  --text-muted: #8A92A1;
+  --text-quiet: #596273;
+
+  /* Aliases para compatibilidade */
+  --bm-color-text-primary: var(--text-strong);
+  --bm-color-text-secondary: var(--text-muted);
+
+  /* --------------------------------------------------------------------------
+     3. CORES SEMÂNTICAS PURAS (Significado estrito, nunca decoração)
+     -------------------------------------------------------------------------- */
+  --profit: #22C47A;       /* Verde Ganancia: Lucro real, confirmação, SUBE */
+  --profit-hover: #1EB06D;
+  --loss: #F2545B;         /* Vermelho: Perda, erro, BAJA */
+  --loss-hover: #DB434A;
+  --pending: #E8A33D;      /* Âmbar: Atenção, pendente */
+  --info: #4D8DFF;         /* Azul: Telemetria de sistema */
+  --metal: #AEB8C8;        /* Aço/Prata: Cor de trabalho institucional */
+
+  /* Aliases para compatibilidade */
+  --bm-color-gain: var(--profit);
+  --bm-color-gain-hover: var(--profit-hover);
+  --bm-color-loss: var(--loss);
+  --bm-color-loss-hover: var(--loss-hover);
+  --bm-color-pending: var(--pending);
+  --bm-color-system: var(--info);
+  --bm-color-border-subtle: var(--line);
+
+  /* --------------------------------------------------------------------------
+     4. TIPOGRAFIA COMO VOZ TÉCNICA
+     -------------------------------------------------------------------------- */
+  --font-logo: 'Geist', sans-serif;
+  --font-ui: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Geist Mono', 'JetBrains Mono', 'Roboto Mono', monospace;
+
+  --bm-font-sans: var(--font-ui);
+  --bm-font-mono: var(--font-mono);
+
+  /* --------------------------------------------------------------------------
+     5. TOKENS DE FÍSICA DE MOVIMENTO (Instrumentação mecânica sem elasticidade)
+     -------------------------------------------------------------------------- */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-micro: 100ms;  /* Hover, active, afundar botão */
+  --t-base: 180ms;   /* Modais, fade in/out, abas, dropdowns */
+  --t-enter: 260ms;  /* Gavetas laterais, entrada de página em bloco, toast */
+  --t-count: 500ms;  /* Contagem numérica de saldo até novo valor */
+
+  /* Aliases para compatibilidade */
+  --bm-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --bm-t-micro: var(--t-micro);
+  --bm-t-base: var(--t-base);
+  --bm-t-enter: var(--t-enter);
+  --bm-t-count: var(--t-count);
+  --bm-dist-max: 64px;
+  --bm-pulse-allowed: tick, countdown-last-5s;
+  --bm-motion-props: transform, opacity;
+}
+
+/* --------------------------------------------------------------------------
+   6. CLASSES UTILITÁRIAS DE PRECISÃO & MOTION
+   -------------------------------------------------------------------------- */
+
+/* Números tabulares estritos em Geist Mono */
+.bm-tabular-nums {
+  font-family: var(--font-mono) !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+/* Superfícies tonais puras */
+.bm-surface-0 { background-color: var(--bg-0); }
+.bm-surface-1 { background-color: var(--bg-1); }
+.bm-surface-2 { background-color: var(--bg-2); }
+.bm-surface-3 { background-color: var(--bg-3); }
+
+/* Entrada de página em bloco único (260ms) */
+.bm-page-enter {
+  animation: bmPageEnterBlock var(--t-enter) var(--ease) forwards;
+}
+
+@keyframes bmPageEnterBlock {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Feedback tátil mecânico no clique (0ms afunda 1px) */
+.bm-btn-press {
+  transition: transform var(--t-micro) var(--ease), background-color var(--t-micro) var(--ease);
+}
+.bm-btn-press:active {
+  transform: translateY(1px);
+}
+
+/* Botão de precisão institucional */
+.bm-btn-precision {
+  background-color: var(--bg-2);
+  color: var(--text-strong);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color var(--t-micro) var(--ease), border-color var(--t-micro) var(--ease), transform var(--t-micro) var(--ease);
+}
+.bm-btn-precision:hover {
+  background-color: var(--bg-3);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.bm-btn-precision:active {
+  transform: translateY(1px);
+}
+
+/* Modal com escala sutil de 0.98 a 1.0 (sem saltos elásticos) */
+.bm-modal-scale {
+  animation: bmModalScaleIn var(--t-base) var(--ease) forwards;
+}
+
+@keyframes bmModalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Dropzone com transição mecânica sólida */
+.bm-dropzone-active {
+  border-style: solid !important;
+  background-color: var(--bg-3) !important;
+  transition: background-color var(--t-micro) var(--ease), border-color var(--t-micro) var(--ease);
+}
+
+/* Erro cirúrgico estático: fade in da mensagem e borda vermelha SEM SHAKE */
+.bm-input-error {
+  border-color: var(--loss) !important;
+  transition: border-color var(--t-micro) var(--ease);
+}
+
+.bm-error-message {
+  animation: bmErrorFade var(--t-base) var(--ease) forwards;
+  color: var(--loss);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+@keyframes bmErrorFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Toast de resultado cirúrgico */
+.bm-toast-enter {
+  animation: bmToastIn var(--t-enter) var(--ease) forwards;
+}
+
+@keyframes bmToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Neutralização expressa de anti-patterns de cassino */
+.bm-no-shake {
+  animation: none !important;
+  transform: none !important;
+}
+
+.bm-no-bounce {
+  transition-timing-function: var(--ease) !important;
+}
+
+/* Indicador de telemetria e desconexão de WebSocket */
+.bm-connection-lost {
+  opacity: 0.6;
+  filter: grayscale(0.8);
+  transition: opacity var(--t-base) var(--ease), filter var(--t-base) var(--ease);
+}
+
+/* Respeito rigoroso à acessibilidade de movimento reduzido */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   7. LAYOUT RESPONSIVO DO AUTHSHELL & FOCO DE PRECISÃO SUÍÇA
+   -------------------------------------------------------------------------- */
+.auth-shell-scroll {
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+@media (max-width: 960px) {
+  .auth-left-panel {
+    display: none !important;
+  }
+  .auth-right-panel {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    padding: 24px 16px !important;
+  }
+}
+
+/* Anel de foco de precisão cirúrgica de 1px */
+.bm-input-precision:focus {
+  border-color: var(--profit) !important;
+  box-shadow: 0 0 0 1px rgba(34, 196, 122, 0.25) !important;
+}
+
+/* --------------------------------------------------------------------------
+   8. TOKENS PREMIUM FINTECH (CÁPSULAS, INPUTS 12px/48px, CARDS 20px)
+   -------------------------------------------------------------------------- */
+.bm-pill-container {
+  display: flex;
+  background-color: #0E131F;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  padding: 4px;
+  gap: 4px;
+  box-sizing: border-box;
+}
+
+.bm-pill-tab {
+  flex: 1;
+  height: 36px;
+  border-radius: 9999px;
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 500;
+  transition: all var(--t-micro) var(--ease);
+  outline: none;
+}
+.bm-pill-tab:hover {
+  color: #C0C7D5;
+}
+.bm-pill-tab-active {
+  background-color: #141A28 !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.bm-card-fintech {
+  width: 100%;
+  max-width: 440px;
+  background: linear-gradient(180deg, rgba(16, 22, 34, 0.88) 0%, rgba(11, 14, 20, 0.94) 100%);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  padding: 36px 32px;
+  box-sizing: border-box;
+  box-shadow: 0 28px 72px -16px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.02);
+  position: relative;
+}
+
+.bm-input-fintech {
+  width: 100%;
+  height: 48px;
+  background-color: #121824;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 0 16px;
+  color: #F4F5F7;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color var(--t-micro) var(--ease), box-shadow var(--t-micro) var(--ease);
+}
+.bm-input-fintech::placeholder {
+  color: #5A6578;
+}
+.bm-input-fintech:focus {
+  border-color: var(--profit) !important;
+  box-shadow: 0 0 0 1px rgba(34, 196, 122, 0.3) !important;
+}
+
+.bm-btn-pill-primary {
+  width: 100%;
+  height: 48px;
+  border-radius: 9999px;
+  background-color: var(--profit);
+  color: #08140B;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 15px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background-color var(--t-micro) var(--ease), transform var(--t-micro) var(--ease);
+}
+.bm-btn-pill-primary:hover:not(:disabled) {
+  background-color: var(--profit-hover);
+}
+.bm-btn-pill-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.bm-btn-pill-primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.bm-security-disclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 24px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #7E8B9F;
+}
+
+/* --------------------------------------------------------------------------
+   9. MOTION DESIGN DE FUNDO: ONDAS VETORIAIS E GLOW CONTÍNUO
+   -------------------------------------------------------------------------- */
+.bm-bg-curve-motion {
+  animation: bmWaveDrift 16s ease-in-out infinite;
+  will-change: transform, opacity;
+  transform-origin: center bottom;
+}
+
+@keyframes bmWaveDrift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.88;
+  }
+  50% {
+    transform: translate3d(-16px, 10px, 0) scale(1.015);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.88;
+  }
+}
+
+.bm-bg-glow-drift {
+  animation: bmGlowPulse 10s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+
+@keyframes bmGlowPulse {
+  0%, 100% {
+    opacity: 0.70;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.04);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   MOTION WIN/LOSS — Keyframes oficiais de resultado de contrato
+   Tokens: --ease, --t-enter (260ms), --t-base (180ms), --t-count (500ms)
+   Restrição: apenas transform e opacity (GPU friendly, --bm-motion-props)
+   -------------------------------------------------------------------------- */
+
+/* Pin de resultado in-chart: entrada com slide lateral 12px + fade */
+@keyframes bmPinEnter {
+  from {
+    opacity: 0;
+    transform: translate(10px, -50%) translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(10px, -50%) translateX(0);
+  }
+}
+
+/* Pin de resultado in-chart: saída com fade-out + slide lateral */
+@keyframes bmPinExit {
+  from {
+    opacity: 1;
+    transform: translate(10px, -50%) translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(10px, -50%) translateX(12px);
+  }
+}
+
+/* Toast de resultado: entrada com slide-up 16px + fade */
+@keyframes bmToastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Toast de resultado: saída com fade-down 8px */
+@keyframes bmToastSlideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Anchor dot do pin: pulso único 1x (WIN only, sem infinite) */
+@keyframes bmAnchorPulse {
+  0% {
+    transform: translateY(-50%) scale(1);
+  }
+  50% {
+    transform: translateY(-50%) scale(1.4);
+  }
+  100% {
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bm-bg-curve-motion,
+  .bm-bg-glow-drift {
+    animation: none !important;
+  }
+}
+
+.bm-stealth-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(138, 146, 161, 0.25) transparent;
+}
+
+.bm-stealth-scroll::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.bm-stealth-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bm-stealth-scroll::-webkit-scrollbar-thumb {
+  background: rgba(138, 146, 161, 0.25);
+  border-radius: 4px;
+}
+
+.bm-stealth-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(138, 146, 161, 0.45);
+}
+
+
+

@@ -1,0 +1,38 @@
+{
+  "title": "LATAM Trading Platform",
+  "latency": "Latência",
+  "online": "Conectado",
+  "offline": "Desconectado",
+  "loading": "Carregando...",
+  "error": "Ocorreu um erro",
+  "buttons": {
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "close": "Fechar",
+    "confirm": "Confirmar"
+  },
+  "currencies": {
+    "select_currency": "Moeda de Exibição",
+    "brl": "Real Brasileiro (BRL)",
+    "mxn": "Peso Mexicano (MXN)",
+    "cop": "Peso Colombiano (COP)",
+    "ars": "Peso Argentino (ARS)",
+    "clp": "Peso Chileno (CLP)",
+    "pen": "Sol Peruano (PEN)",
+    "usd": "Dólar Americano (USD - Base)"
+  },
+  "tabs": {
+    "forex": "Forex",
+    "crypto": "Cripto",
+    "commodities": "Commodities",
+    "synthetics": "Sintéticos",
+    "all": "Todos"
+  },
+  "geoblock": {
+    "title": "Acesso Não Disponível na sua Região",
+    "message": "Nossa plataforma opera atualmente na Fase 2 exclusivamente nos seguintes 6 países da América Latina:",
+    "countries": "Brasil, México, Colômbia, Argentina, Chile e Peru.",
+    "support": "Se você reside em um desses países e está usando VPN, por favor desative-a para acessar.",
+    "button_retry": "Verificar Novamente"
+  }
+}

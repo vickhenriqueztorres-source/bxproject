@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ColorType,
-  createChart,
   LineStyle,
   type AreaData,
   type CandlestickData,
@@ -12,7 +10,7 @@ import {
 } from 'lightweight-charts';
 import { fetchHistoricalCandlesChunk, type Candle, type Contract } from '../api/client';
 import type { Tick } from '../feed/protocol';
-import { formatMinor } from '../lib/money';
+import { formatMinor, formatCurrencyBinmax } from '../lib/money';
 import {
   candleData,
   candleFromTick,
@@ -21,6 +19,8 @@ import {
   isSubMinuteTimeframe,
   type Timeframe,
 } from './candle-adapter';
+import { mergeObservedCandles, safeCandleFromTick } from './chart-scale-normalizer';
+import { IsolatedChartHost } from './IsolatedChartHost';
 import { TimeLinesOverlay } from './TimeLinesOverlay';
 import { OrderFlagsOverlay } from './OrderFlagsOverlay';
 import { TradersMoodBar } from './TradersMoodBar';
@@ -28,12 +28,16 @@ import { useTickPulse } from './useTickPulse';
 import { RafChartUpdater } from './raf-updater';
 import { ChartDrawingToolbar } from './ChartDrawingToolbar';
 import { ChartDrawingOverlay } from './ChartDrawingOverlay';
+import { isNewTraderoomEnabled } from '../lib/feature-flags';
+import { ASSET_CATALOG, type AssetCategory, isSameAsset } from '../catalog/assets';
+import { AssetFlagBadge } from '../components/header/AssetFlagBadge';
 import {
   DEFAULT_INDICATORS,
   type DrawingItem,
   type DrawingToolType,
   type IndicatorConfig,
 } from './drawing-types';
+import { loadSafeDrawings, saveSafeDrawings } from './drawing-sanitizer';
 import {
   calculateSMA,
   calculateEMA,
@@ -55,24 +59,45 @@ export interface PriceChartProps {
   tick: Tick | null;
   symbol?: string;
   activeContracts?: Contract[];
+  contracts?: Contract[];
   isStale?: boolean;
   isVisible?: boolean;
+  onSelectSymbol?: (symbol: string) => void;
 }
 
 export function PriceChart({
   candles,
   tick,
-  symbol = 'SYNTH_VOL_50',
+  symbol = 'VOL_50',
   activeContracts = [],
+  contracts,
   isStale = false,
   isVisible = true,
+  onSelectSymbol,
 }: PriceChartProps) {
+  const effectiveContracts = contracts ?? activeContracts ?? [];
   const host = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<IChartApi | null>(null);
   const candleSeries = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const areaSeries = useRef<ISeriesApi<'Area'> | null>(null);
   const currentPriceLine = useRef<IPriceLine | null>(null);
+  const currentPriceLineSeries = useRef<ISeriesApi<any> | null>(null);
   const strikeLinesMap = useRef<Map<string, IPriceLine>>(new Map());
+
+  const safeRemoveCurrentPriceLine = useCallback(() => {
+    if (currentPriceLine.current) {
+      try {
+        if (currentPriceLineSeries.current) {
+          currentPriceLineSeries.current.removePriceLine(currentPriceLine.current);
+        } else {
+          if (candleSeries.current) candleSeries.current.removePriceLine(currentPriceLine.current);
+          if (areaSeries.current) areaSeries.current.removePriceLine(currentPriceLine.current);
+        }
+      } catch { /* ignore */ }
+      currentPriceLine.current = null;
+      currentPriceLineSeries.current = null;
+    }
+  }, []);
   const indicatorSeriesMap = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
   const latestCandle = useRef<CandlestickData<UTCTimestamp> | null>(null);
   const rafUpdaterRef = useRef<RafChartUpdater>(new RafChartUpdater());
@@ -81,56 +106,122 @@ export function PriceChart({
   const [timeframe, setTimeframe] = useState<Timeframe>('1m');
   const [sentimentBulls, setSentimentBulls] = useState(64);
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  const [isChartReady, setIsChartReady] = useState(false);
   const lastPrice = useRef<number | null>(null);
   const [priceDirection, setPriceDirection] = useState<'UP' | 'DOWN' | 'NEUTRAL'>('NEUTRAL');
   const tickPulse = useTickPulse(tick);
 
+  // Seletor Rápido de Ativos In-Chart (Subetapa 2)
+  const [showAssetSelector, setShowAssetSelector] = useState(false);
+  const [assetSearchQuery, setAssetSearchQuery] = useState('');
+  const [assetCategoryFilter, setAssetCategoryFilter] = useState<'TODOS' | AssetCategory>('TODOS');
+
+  useEffect(() => {
+    if (!showAssetSelector) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowAssetSelector(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showAssetSelector]);
+
+  // Telemetria em Tempo Real In-Chart (Subetapa 03 / IQ Option Fidelity)
+  const [telemetryNow, setTelemetryNow] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setTelemetryNow(Date.now()), 250);
+    return () => clearInterval(interval);
+  }, []);
+
+  const openChartContracts = effectiveContracts.filter(
+    (c) => (isSameAsset(c.symbol, symbol) || !c.symbol) && c.status === 'OPEN'
+  );
+
+  let timeFormatted = '00:00';
+  let totalStakeMinor = 0;
+  let netPnlMinor = 0;
+  let isTradeWinning = false;
+
+  if (openChartContracts.length > 0) {
+    let earliestExpiryMs = Infinity;
+
+    for (const c of openChartContracts) {
+      const stake = Number(c.stake_minor) || 0;
+      totalStakeMinor += stake;
+
+      const curP = tick ? Number(tick.price) : Number(c.entry_price ?? 0);
+      const strike = Number(c.strike_price ?? c.entry_price ?? curP);
+      const isUp = c.direction === 'UP';
+      const isWin = isUp ? curP > strike : curP < strike;
+      const isDraw = curP === strike;
+
+      const payout = c.payout_minor
+        ? Number(c.payout_minor)
+        : Math.round(stake * 0.85);
+
+      if (isWin) {
+        netPnlMinor += payout;
+      } else if (!isDraw) {
+        netPnlMinor -= stake;
+      }
+
+      if (c.expires_at) {
+        const expMs = Date.parse(c.expires_at);
+        if (Number.isFinite(expMs) && expMs < earliestExpiryMs) {
+          earliestExpiryMs = expMs;
+        }
+      }
+    }
+
+    isTradeWinning = netPnlMinor >= 0;
+
+    const targetExpiry = Number.isFinite(earliestExpiryMs) ? earliestExpiryMs : telemetryNow;
+    const secondsRemaining = Math.max(0, Math.ceil((targetExpiry - telemetryNow) / 1000));
+    const mins = Math.floor(secondsRemaining / 60).toString().padStart(2, '0');
+    const secs = (secondsRemaining % 60).toString().padStart(2, '0');
+    timeFormatted = `${mins}:${secs}`;
+  }
+
   // Retenção Histórica & Janela Deslizante Macro (Perigo 8 / Subetapas 4 & 6)
   const MAX_LOADED_BARS = 3500;
   const [internalCandles, setInternalCandles] = useState<Candle[]>(candles);
+  const [internalSymbol, setInternalSymbol] = useState(symbol);
+  const observed = useRef({ symbol, sequence: 0, bars: new Map<UTCTimestamp, CandlestickData<UTCTimestamp>>(), pending: new Set<UTCTimestamp>() });
+  const renderContext = useRef({ symbol, timeframe, chartType });
+  renderContext.current = { symbol, timeframe, chartType };
   const isLoadingHistoryRef = useRef(false);
   const hasMoreHistoryRef = useRef(true);
   const oldestLoadedTimeRef = useRef<number | null>(null);
   const shouldScrollToRealTimeRef = useRef(true);
 
-  // Sincronizar quando a prop inicial de candles ou o símbolo mudar
+  // Sincronizar quando a prop inicial de candles ou o símbolo mudar (Subetapa 01)
   useEffect(() => {
     setInternalCandles(candles);
+    setInternalSymbol(symbol);
+    if (observed.current.symbol !== symbol) {
+      observed.current = { symbol, sequence: 0, bars: new Map(), pending: new Set() };
+    }
     hasMoreHistoryRef.current = true;
     isLoadingHistoryRef.current = false;
     oldestLoadedTimeRef.current = null;
     shouldScrollToRealTimeRef.current = true;
+    rafUpdaterRef.current.reset(symbol);
   }, [candles, symbol]);
 
   // Ferramentas Gráficas e Indicadores Técnicos
   const [indicators, setIndicators] = useState<IndicatorConfig[]>(DEFAULT_INDICATORS);
-  const [drawings, setDrawings] = useState<DrawingItem[]>(() => {
-    try {
-      const raw = localStorage.getItem('broker_drawings_' + symbol);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [drawings, setDrawings] = useState<DrawingItem[]>(() => loadSafeDrawings(symbol));
   const [activeTool, setActiveTool] = useState<DrawingToolType>(null);
   const [activeColor, setActiveColor] = useState<string>('#00e676');
 
-  // Persistência de desenhos no localStorage por ativo
+  // Persistência blindada de desenhos no localStorage por ativo com Quota Guard
   useEffect(() => {
-    try {
-      localStorage.setItem('broker_drawings_' + symbol, JSON.stringify(drawings));
-    } catch {
-      // Ignora falhas de storage restrito
-    }
+    saveSafeDrawings(symbol, drawings);
   }, [drawings, symbol]);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('broker_drawings_' + symbol);
-      setDrawings(raw ? JSON.parse(raw) : []);
-    } catch {
-      setDrawings([]);
-    }
+    setDrawings(loadSafeDrawings(symbol));
   }, [symbol]);
 
   // Monitorar direção do preço e atualizar levemente o sentimento da comunidade
@@ -151,153 +242,110 @@ export function PriceChart({
     }
   }, [tick]);
 
-  // Reset de referência de preço ao alternar ativo
+  // Reset de referência de preço e sequência ao alternar ativo
   useEffect(() => {
     lastPrice.current = null;
+    rafUpdaterRef.current.resetSequence();
+    shouldScrollToRealTimeRef.current = true;
   }, [symbol]);
 
-  // Instanciação inicial do gráfico
-  useEffect(() => {
-    if (!host.current) return;
+  const isBinmax = isNewTraderoomEnabled();
 
-    const chart = createChart(host.current, {
-      autoSize: false,
-      layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: '#8e9ebc',
-        fontSize: 11,
-      },
-      grid: {
-        vertLines: { color: 'rgba(28, 41, 65, 0.45)' },
-        horzLines: { color: 'rgba(28, 41, 65, 0.45)' },
-      },
-      rightPriceScale: {
-        borderColor: '#1d2c48',
-        scaleMargins: { top: 0.12, bottom: 0.12 },
-      },
-      timeScale: {
-        borderColor: '#1d2c48',
-        timeVisible: true,
-        secondsVisible: false,
-        rightOffset: 12,
-        barSpacing: 10,
-      },
-      crosshair: {
-        vertLine: { color: '#4d6994', width: 1 },
-        horzLine: { color: '#4d6994', width: 1 },
-      },
-    });
+  // Callback de inicialização do canvas vindo do componente ilhado IsolatedChartHost
+  const handleChartReady = useCallback(
+    (api: {
+      chart: IChartApi;
+      activeSeries: ISeriesApi<'Candlestick'> | ISeriesApi<'Area'>;
+      candleSeries: ISeriesApi<'Candlestick'>;
+      areaSeries: ISeriesApi<'Area'>;
+      timeScale: any;
+    }) => {
+      chartInstance.current = api.chart;
+      candleSeries.current = api.candleSeries;
+      areaSeries.current = api.areaSeries;
+      setIsChartReady(true);
 
-    chartInstance.current = chart;
-
-    if (host.current) {
-      setDimensions({
-        width: host.current.clientWidth,
-        height: host.current.clientHeight || 450,
-      });
-    }
-
-    // Redimensionamento full-bleed resiliente
-    const resizeObserver = new ResizeObserver(() => {
-      if (host.current && chartInstance.current) {
-        const width = host.current.clientWidth;
-        const height = host.current.clientHeight || 450;
-        chartInstance.current.applyOptions({ width, height });
-        setDimensions({ width, height });
+      if (shouldScrollToRealTimeRef.current) {
+        api.timeScale.scrollToRealTime();
+        shouldScrollToRealTimeRef.current = false;
       }
-    });
-    resizeObserver.observe(host.current);
+    },
+    []
+  );
 
+  const effectiveCandles = internalSymbol === symbol ? internalCandles : [];
+
+  const resampledCandles = useMemo(() => {
+    return mergeObservedCandles(resampleCandles(effectiveCandles, timeframe),
+      observed.current.symbol === symbol ? [...observed.current.bars.values()] : [], timeframe);
+  }, [effectiveCandles, timeframe, chartType, symbol]);
+
+  // Atualiza referência da vela mais recente quando as velas reamostradas mudam
+  useEffect(() => {
+    rafUpdaterRef.current.reset();
+    latestCandle.current = resampledCandles.at(-1) ?? null;
+  }, [resampledCandles, isChartReady]);
+
+  // Sincronizar Linha de Preço Atual na troca de tipo de gráfico
+  useEffect(() => {
+    safeRemoveCurrentPriceLine();
+
+    const activeSeries = chartType === 'candles' ? candleSeries.current : areaSeries.current;
+    if (!activeSeries || lastPrice.current === null) return;
+
+    const price = lastPrice.current;
+    const isUp = priceDirection === 'UP' || priceDirection === 'NEUTRAL';
+    const color = isBinmax ? '#DCE1EA' : (isUp ? '#00e676' : '#ff3d71');
+    const title = isBinmax ? '' : (isUp ? '▲ Cotação' : '▼ Cotação');
+
+    currentPriceLine.current = activeSeries.createPriceLine({
+      price,
+      color,
+      lineWidth: 1,
+      lineStyle: LineStyle.Dashed,
+      axisLabelVisible: true,
+      title,
+    });
+    currentPriceLineSeries.current = activeSeries;
+  }, [chartType, isBinmax, safeRemoveCurrentPriceLine]);
+
+  // Cleanup geral ao desmontar o componente
+  useEffect(() => {
     return () => {
-      resizeObserver.disconnect();
-      chart.remove();
+      safeRemoveCurrentPriceLine();
       chartInstance.current = null;
       candleSeries.current = null;
       areaSeries.current = null;
+      currentPriceLineSeries.current = null;
       latestCandle.current = null;
-      currentPriceLine.current = null;
       lastPrice.current = null;
       strikeLinesMap.current.clear();
       indicatorSeriesMap.current.clear();
       rafUpdaterRef.current.cancel();
     };
-  }, []);
+  }, [safeRemoveCurrentPriceLine]);
 
-  const resampledCandles = useMemo(() => {
-    return resampleCandles(internalCandles, timeframe);
-  }, [internalCandles, timeframe]);
-
-  // Criar/Trocar Series conforme o chartType e timeframe ativo
+  // Limpeza de overlays, linhas de preço e strikes na troca de ativo (Subetapa 02)
   useEffect(() => {
-    const chart = chartInstance.current;
-    if (!chart) return;
+    safeRemoveCurrentPriceLine();
+    lastPrice.current = null;
 
-    // Atualizar opções do timeScale conforme o timeframe (exibir segundos para 5s, 15s, 30s)
-    chart.timeScale().applyOptions({
-      secondsVisible: isSubMinuteTimeframe(timeframe),
-    });
-
-    // Remover series antigas e linhas associadas
-    const prevSeries = candleSeries.current ?? areaSeries.current;
-    if (currentPriceLine.current && prevSeries) {
+    for (const [, line] of strikeLinesMap.current.entries()) {
       try {
-        prevSeries.removePriceLine(currentPriceLine.current);
+        if (candleSeries.current) candleSeries.current.removePriceLine(line);
+        if (areaSeries.current) areaSeries.current.removePriceLine(line);
       } catch { /* ignore */ }
-      currentPriceLine.current = null;
     }
-    if (prevSeries) {
-      for (const line of strikeLinesMap.current.values()) {
-        try {
-          prevSeries.removePriceLine(line);
-        } catch { /* ignore */ }
-      }
-      strikeLinesMap.current.clear();
-    }
-    if (candleSeries.current) {
-      chart.removeSeries(candleSeries.current);
-      candleSeries.current = null;
-    }
-    if (areaSeries.current) {
-      chart.removeSeries(areaSeries.current);
-      areaSeries.current = null;
-    }
+    strikeLinesMap.current.clear();
 
-    if (chartType === 'candles') {
-      candleSeries.current = chart.addCandlestickSeries({
-        upColor: '#00e676',
-        downColor: '#ff3d71',
-        borderVisible: false,
-        wickUpColor: '#00e676',
-        wickDownColor: '#ff3d71',
-      });
-    } else {
-      areaSeries.current = chart.addAreaSeries({
-        lineColor: '#00e676',
-        topColor: 'rgba(0, 230, 118, 0.35)',
-        bottomColor: 'rgba(0, 230, 118, 0.01)',
-        lineWidth: 2,
-      });
+    shouldScrollToRealTimeRef.current = true;
+    if (chartInstance.current) {
+      try {
+        chartInstance.current.priceScale('right').applyOptions({ autoScale: true });
+        chartInstance.current.timeScale().scrollToRealTime();
+      } catch { /* ignore */ }
     }
-
-    // Carregar dados históricos reamostrados na nova série
-    if (chartType === 'candles' && candleSeries.current) {
-      candleSeries.current.setData(resampledCandles);
-      latestCandle.current = resampledCandles.at(-1) ?? null;
-    } else if (chartType === 'line' && areaSeries.current) {
-      const lineData: AreaData<UTCTimestamp>[] = resampledCandles.map((c) => ({
-        time: c.time,
-        value: c.close,
-      }));
-      areaSeries.current.setData(lineData);
-      latestCandle.current = resampledCandles.at(-1) ?? null;
-    }
-
-    // Posicionar no tempo mais recente apenas quando apropriado (boot, troca de timeframe ou ativo)
-    if (shouldScrollToRealTimeRef.current) {
-      chart.timeScale().scrollToRealTime();
-      shouldScrollToRealTimeRef.current = false;
-    }
-  }, [chartType, resampledCandles, timeframe]);
+  }, [symbol, safeRemoveCurrentPriceLine]);
 
   // Lazy Loading Retroativo no Scroll para a Esquerda (Subetapa 4 & 6)
   useEffect(() => {
@@ -329,6 +377,7 @@ export function PriceChart({
           isLoadingHistoryRef.current = true;
           try {
             const olderBars = await fetchHistoricalCandlesChunk(symbol, oldestEpoch, 1000);
+            if (renderContext.current.symbol !== symbol) return;
             if (!olderBars || olderBars.length === 0) {
               hasMoreHistoryRef.current = false;
               return;
@@ -387,7 +436,7 @@ export function PriceChart({
         chart.timeScale().unsubscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
       } catch { /* ignore */ }
     };
-  }, [internalCandles, symbol]);
+  }, [isChartReady, internalCandles, symbol]);
 
   // Sincronização dos 10 Indicadores Técnicos Nativos
   useEffect(() => {
@@ -610,37 +659,53 @@ export function PriceChart({
         }
       }
     }
-  }, [indicators, resampledCandles]);
+  }, [isChartReady, indicators, resampledCandles]);
 
   // Atualização em tempo real de novos ticks com Throttling rAF a 60fps
   useEffect(() => {
     if (!tick) return;
 
+    // Blindagem Anti-Cross-Asset Zombie Tick: descarta ticks de símbolos anteriores em trânsito
+    if (tick.symbol && tick.symbol !== symbol) {
+      return;
+    }
+
+    const sample = safeCandleFromTick(tick, null, '5s');
+    if (sample && tick.sequence > observed.current.sequence) {
+      observed.current.bars.set(sample.time, safeCandleFromTick(tick, observed.current.bars.get(sample.time) ?? null, '5s')!);
+      observed.current.pending.add(sample.time);
+      observed.current.sequence = tick.sequence;
+      if (observed.current.bars.size > MAX_LOADED_BARS * 12) {
+        const oldest = observed.current.bars.keys().next().value;
+        if (oldest !== undefined) { observed.current.bars.delete(oldest); observed.current.pending.delete(oldest); }
+      }
+    }
     rafUpdaterRef.current.push(tick, (targetTick) => {
+      if (renderContext.current.symbol !== symbol || renderContext.current.timeframe !== timeframe || renderContext.current.chartType !== chartType) return;
+      // Re-valida dentro do callback rAF caso o ativo tenha mudado enquanto o frame aguardava
+      if (targetTick.symbol && targetTick.symbol !== symbol) {
+        return;
+      }
       const price = Number(targetTick.price);
 
-      if (chartType === 'candles' && candleSeries.current) {
-        const next = candleFromTick(targetTick, latestCandle.current, timeframe);
-        if (next) {
+      const updates = mergeObservedCandles(latestCandle.current ? [latestCandle.current] : [],
+        [...observed.current.pending].map((time) => observed.current.bars.get(time)!), timeframe, false);
+      for (const next of updates) {
+        if (chartType === 'candles' && candleSeries.current) {
           candleSeries.current.update(next);
-          latestCandle.current = next;
+        } else if (chartType === 'line' && areaSeries.current) {
+          areaSeries.current.update({ time: next.time, value: next.close });
         }
-      } else if (chartType === 'line' && areaSeries.current) {
-        const epoch = Date.parse(targetTick.ts);
-        if (Number.isFinite(epoch) && Number.isFinite(price)) {
-          const step = timeframeSeconds(timeframe);
-          const tsSeconds = Math.floor(epoch / 1000);
-          const bucket = (Math.floor(tsSeconds / step) * step) as UTCTimestamp;
-          areaSeries.current.update({ time: bucket, value: price });
-        }
+        latestCandle.current = next;
       }
+      observed.current.pending.clear();
 
       // Atualizar Linha de Preço Atual
-      const activeSeries = candleSeries.current ?? areaSeries.current;
+      const activeSeries = chartType === 'candles' ? candleSeries.current : areaSeries.current;
       if (activeSeries && Number.isFinite(price)) {
         const isUp = priceDirection === 'UP' || priceDirection === 'NEUTRAL';
-        const color = isUp ? '#00e676' : '#ff3d71';
-        const title = isUp ? '▲ Cotação' : '▼ Cotação';
+        const color = isBinmax ? '#DCE1EA' : (isUp ? '#00e676' : '#ff3d71');
+        const title = isBinmax ? '' : (isUp ? '▲ Cotação' : '▼ Cotação');
 
         if (currentPriceLine.current) {
           currentPriceLine.current.applyOptions({
@@ -657,14 +722,11 @@ export function PriceChart({
             axisLabelVisible: true,
             title,
           });
+          currentPriceLineSeries.current = activeSeries;
         }
       }
     });
-
-    return () => {
-      rafUpdaterRef.current.cancel();
-    };
-  }, [tick, chartType, priceDirection, timeframe]);
+  }, [tick, chartType, priceDirection, timeframe, isBinmax, symbol, resampledCandles, isChartReady]);
 
   // Pausa e Retomada de Renderização sob Segundo Plano
   useEffect(() => {
@@ -677,10 +739,14 @@ export function PriceChart({
 
   // Sincronizar linhas de strike para ordens ativas
   useEffect(() => {
-    const activeSeries = candleSeries.current ?? areaSeries.current;
+    const activeSeries = chartType === 'candles' ? candleSeries.current : areaSeries.current;
     if (!activeSeries) return;
 
-    const currentOpenIds = new Set(activeContracts.filter((c) => c.status === 'OPEN').map((c) => c.id));
+    const currentOpenIds = new Set(
+      effectiveContracts
+        .filter((c) => c.status === 'OPEN' && (isSameAsset(c.symbol, symbol) || !c.symbol))
+        .map((c) => c.id)
+    );
 
     // Remover linhas de contratos liquidados ou removidos
     for (const [id, line] of strikeLinesMap.current.entries()) {
@@ -693,8 +759,9 @@ export function PriceChart({
     }
 
     // Criar linhas de strike para contratos abertos
-    for (const contract of activeContracts) {
+    for (const contract of effectiveContracts) {
       if (contract.status !== 'OPEN') continue;
+      if (!isSameAsset(contract.symbol, symbol) && contract.symbol) continue;
       if (strikeLinesMap.current.has(contract.id)) continue;
 
       const rawStrike = contract.strike_price ?? contract.entry_price ?? tick?.price;
@@ -702,9 +769,11 @@ export function PriceChart({
       if (!Number.isFinite(strike) || strike <= 0) continue;
 
       const isUp = contract.direction === 'UP';
-      const color = isUp ? '#00e676' : '#ff3d71';
+      const color = isBinmax ? (isUp ? '#22C55E' : '#E5484D') : (isUp ? '#00e676' : '#ff3d71');
       const stakeNum = Number(contract.stake_minor);
-      const title = `${isUp ? '▲ COMPRA' : '▼ VENDA'} ${Number.isFinite(stakeNum) ? formatMinor(stakeNum) : ''}`;
+      const title = isBinmax
+        ? `${isUp ? '▲ SUBE' : '▼ BAJA'} ${Number.isFinite(stakeNum) ? formatCurrencyBinmax(stakeNum) : ''}`
+        : `${isUp ? '▲ COMPRA' : '▼ VENDA'} ${Number.isFinite(stakeNum) ? formatMinor(stakeNum) : ''}`;
 
       const line = activeSeries.createPriceLine({
         price: strike,
@@ -716,7 +785,7 @@ export function PriceChart({
       });
       strikeLinesMap.current.set(contract.id, line);
     }
-  }, [activeContracts, chartType, tick?.price]);
+  }, [effectiveContracts, chartType, tick?.price, isBinmax, isChartReady, symbol]);
 
   const handleToggleIndicator = (id: string) => {
     setIndicators((prev) =>
@@ -742,6 +811,19 @@ export function PriceChart({
     }
   };
 
+  const inChartFilteredAssets = useMemo(() => {
+    return ASSET_CATALOG.filter((a) => {
+      const matchesCat = assetCategoryFilter === 'TODOS' || a.category === assetCategoryFilter;
+      const query = assetSearchQuery.trim().toLowerCase();
+      const matchesQuery =
+        !query ||
+        a.symbol.toLowerCase().includes(query) ||
+        a.name.toLowerCase().includes(query) ||
+        a.category.toLowerCase().includes(query);
+      return matchesCat && matchesQuery;
+    });
+  }, [assetCategoryFilter, assetSearchQuery]);
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       {/* HUD Flutuante Superior */}
@@ -759,73 +841,384 @@ export function PriceChart({
         }}
       >
         {/* Espaço reservado para manter o alinhamento com a barra esquerda */}
-        <div style={{ width: '40px' }} />
+        {isBinmax ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', pointerEvents: 'auto' }}>
+            <div style={{ position: 'relative' }}>
+            <div
+              data-testid="chart-top-asset-pill"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(15, 20, 28, 0.88)',
+                backdropFilter: 'blur(12px)',
+                border: '1px solid rgba(244, 245, 247, 0.1)',
+                borderRadius: '7px',
+                padding: '4px 10px',
+                boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)',
+              }}
+            >
+              <div
+                onClick={() => setShowAssetSelector((prev) => !prev)}
+                role="button"
+                aria-label="Seleccionar activo del gráfico"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                }}
+              >
+                <AssetFlagBadge symbol={symbol} size={18} />
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#F4F5F7' }}>
+                  {symbol.replace('_OTC', '').replace(/([A-Z]{3})([A-Z]{3})/, '$1/$2')}
+                </span>
+                <span
+                  style={{
+                    fontSize: '9.5px',
+                    color: '#22C47A',
+                    fontWeight: 700,
+                    background: 'rgba(34, 196, 122, 0.12)',
+                    border: '1px solid rgba(34, 196, 122, 0.25)',
+                    borderRadius: '4px',
+                    padding: '1px 5px',
+                  }}
+                >
+                  Digital
+                </span>
+                <svg
+                  data-testid="asset-selector-chevron"
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#8A92A1"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{
+                    transform: showAssetSelector ? 'rotate(180deg)' : 'none',
+                    transition: 'transform 180ms cubic-bezier(0.16, 1, 0.3, 1)',
+                  }}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </div>
 
-        {/* Tag Pulsante de Preço em Tempo Real */}
-        <div
-          className={`price-tag-pulse ${priceDirection === 'DOWN' ? 'down' : 'up'} ${
-            isStale ? 'stale' : tickPulse === 'UP' ? 'tick-pulse-green' : tickPulse === 'DOWN' ? 'tick-pulse-red' : ''
-          }`}
-          style={{
-            pointerEvents: 'auto',
-            background: isStale ? 'rgba(50, 60, 75, 0.85)' : undefined,
-            borderColor: isStale ? '#5a6b82' : undefined,
-            color: isStale ? '#a0b0c5' : undefined,
-          }}
-        >
-          <span
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: isStale ? '#8898a8' : priceDirection === 'DOWN' ? '#ff3d71' : '#00e676',
-            }}
-          />
-          <span>{tick?.price ?? '—'} USD</span>
-          <span>{isStale ? '⏸️' : priceDirection === 'DOWN' ? '▼' : '▲'}</span>
-        </div>
+              <div style={{ width: '1px', height: '14px', background: 'rgba(244, 245, 247, 0.12)' }} />
 
-        {/* Trader Sentiment Bar (Sentimento da Comunidade) */}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '4px',
-            background: 'rgba(10, 16, 30, 0.85)',
-            backdropFilter: 'blur(8px)',
-            border: '1px solid #1f2e4b',
-            borderRadius: '8px',
-            padding: '6px 12px',
-            pointerEvents: 'auto',
-            minWidth: '170px',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontWeight: 800 }}>
-            <span style={{ color: '#00e676' }}>▲ {sentimentBulls}% COMPRA</span>
-            <span style={{ color: '#ff3d71' }}>▼ {100 - sentimentBulls}% VENDA</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#8A92A1', fontSize: '12px' }}>
+                <span
+                  data-testid="asset-action-info"
+                  title="Información del activo"
+                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#F4F5F7')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = '#8A92A1')}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                </span>
+                <span
+                  data-testid="asset-action-alert"
+                  title="Crear alerta"
+                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#F4F5F7')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = '#8A92A1')}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
+                </span>
+                <span
+                  data-testid="asset-action-favorite"
+                  title="Agregar a favoritos"
+                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#F4F5F7')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = '#8A92A1')}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                </span>
+              </div>
+            </div>
+
+            {/* Dropdown Seletor de Ativos Flutuante In-Chart */}
+            {showAssetSelector && (
+              <>
+                <div
+                  onClick={() => setShowAssetSelector(false)}
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 90,
+                    background: 'rgba(0, 0, 0, 0.4)',
+                  }}
+                />
+                <div
+                  data-testid="chart-asset-selector-dropdown"
+                  style={{
+                    position: 'absolute',
+                    top: '36px',
+                    left: 0,
+                    width: '320px',
+                    maxHeight: '420px',
+                    background: '#121721',
+                    border: '1px solid rgba(244, 245, 247, 0.12)',
+                    borderRadius: '8px',
+                    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.85)',
+                    zIndex: 100,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    padding: '10px',
+                    boxSizing: 'border-box',
+                    gap: '8px',
+                    backdropFilter: 'blur(12px)',
+                  }}
+                >
+                  {/* Busca */}
+                  <input
+                    type="text"
+                    data-testid="in-chart-search-input"
+                    placeholder="Buscar activo (ej: EUR, BTC, Vol)..."
+                    value={assetSearchQuery}
+                    onChange={(e) => setAssetSearchQuery(e.target.value)}
+                    autoFocus
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      background: '#0D0F14',
+                      border: '1px solid rgba(244, 245, 247, 0.12)',
+                      borderRadius: '6px',
+                      padding: '6px 10px',
+                      fontSize: '11px',
+                      color: '#F4F5F7',
+                      outline: 'none',
+                    }}
+                  />
+
+                  {/* Categorias Pills */}
+                  <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '2px' }}>
+                    {(['TODOS', 'Sintéticos', 'Forex', 'Cripto', 'Commodities'] as const).map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setAssetCategoryFilter(cat)}
+                        style={{
+                          background: assetCategoryFilter === cat ? 'rgba(34, 196, 122, 0.15)' : 'rgba(244, 245, 247, 0.05)',
+                          border: assetCategoryFilter === cat ? '1px solid #22C47A' : '1px solid transparent',
+                          color: assetCategoryFilter === cat ? '#22C47A' : '#8A92A1',
+                          borderRadius: '4px',
+                          padding: '2px 8px',
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                          transition: 'all 100ms cubic-bezier(0.16, 1, 0.3, 1)',
+                        }}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Lista de Ativos */}
+                  <div style={{ maxHeight: '280px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                    {inChartFilteredAssets.map((asset) => {
+                      const isCur = asset.symbol === symbol;
+                      return (
+                        <div
+                          key={asset.symbol}
+                          onClick={() => {
+                            if (onSelectSymbol) {
+                              onSelectSymbol(asset.symbol);
+                            }
+                            setShowAssetSelector(false);
+                            setAssetSearchQuery('');
+                          }}
+                          data-testid={`in-chart-asset-row-${asset.symbol}`}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '6px 8px',
+                            borderRadius: '6px',
+                            background: isCur ? 'rgba(34, 196, 122, 0.1)' : 'transparent',
+                            border: isCur ? '1px solid rgba(34, 196, 122, 0.3)' : '1px solid transparent',
+                            cursor: 'pointer',
+                            transition: 'background 100ms cubic-bezier(0.16, 1, 0.3, 1)',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isCur) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isCur) e.currentTarget.style.background = 'transparent';
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <AssetFlagBadge symbol={asset.symbol} size={16} />
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontSize: '11px', fontWeight: 700, color: isCur ? '#22C47A' : '#F4F5F7' }}>
+                                {asset.symbol.replace('_OTC', '').replace(/([A-Z]{3})([A-Z]{3})/, '$1/$2')}
+                              </span>
+                              <span style={{ fontSize: '9px', color: '#8A92A1' }}>{asset.name}</span>
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: 800,
+                              color: '#22C47A',
+                              background: 'rgba(34, 196, 122, 0.12)',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontFamily: "'Geist Mono', monospace",
+                            }}
+                          >
+                            +{asset.payout}%
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+            </div>
+
+            {/* Barra de Telemetria In-Chart (Estilo IQ Option Oficial - Tipografia Pura) */}
+            {openChartContracts.length > 0 && (
+              <div
+                data-testid="chart-trade-telemetry-strip"
+                data-telemetry-status={isTradeWinning ? 'winning' : 'losing'}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '20px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: 0,
+                  padding: '2px 8px',
+                  boxShadow: 'none',
+                  pointerEvents: 'auto',
+                  fontFamily: "'Geist', sans-serif",
+                }}
+              >
+                {/* Coluna 1: HORA DE COMPRA */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600, fontFamily: "'Geist Mono', monospace", fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.2px' }}>
+                    <span style={{ fontSize: '13px' }}>⏱</span>
+                    <span>{timeFormatted}</span>
+                  </div>
+                  <span style={{ fontSize: '9px', color: 'var(--text-quiet)', fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                    HORA DE COMPRA
+                  </span>
+                </div>
+
+                <div style={{ width: '1px', height: '32px', background: 'rgba(255, 255, 255, 0.12)' }} />
+
+                {/* Coluna 2: INVESTIMENTO TOTAL */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600, fontFamily: "'Geist Mono', monospace", fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.2px' }}>
+                    {`$${(totalStakeMinor / 100).toFixed(2)}`}
+                  </span>
+                  <span style={{ fontSize: '9px', color: 'var(--text-quiet)', fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                    INVERSIÓN TOTAL
+                  </span>
+                </div>
+
+                <div style={{ width: '1px', height: '32px', background: 'rgba(255, 255, 255, 0.12)' }} />
+
+                {/* Coluna 3: LUCRO ESPERADO */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ color: isTradeWinning ? 'var(--profit)' : 'var(--loss)', fontSize: '20px', fontWeight: 700, fontFamily: "'Geist Mono', monospace", fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.2px' }}>
+                    {isTradeWinning ? `+$${(netPnlMinor / 100).toFixed(2)}` : `-$${(Math.abs(netPnlMinor) / 100).toFixed(2)}`}
+                  </span>
+                  <span style={{ fontSize: '9px', color: 'var(--text-quiet)', fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                    GANANCIA ESPERADA
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
-          {/* Barra bicolor */}
+        ) : (
+          <div style={{ width: '40px' }} />
+        )}
+
+        {/* Tag Pulsante de Preço em Tempo Real (Apenas modo legado, não no Binmax) */}
+        {!isBinmax && (
           <div
+            className={`price-tag-pulse ${priceDirection === 'DOWN' ? 'down' : 'up'} ${
+              isStale ? 'stale' : tickPulse === 'UP' ? 'tick-pulse-green' : tickPulse === 'DOWN' ? 'tick-pulse-red' : ''
+            }`}
             style={{
-              height: '4px',
-              width: '100%',
-              borderRadius: '2px',
-              background: '#ff3d71',
-              overflow: 'hidden',
-              display: 'flex',
+              pointerEvents: 'auto',
+              background: isStale ? 'rgba(50, 60, 75, 0.85)' : undefined,
+              borderColor: isStale ? '#5a6b82' : undefined,
+              color: isStale ? '#a0b0c5' : undefined,
             }}
           >
-            <div
+            <span
               style={{
-                height: '100%',
-                width: `${sentimentBulls}%`,
-                background: '#00e676',
-                transition: 'width 0.4s ease',
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: isStale ? '#8898a8' : priceDirection === 'DOWN' ? '#ff3d71' : '#00e676',
               }}
             />
+            <span>{tick?.price ?? '—'} USD</span>
+            <span>{isStale ? '⏸️' : priceDirection === 'DOWN' ? '▼' : '▲'}</span>
           </div>
-        </div>
+        )}
+
+        {/* Trader Sentiment Bar (Sentimento da Comunidade Legado) */}
+        {!isBinmax && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              background: 'rgba(10, 16, 30, 0.85)',
+              backdropFilter: 'blur(8px)',
+              border: '1px solid #1f2e4b',
+              borderRadius: '8px',
+              padding: '6px 12px',
+              pointerEvents: 'auto',
+              minWidth: '170px',
+              boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontWeight: 800 }}>
+              <span style={{ color: '#00e676' }}>▲ {sentimentBulls}% COMPRA</span>
+              <span style={{ color: '#ff3d71' }}>▼ {100 - sentimentBulls}% VENDA</span>
+            </div>
+            {/* Barra bicolor */}
+            <div
+              style={{
+                height: '4px',
+                width: '100%',
+                borderRadius: '2px',
+                background: '#ff3d71',
+                overflow: 'hidden',
+                display: 'flex',
+              }}
+            >
+              <div
+                style={{
+                  height: '100%',
+                  width: `${sentimentBulls}%`,
+                  background: '#00e676',
+                  transition: 'width 0.4s ease',
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Barra de Ferramentas Gráficas Lateral (Estilo IQ Option) */}
@@ -852,49 +1245,56 @@ export function PriceChart({
         onToggleIndicator={handleToggleIndicator}
       />
 
-      {/* Overlays de Linhas de Tempo: Hora de Compra e Expiração */}
-      <TimeLinesOverlay
-        containerWidth={dimensions.width}
-        containerHeight={dimensions.height}
-        chartInstance={chartInstance.current}
-        latestCandleTime={latestCandle.current?.time ?? null}
-        tickTimestamp={tick?.ts ?? null}
-      />
+      {/* Overlays de Linhas de Tempo, Ordens e Desenhos Técnicos (Blindados com isChartReady) */}
+      {isChartReady && (
+        <>
+          <TimeLinesOverlay
+            containerWidth={dimensions.width}
+            containerHeight={dimensions.height}
+            chartInstance={chartInstance.current}
+            latestCandleTime={latestCandle.current?.time ?? null}
+            tickTimestamp={tick?.ts ?? null}
+            timeframe={timeframe}
+            hideTopTags={openChartContracts.length > 0}
+          />
 
-      {/* Bandeirinhas Flutuantes de Ordens Abertas (Strike Flags) */}
-      <OrderFlagsOverlay
-        contracts={activeContracts}
-        currentPrice={tick ? Number(tick.price) : null}
-        containerWidth={dimensions.width}
-        containerHeight={dimensions.height}
-        activeSeries={candleSeries.current ?? areaSeries.current}
-      />
+          <OrderFlagsOverlay
+            contracts={effectiveContracts.filter((c) => isSameAsset(c.symbol, symbol) || !c.symbol)}
+            currentPrice={tick ? Number(tick.price) : null}
+            containerWidth={dimensions.width}
+            containerHeight={dimensions.height}
+            activeSeries={chartType === 'candles' ? candleSeries.current : areaSeries.current}
+            chartInstance={chartInstance.current}
+          />
 
-      {/* Camada SVG Interativa de Desenho Técnico (Linhas, Fibonacci, etc.) */}
-      <ChartDrawingOverlay
-        chartInstance={chartInstance.current}
-        activeSeries={candleSeries.current ?? areaSeries.current}
-        containerWidth={dimensions.width}
-        containerHeight={dimensions.height}
-        drawings={drawings}
-        onAddDrawing={handleAddDrawing}
-        onUpdateDrawing={handleUpdateDrawing}
-        onRemoveDrawing={handleRemoveDrawing}
-        activeTool={activeTool}
-        onFinishDrawing={() => setActiveTool(null)}
-        activeColor={activeColor}
-      />
+          <ChartDrawingOverlay
+            chartInstance={chartInstance.current}
+            activeSeries={chartType === 'candles' ? candleSeries.current : areaSeries.current}
+            containerWidth={dimensions.width}
+            containerHeight={dimensions.height}
+            drawings={drawings}
+            onAddDrawing={handleAddDrawing}
+            onUpdateDrawing={handleUpdateDrawing}
+            onRemoveDrawing={handleRemoveDrawing}
+            activeTool={activeTool}
+            onFinishDrawing={() => setActiveTool(null)}
+            activeColor={activeColor}
+          />
+        </>
+      )}
 
       {/* Barra de Sentimento Vertical (Trader's Mood Bar) */}
       <TradersMoodBar bullsPercentage={sentimentBulls} />
 
-      {/* Canvas Full-Bleed do Lightweight Charts */}
-      <div
-        className="chart-host"
-        ref={host}
-        role="img"
-        aria-label={`Gráfico de trading em tempo real para ${symbol}`}
-        style={{ width: '100%', height: '100%' }}
+      {/* Canvas Ilhado do Lightweight Charts (Subetapa 01/03) */}
+      <IsolatedChartHost
+        candles={resampledCandles}
+        chartType={chartType}
+        timeframe={timeframe}
+        symbol={symbol}
+        isBinmax={isBinmax}
+        onChartReady={handleChartReady}
+        onDimensionsChange={setDimensions}
       />
     </div>
   );

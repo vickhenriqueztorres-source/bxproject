@@ -1,7 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.RiskManager = void 0;
-class RiskManager {
+export class RiskManager {
     redis;
     checkScript;
     releaseScript;
@@ -89,4 +86,3 @@ class RiskManager {
         await this.redis.eval(this.releaseScript, 1, riskKey, riskAmount);
     }
 }
-exports.RiskManager = RiskManager;

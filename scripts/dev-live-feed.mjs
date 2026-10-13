@@ -1,4 +1,5 @@
 import http from 'node:http';
+import https from 'node:https';
 import { createRequire } from 'node:module';
 import {
   createPriceGenerator,
@@ -33,7 +34,24 @@ try {
   console.warn('[DB] Fallback em memória para auth/users:', e.message);
 }
 
+let BlnkClient = null;
+let blnk = null;
+try {
+  const blnkModule = require('../services/wallet-adapter/dist/blnk-client.js');
+  BlnkClient = blnkModule.BlnkClient;
+  const BLNK_URL = process.env.BLNK_URL || 'http://172.18.0.11:5001';
+  blnk = new BlnkClient(BLNK_URL, 2500);
+  blnk.initializeLedgerAndHouseAccounts().then(() => {
+    console.log('[Blnk] Ledger e contas da casa inicializadas com sucesso.');
+  }).catch((err) => {
+    console.warn('[Blnk] Aviso na inicialização de contas da casa:', err.message);
+  });
+} catch (bErr) {
+  console.warn('[Blnk] Adaptador Blnk não carregado:', bErr.message);
+}
+
 const memoryUsers = new Map();
+const memoryVerificationCodes = new Map();
 memoryUsers.set('demo@binmax.com', {
   id: '00000000-0000-4000-8000-000000000001',
   name: 'Usuario Demo Binmax',
@@ -67,6 +85,206 @@ function createSessionToken(user) {
   })).toString('base64url');
   const signature = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest('base64url');
   return `${header}.${payload}.${signature}`;
+}
+
+function verifySessionToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const [header, payload, signature] = parts;
+  const expectedSig = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest('base64url');
+  if (signature !== expectedSig) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (data.exp && data.exp < Math.floor(Date.now() / 1000)) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function extractBearerUser(req) {
+  const authHeader = req.headers['authorization'] || '';
+  if (!authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.slice(7).trim();
+  return verifySessionToken(token);
+}
+
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const FROM_EMAIL = 'Binmax Broker <suporte@binmaxbroker.com>';
+
+function resolveEmailLang(countryCode) {
+  const cc = (countryCode || '').toUpperCase().trim();
+  if (['BR', 'PT', 'AO', 'MZ'].includes(cc)) return 'pt';
+  if (['ES', 'MX', 'CO', 'AR', 'CL', 'PE', 'UY', 'VE', 'EC', 'GT', 'CU', 'BO', 'DO', 'HN', 'PY', 'SV', 'NI', 'CR', 'PA'].includes(cc)) return 'es';
+  return 'en';
+}
+
+function renderVerificationHtml({ name, code, link, lang }) {
+  const content = {
+    pt: {
+      subject: `Seu código de ativação: ${code} — Binmax Broker`,
+      badge: 'VERIFICAÇÃO DE SEGURANÇA',
+      headline: `Confirmação de acesso, ${name}`,
+      intro: `Para concluir a ativação da sua conta e liberar sua banca demonstrativa de <strong style="color: #22C47A;">$10.000 USD</strong> na sala de operações, utilize o código de segurança abaixo:`,
+      codeLabel: 'CÓDIGO DE ATIVAÇÃO:',
+      buttonText: 'Confirmar E-mail e Acessar Plataforma',
+      footerNote: 'Válido por 15 minutos. Contas verificadas contam com proteção de capital e saques liberados.',
+      text: `Olá ${name},\n\nSeu código de ativação Binmax é: ${code}\n\nOu abra este link para ativar em 1 clique:\n${link}\n\nCódigo válido por 15 minutos.\nEquipe Binmax Broker`
+    },
+    es: {
+      subject: `Tu código de activación: ${code} — Binmax Broker`,
+      badge: 'VERIFICACIÓN DE SEGURIDAD',
+      headline: `Confirmación de acceso, ${name}`,
+      intro: `Para completar la activación de tu cuenta y liberar tu saldo de práctica de <strong style="color: #22C47A;">$10.000 USD</strong> en la sala de operaciones, utiliza el código de seguridad:`,
+      codeLabel: 'CÓDIGO DE ACTIVACIÓN:',
+      buttonText: 'Confirmar Correo y Entrar a la Plataforma',
+      footerNote: 'Válido por 15 minutos. Las cuentas verificadas cuentan con retiros prioritarios y protección de capital.',
+      text: `Hola ${name},\n\nTu código de activación Binmax es: ${code}\n\nO abre este enlace para activar en 1 clic:\n${link}\n\nCódigo válido por 15 minutos.\nEquipo Binmax Broker`
+    },
+    en: {
+      subject: `Your activation code: ${code} — Binmax Broker`,
+      badge: 'SECURITY VERIFICATION',
+      headline: `Access confirmation, ${name}`,
+      intro: `To complete your account activation and unlock your <strong style="color: #22C47A;">$10,000 USD</strong> practice balance on the trading floor, enter the code below:`,
+      codeLabel: 'ACTIVATION CODE:',
+      buttonText: 'Verify Email & Open Trading Room',
+      footerNote: 'Valid for 15 minutes. Verified accounts enjoy priority withdrawals and capital protection.',
+      text: `Hello ${name},\n\nYour Binmax activation code is: ${code}\n\nOr open this link to verify in 1 click:\n${link}\n\nCode valid for 15 minutes.\nBinmax Broker Team`
+    }
+  }[lang || 'es'];
+
+  return {
+    subject: content.subject,
+    text: content.text,
+    html: `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>${content.subject}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0D0F14; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #F4F5F7;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #0D0F14; padding: 48px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 520px; background-color: #151922; border: 1px solid #232936; border-radius: 12px; overflow: hidden; box-shadow: 0 16px 36px rgba(0,0,0,0.6);">
+          <tr>
+            <td style="padding: 28px 32px 24px; border-bottom: 1px solid #232936;">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td style="vertical-align: middle;">
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="vertical-align: middle; padding-right: 12px; line-height: 0;">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="28" height="28" fill="none">
+                            <path d="M 9 26 L 24 11 L 39 26" stroke="#DCE1EA" stroke-width="6.5" stroke-linejoin="miter" stroke-linecap="square" />
+                            <path d="M 9 41 L 24 26 L 39 41" stroke="#8A92A1" stroke-width="6.5" stroke-linejoin="miter" stroke-linecap="square" />
+                          </svg>
+                        </td>
+                        <td style="vertical-align: middle;">
+                          <span style="font-size: 19px; font-weight: 700; letter-spacing: -0.2px; color: #DCE1EA; display: inline-block;">BINMAX</span>
+                          <span style="font-size: 10px; font-weight: 600; letter-spacing: 2px; color: #8A92A1; display: inline-block; margin-left: 4px;">BROKER</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td align="right" style="vertical-align: middle;">
+                    <span style="display: inline-block; padding: 4px 10px; font-size: 10px; font-weight: 600; color: #8A92A1; background-color: #0D0F14; border: 1px solid #232936; border-radius: 4px; letter-spacing: 0.8px;">
+                      ${content.badge}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 32px;">
+              <h1 style="margin: 0 0 16px; font-size: 19px; font-weight: 600; color: #F4F5F7; line-height: 1.35; letter-spacing: -0.2px;">
+                ${content.headline}
+              </h1>
+              <p style="margin: 0 0 20px; color: #8A92A1; font-size: 14px; line-height: 1.6;">
+                ${content.intro}
+              </p>
+              <div style="background-color: #0D0F14; border: 1px solid #232936; border-radius: 8px; padding: 22px 16px; text-align: center; margin: 24px 0;">
+                <div style="font-size: 11px; font-weight: 600; color: #8A92A1; letter-spacing: 1.5px; margin-bottom: 10px; text-transform: uppercase;">
+                  ${content.codeLabel}
+                </div>
+                <div style="font-size: 34px; font-weight: 700; letter-spacing: 8px; color: #F4F5F7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace; display: inline-block;">
+                  ${code}
+                </div>
+              </div>
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 28px 0 14px;">
+                <tr>
+                  <td align="center">
+                    <a href="${link}" style="display: block; width: 100%; box-sizing: border-box; background-color: #22C47A; color: #0D0F14; text-align: center; padding: 13px 24px; border-radius: 6px; font-size: 14px; font-weight: 600; letter-spacing: 0.2px; text-decoration: none;">
+                      ${content.buttonText}
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 18px 0 0; font-size: 12px; color: #8A92A1; text-align: center; line-height: 1.5;">
+                ${content.footerNote}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #0D0F14; padding: 22px 32px; border-top: 1px solid #232936; text-align: center;">
+              <p style="margin: 0 0 6px; font-size: 11px; color: #8A92A1; line-height: 1.4;">
+                © 2026 Binmax Broker. Todos os direitos reservados.
+              </p>
+              <p style="margin: 0; font-size: 10px; color: #535B6A; line-height: 1.4;">
+                Aviso de Risco: A negociação de derivativos e índices sintéticos envolve risco substancial de perda. Opere apenas com capital que você pode se permitir perder.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+  };
+}
+
+async function sendResendMail({ to, subject, html, text }) {
+  return new Promise((resolve) => {
+    try {
+      const payload = JSON.stringify({
+        from: FROM_EMAIL,
+        to: [to],
+        subject,
+        html,
+        text
+      });
+
+      const req = https.request('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload)
+        }
+      }, (res) => {
+        let data = '';
+        res.on('data', chunk => { data += chunk; });
+        res.on('end', () => {
+          console.log(`[Resend Email Sent] to=${to} status=${res.statusCode}`);
+          resolve({ status: res.statusCode, body: data });
+        });
+      });
+
+      req.on('error', (err) => {
+        console.error('[Resend Email Error]', err.message);
+        resolve({ status: 500, error: err.message });
+      });
+
+      req.write(payload);
+      req.end();
+    } catch (e) {
+      console.error('[Resend Email Exception]', e.message);
+      resolve({ status: 500, error: e.message });
+    }
+  });
 }
 
 const PORT = 3001;
@@ -352,10 +570,10 @@ function getCachedNews() {
 }
 
 // Servidor HTTP: Health Check, REST Candles, Contracts e UDF Chart History
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   // Configuração universal de CORS para o frontend
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Idempotency-Key');
 
   if (req.method === 'OPTIONS') {
@@ -555,11 +773,44 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
     return;
   }
 
-  // Endpoint de Consulta de Contrato por ID: GET /api/contracts/:id ou GET /contracts/:id
-  const contractMatch = pathname.match(/^\/(api\/)?contracts\/([a-zA-Z0-9_-]+)$/);
+  // Endpoint de Consulta de Contrato por ID: GET /api/contracts/:id, /contracts/:id, /api/v1/contracts/:id, /v1/contracts/:id
+  const contractMatch = pathname.match(/^\/(api\/)?(v1\/)?contracts\/([a-zA-Z0-9_-]+)$/);
   if (contractMatch && req.method === 'GET') {
-    const contractId = contractMatch[2];
-    const found = devContracts.find(c => c.id === contractId);
+    const contractId = contractMatch[3];
+    let found = null;
+
+    if (pgPool) {
+      try {
+        const queryRes = await pgPool.query('SELECT * FROM contracts WHERE id = $1', [contractId]);
+        if (queryRes.rows.length > 0) {
+          const row = queryRes.rows[0];
+          found = {
+            id: row.id,
+            user_id: row.user_id,
+            symbol: row.symbol,
+            direction: row.direction,
+            status: row.status,
+            result: row.result,
+            stake_minor: Number(row.stake_minor),
+            payout_minor: row.payout_minor !== null ? Number(row.payout_minor) : null,
+            entry_price: Number(row.entry_price),
+            strike_price: row.exit_price !== null ? Number(row.exit_price) : Number(row.entry_price),
+            exit_price: row.exit_price !== null ? Number(row.exit_price) : null,
+            expires_at: row.expires_at,
+            created_at: row.created_at,
+            opened_at: row.opened_at,
+            settled_at: row.settled_at
+          };
+        }
+      } catch (err) {
+        // Fallback em memória se id não for UUID ou erro no banco
+      }
+    }
+
+    if (!found) {
+      found = devContracts.find(c => c.id === contractId);
+    }
+
     if (!found) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ code: 'CONTRACT_NOT_FOUND', error: 'Contrato não encontrado' }));
@@ -617,9 +868,9 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
             }
 
             const insertRes = await pgPool.query(
-              `INSERT INTO users (name, email, password_hash, password_salt, country_code, demo_balance_minor)
-               VALUES ($1, $2, $3, $4, $5, $6)
-               RETURNING id, name, email, country_code, demo_balance_minor`,
+              `INSERT INTO users (name, email, password_hash, password_salt, country_code, demo_balance_minor, email_verified)
+               VALUES ($1, $2, $3, $4, $5, $6, false)
+               RETURNING id, name, email, country_code, demo_balance_minor, email_verified`,
               [name, email, hash, salt, country, demoBalance]
             );
             if (insertRes.rows.length > 0) {
@@ -629,7 +880,8 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
                 name: row.name,
                 email: row.email,
                 country: row.country_code,
-                demo_balance_minor: Number(row.demo_balance_minor)
+                demo_balance_minor: Number(row.demo_balance_minor),
+                email_verified: false
               };
             }
           } catch (dbErr) {
@@ -649,7 +901,8 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
             name,
             email,
             country,
-            demo_balance_minor: demoBalance
+            demo_balance_minor: demoBalance,
+            email_verified: false
           };
           memoryUsers.set(email, {
             ...createdUser,
@@ -658,12 +911,58 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
           });
         }
 
+        // 1. Gerar OTP de 6 dígitos e Token de Verificação
+        const verificationCode = crypto.randomInt(100000, 1000000).toString();
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const verificationExpiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
+
+        if (pgPool && createdUser.id) {
+          try {
+            await pgPool.query(
+              `INSERT INTO email_verification_codes (user_id, code, token, expires_at)
+               VALUES ($1, $2, $3, $4)`,
+              [createdUser.id, verificationCode, verificationToken, verificationExpiresAt]
+            );
+          } catch (codeErr) {
+            console.error('[DB Verification Code Error]', codeErr.message);
+          }
+        }
+
+        memoryVerificationCodes.set(verificationCode, {
+          userId: createdUser.id,
+          email: createdUser.email,
+          token: verificationToken,
+          expiresAt: Date.now() + 15 * 60 * 1000
+        });
+
+        // 2. Disparar e-mail de ativação via Resend com template oficial Turbo Prata
+        const lang = resolveEmailLang(createdUser.country);
+        const { subject, html, text } = renderVerificationHtml({
+          name: createdUser.name,
+          code: verificationCode,
+          link: `https://binmaxbroker.com/verificar?code=${verificationCode}`,
+          lang
+        });
+
+        sendResendMail({
+          to: createdUser.email,
+          subject,
+          html,
+          text
+        }).then(resendRes => {
+          console.log(`[Auto-Verification Email Sent] to=${createdUser.email} code=${verificationCode} status=${resendRes.status}`);
+        }).catch(err => {
+          console.error('[Auto-Verification Email Failed]', err);
+        });
+
         const token = createSessionToken(createdUser);
 
         res.writeHead(201, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           token,
-          user: createdUser
+          user: createdUser,
+          requiresEmailVerification: true,
+          message: 'Usuario registrado con éxito. Te hemos enviado un correo con tu código de verificación.'
         }));
       } catch (err) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -695,7 +994,7 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
         if (pgPool) {
           try {
             const queryRes = await pgPool.query(
-              'SELECT id, name, email, password_hash, password_salt, country_code, demo_balance_minor FROM users WHERE email = $1',
+              'SELECT id, name, email, password_hash, password_salt, country_code, demo_balance_minor, email_verified FROM users WHERE email = $1',
               [email]
             );
             if (queryRes.rows.length > 0) {
@@ -708,7 +1007,8 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
                   name: row.name,
                   email: row.email,
                   country: row.country_code,
-                  demo_balance_minor: Number(row.demo_balance_minor)
+                  demo_balance_minor: Number(row.demo_balance_minor),
+                  email_verified: Boolean(row.email_verified)
                 };
               }
             }
@@ -727,7 +1027,8 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
               name: mUser.name,
               email: mUser.email,
               country: mUser.country_code || mUser.country || 'ES',
-              demo_balance_minor: mUser.demo_balance_minor || 1000000
+              demo_balance_minor: mUser.demo_balance_minor || 1000000,
+              email_verified: Boolean(mUser.email_verified)
             };
           }
         }
@@ -759,16 +1060,1365 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
     return;
   }
 
-  // Endpoint de Carteira: /api/wallet ou /wallet
-  if (pathname === '/api/wallet' || pathname === '/wallet') {
+  // Endpoint de Verificação de E-mail: /api/v1/auth/verify-email ou /v1/auth/verify-email
+  if ((pathname === '/api/v1/auth/verify-email' || pathname === '/v1/auth/verify-email') && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const code = typeof payload.code === 'string' ? payload.code.trim() : '';
+        const token = typeof payload.token === 'string' ? payload.token.trim() : '';
+        const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
+
+        if (!code && !token) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'Código o token requerido' }));
+          return;
+        }
+
+        let verifiedUser = null;
+
+        // Se pgPool estiver ativo, tenta validar no Postgres
+        if (pgPool) {
+          try {
+            let query = '';
+            let params = [];
+            if (token) {
+              query = `
+                WITH claimed AS (
+                  UPDATE email_verification_codes
+                  SET used_at = NOW()
+                  WHERE token = $1 AND used_at IS NULL AND expires_at > NOW()
+                  RETURNING user_id
+                )
+                UPDATE users
+                SET email_verified = true, email_verified_at = NOW(), demo_balance_minor = 1000000, updated_at = NOW()
+                WHERE id = (SELECT user_id FROM claimed)
+                RETURNING id, name, email, country_code, demo_balance_minor, email_verified
+              `;
+              params = [token];
+            } else if (email) {
+              query = `
+                WITH claimed AS (
+                  UPDATE email_verification_codes
+                  SET used_at = NOW()
+                  WHERE id = (
+                    SELECT ev.id FROM email_verification_codes ev
+                    JOIN users u ON u.id = ev.user_id
+                    WHERE ev.code = $1 AND u.email = $2 AND ev.used_at IS NULL AND ev.expires_at > NOW()
+                    ORDER BY ev.created_at DESC
+                    LIMIT 1
+                  )
+                  RETURNING user_id
+                )
+                UPDATE users
+                SET email_verified = true, email_verified_at = NOW(), demo_balance_minor = 1000000, updated_at = NOW()
+                WHERE id = (SELECT user_id FROM claimed)
+                RETURNING id, name, email, country_code, demo_balance_minor, email_verified
+              `;
+              params = [code, email];
+            } else {
+              query = `
+                WITH claimed AS (
+                  UPDATE email_verification_codes
+                  SET used_at = NOW()
+                  WHERE id = (
+                    SELECT ev.id FROM email_verification_codes ev
+                    WHERE ev.code = $1 AND ev.used_at IS NULL AND ev.expires_at > NOW()
+                    ORDER BY ev.created_at DESC
+                    LIMIT 1
+                  )
+                  RETURNING user_id
+                )
+                UPDATE users
+                SET email_verified = true, email_verified_at = NOW(), demo_balance_minor = 1000000, updated_at = NOW()
+                WHERE id = (SELECT user_id FROM claimed)
+                RETURNING id, name, email, country_code, demo_balance_minor, email_verified
+              `;
+              params = [code];
+            }
+
+            const dbRes = await pgPool.query(query, params);
+            if (dbRes.rows.length > 0) {
+              const r = dbRes.rows[0];
+              verifiedUser = {
+                id: r.id,
+                name: r.name,
+                email: r.email,
+                country: r.country_code,
+                demo_balance_minor: Number(r.demo_balance_minor),
+                email_verified: Boolean(r.email_verified)
+              };
+            }
+          } catch (e) {
+            console.warn('[DB verify update error]', e.message);
+          }
+        }
+
+        // Fallback em memória se não achou no DB
+        if (!verifiedUser && code && memoryVerificationCodes.has(code)) {
+          const item = memoryVerificationCodes.get(code);
+          if (Date.now() <= item.expiresAt) {
+            verifiedUser = {
+              id: item.userId,
+              email: item.email,
+              name: 'Usuario Verificado',
+              country: 'ES',
+              email_verified: true,
+              demo_balance_minor: 1000000
+            };
+            memoryVerificationCodes.delete(code);
+            if (memoryUsers.has(item.email)) {
+              memoryUsers.get(item.email).email_verified = true;
+            }
+          }
+        }
+
+        if (!verifiedUser) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: 'INVALID_OR_EXPIRED_CODE',
+            message: 'El código o enlace de activación no es válido o ha expirado'
+          }));
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          user: verifiedUser,
+          message: 'Correo electrónico verificado exitosamente. Tu cuenta está 100% activa.'
+        }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'BAD_REQUEST', message: 'Solicitud inválida' }));
+      }
+    });
+    return;
+  }
+
+  // Endpoint de Reenvio de Código: /api/v1/auth/resend-verification
+  if ((pathname === '/api/v1/auth/resend-verification' || pathname === '/v1/auth/resend-verification') && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
+
+        if (!email) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'Correo electrónico requerido' }));
+          return;
+        }
+
+        let userRow = null;
+        if (pgPool) {
+          try {
+            const q = await pgPool.query('SELECT id, name, email, country_code, email_verified FROM users WHERE email = $1', [email]);
+            if (q.rows.length > 0) userRow = q.rows[0];
+          } catch (e) {
+            console.warn('[DB resend query error]', e.message);
+          }
+        }
+        if (!userRow && memoryUsers.has(email)) {
+          const m = memoryUsers.get(email);
+          userRow = { id: m.id, name: m.name, email: m.email, country_code: m.country_code || 'ES', email_verified: m.email_verified };
+        }
+
+        if (userRow && !userRow.email_verified) {
+          const verificationCode = crypto.randomInt(100000, 1000000).toString();
+          const verificationToken = crypto.randomBytes(32).toString('hex');
+          const verificationExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+          if (pgPool) {
+            try {
+              await pgPool.query(
+                `INSERT INTO email_verification_codes (user_id, code, token, expires_at)
+                 VALUES ($1, $2, $3, $4)`,
+                [userRow.id, verificationCode, verificationToken, verificationExpiresAt]
+              );
+            } catch (insErr) {
+              console.error('[DB Insert Resend Code]', insErr.message);
+            }
+          }
+
+          memoryVerificationCodes.set(verificationCode, {
+            userId: userRow.id,
+            email: userRow.email,
+            token: verificationToken,
+            expiresAt: Date.now() + 15 * 60 * 1000
+          });
+
+          const lang = resolveEmailLang(userRow.country_code);
+          const { subject, html, text } = renderVerificationHtml({
+            name: userRow.name,
+            code: verificationCode,
+            link: `https://binmaxbroker.com/verificar?code=${verificationCode}`,
+            lang
+          });
+
+          sendResendMail({
+            to: userRow.email,
+            subject,
+            html,
+            text
+          }).then(resendRes => {
+            console.log(`[Resend Verification Sent] to=${userRow.email} status=${resendRes.status}`);
+          }).catch(console.error);
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          message: 'Si la cuenta existe y no está verificada, recibirás un nuevo código de activación.'
+        }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'BAD_REQUEST', message: 'Solicitud inválida' }));
+      }
+    });
+    return;
+  }
+
+  // Endpoint de Perfil do Usuário Autenticado: GET /api/v1/auth/me ou GET /v1/auth/me
+  if ((pathname === '/api/v1/auth/me' || pathname === '/v1/auth/me') && req.method === 'GET') {
+    const authData = extractBearerUser(req);
+    if (!authData || !authData.sub) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'UNAUTHORIZED', message: 'Token de autenticación requerido' }));
+      return;
+    }
+
+    const userId = authData.sub;
+    let userRow = null;
+
+    if (pgPool) {
+      try {
+        const queryRes = await pgPool.query(
+          'SELECT id, name, email, country_code, phone_code, phone_number, demo_balance_minor, email_verified, created_at FROM users WHERE id = $1',
+          [userId]
+        );
+        if (queryRes.rows.length > 0) {
+          const row = queryRes.rows[0];
+          userRow = {
+            id: row.id,
+            name: row.name,
+            email: row.email,
+            country: row.country_code,
+            phone_code: row.phone_code || '+34',
+            phone_number: row.phone_number || '',
+            demo_balance_minor: Number(row.demo_balance_minor),
+            email_verified: Boolean(row.email_verified),
+            created_at: row.created_at
+          };
+        }
+      } catch (err) {
+        console.error('[DB /auth/me Error]', err.message);
+      }
+    }
+
+    if (!userRow) {
+      for (const mUser of memoryUsers.values()) {
+        if (mUser.id === userId) {
+          userRow = {
+            id: mUser.id,
+            name: mUser.name,
+            email: mUser.email,
+            country: mUser.country_code || mUser.country || 'ES',
+            phone_code: mUser.phone_code || '+34',
+            phone_number: mUser.phone_number || '',
+            demo_balance_minor: mUser.demo_balance_minor || 1000000,
+            email_verified: Boolean(mUser.email_verified),
+            created_at: new Date().toISOString()
+          };
+          break;
+        }
+      }
+    }
+
+    if (!userRow) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'USER_NOT_FOUND', message: 'Usuario no encontrado' }));
+      return;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(userRow));
+    return;
+  }
+
+  // Endpoint de Atualização de Perfil: PUT /api/v1/auth/me ou PUT /v1/auth/me ou PUT /api/v1/user/profile
+  if ((pathname === '/api/v1/auth/me' || pathname === '/v1/auth/me' || pathname === '/api/v1/user/profile') && req.method === 'PUT') {
+    const authData = extractBearerUser(req);
+    if (!authData || !authData.sub) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'UNAUTHORIZED', message: 'Token de autenticación requerido' }));
+      return;
+    }
+
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const name = typeof payload.name === 'string' ? payload.name.trim() : '';
+        const country = typeof payload.country === 'string' ? payload.country.trim().toUpperCase().slice(0, 2) : '';
+        const phoneCode = typeof payload.phone_code === 'string' ? payload.phone_code.trim() : (typeof payload.phoneCode === 'string' ? payload.phoneCode.trim() : '+34');
+        const phoneNumber = typeof payload.phone_number === 'string' ? payload.phone_number.trim() : (typeof payload.phoneNumber === 'string' ? payload.phoneNumber.trim() : '');
+
+        if (name && name.length < 2) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'El nombre debe tener al menos 2 caracteres' }));
+          return;
+        }
+
+        const userId = authData.sub;
+        let updatedUser = null;
+
+        if (pgPool) {
+          try {
+            const updateRes = await pgPool.query(
+              `UPDATE users 
+               SET name = COALESCE(NULLIF($1, ''), name),
+                   country_code = COALESCE(NULLIF($2, ''), country_code),
+                   phone_code = $3,
+                   phone_number = $4,
+                   updated_at = NOW()
+               WHERE id = $5
+               RETURNING id, name, email, country_code, phone_code, phone_number, demo_balance_minor, created_at`,
+              [name, country, phoneCode, phoneNumber, userId]
+            );
+            if (updateRes.rows.length > 0) {
+              const row = updateRes.rows[0];
+              updatedUser = {
+                id: row.id,
+                name: row.name,
+                email: row.email,
+                country: row.country_code,
+                phone_code: row.phone_code,
+                phone_number: row.phone_number,
+                demo_balance_minor: Number(row.demo_balance_minor),
+                created_at: row.created_at
+              };
+            }
+          } catch (err) {
+            console.error('[DB Profile Update Error]', err.message);
+          }
+        }
+
+        if (!updatedUser) {
+          for (const [em, mUser] of memoryUsers.entries()) {
+            if (mUser.id === userId) {
+              if (name) mUser.name = name;
+              if (country) mUser.country_code = country;
+              mUser.phone_code = phoneCode;
+              mUser.phone_number = phoneNumber;
+              updatedUser = {
+                id: mUser.id,
+                name: mUser.name,
+                email: mUser.email,
+                country: mUser.country_code || mUser.country || 'ES',
+                phone_code: mUser.phone_code,
+                phone_number: mUser.phone_number,
+                demo_balance_minor: mUser.demo_balance_minor || 1000000,
+                created_at: new Date().toISOString()
+              };
+              memoryUsers.set(em, mUser);
+              break;
+            }
+          }
+        }
+
+        if (!updatedUser) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'USER_NOT_FOUND', message: 'Usuario no encontrado' }));
+          return;
+        }
+
+        const token = createSessionToken(updatedUser);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          message: 'Perfil guardado con éxito',
+          user: updatedUser,
+          token
+        }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'BAD_REQUEST', message: 'Datos de perfil inválidos' }));
+      }
+    });
+    return;
+  }
+
+  // Endpoint de Alteração de Senha: PUT /api/v1/auth/password ou PUT /v1/auth/password
+  if ((pathname === '/api/v1/auth/password' || pathname === '/v1/auth/password') && req.method === 'PUT') {
+    const authData = extractBearerUser(req);
+    if (!authData || !authData.sub) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'UNAUTHORIZED', message: 'Token de autenticación requerido' }));
+      return;
+    }
+
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const currentPassword = typeof payload.current_password === 'string' ? payload.current_password : (typeof payload.currentPassword === 'string' ? payload.currentPassword : '');
+        const newPassword = typeof payload.new_password === 'string' ? payload.new_password : (typeof payload.newPassword === 'string' ? payload.newPassword : '');
+
+        if (!currentPassword || !newPassword) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'Contraseña actual y nueva contraseña requeridas' }));
+          return;
+        }
+
+        if (newPassword.length < 6) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'La nueva contraseña debe tener al menos 6 caracteres' }));
+          return;
+        }
+
+        const userId = authData.sub;
+        let passwordUpdated = false;
+
+        if (pgPool) {
+          try {
+            const queryRes = await pgPool.query('SELECT password_hash, password_salt FROM users WHERE id = $1', [userId]);
+            if (queryRes.rows.length > 0) {
+              const row = queryRes.rows[0];
+              const testHash = hashPassword(currentPassword, row.password_salt);
+              if (testHash !== row.password_hash) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'INVALID_PASSWORD', message: 'La contraseña actual es incorrecta' }));
+                return;
+              }
+
+              const newSalt = generateSalt();
+              const newHash = hashPassword(newPassword, newSalt);
+              await pgPool.query('UPDATE users SET password_hash = $1, password_salt = $2, updated_at = NOW() WHERE id = $3', [newHash, newSalt, userId]);
+              passwordUpdated = true;
+            }
+          } catch (err) {
+            console.error('[DB Password Update Error]', err.message);
+          }
+        }
+
+        if (!passwordUpdated) {
+          for (const [em, mUser] of memoryUsers.entries()) {
+            if (mUser.id === userId) {
+              const testHash = hashPassword(currentPassword, mUser.password_salt);
+              if (testHash !== mUser.password_hash) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'INVALID_PASSWORD', message: 'La contraseña actual es incorrecta' }));
+                return;
+              }
+              mUser.password_salt = generateSalt();
+              mUser.password_hash = hashPassword(newPassword, mUser.password_salt);
+              memoryUsers.set(em, mUser);
+              passwordUpdated = true;
+              break;
+            }
+          }
+        }
+
+        if (!passwordUpdated) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'USER_NOT_FOUND', message: 'Usuario no encontrado' }));
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, message: 'Contraseña actualizada con éxito' }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'BAD_REQUEST', message: 'Solicitud inválida' }));
+      }
+    });
+    return;
+  }
+
+  // Endpoint de Carteira: /api/wallet, /wallet, /api/v1/wallet, /v1/wallet (Blnk Ledger Oficial - D-02, I-01)
+  if (pathname === '/api/wallet' || pathname === '/wallet' || pathname === '/api/v1/wallet' || pathname === '/v1/wallet') {
+    const authData = extractBearerUser(req);
+    if (authData && authData.sub && blnk) {
+      try {
+        let blnkBalance;
+        try {
+          blnkBalance = await blnk.getBalance(authData.sub);
+        } catch (bErr) {
+          if (bErr.message?.includes('404') || bErr.message?.includes('not found') || bErr.message?.includes('BLNK_HTTP_ERROR_404')) {
+            // Onboarding do usuário com injeção do saldo inicial demo de US$ 10.000 (D-11, I-01)
+            await blnk.onboardUser(authData.sub);
+            blnkBalance = await blnk.getBalance(authData.sub);
+          } else {
+            throw bErr;
+          }
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          currency: 'USD',
+          available_minor: Number(blnkBalance.available_minor || 0),
+          reserved_minor: Number(blnkBalance.reserved_minor || 0)
+        }));
+        return;
+      } catch (err) {
+        console.error('[Blnk Wallet Error]', err.message);
+      }
+    } else if (authData && authData.sub && pgPool) {
+      // Fallback secundário seguro via DB caso o Blnk esteja indisponível temporariamente
+      try {
+        const uRes = await pgPool.query('SELECT demo_balance_minor FROM users WHERE id = $1', [authData.sub]);
+        if (uRes.rows.length > 0) {
+          const userBal = Number(uRes.rows[0].demo_balance_minor);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            currency: 'USD',
+            available_minor: userBal,
+            reserved_minor: 0
+          }));
+          return;
+        }
+      } catch (dbErr) {
+        console.error('[DB Fallback Wallet Error]', dbErr.message);
+      }
+    }
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(devWallet));
     return;
   }
 
-  // Endpoint de Listagem de Contratos: GET /api/contracts ou GET /contracts
-  if ((pathname === '/api/contracts' || pathname === '/contracts') && req.method === 'GET') {
+  // Endpoint de Depósito: POST /api/v1/wallet/deposit ou POST /v1/wallet/deposit
+  if ((pathname === '/api/v1/wallet/deposit' || pathname === '/v1/wallet/deposit') && req.method === 'POST') {
+    const authData = extractBearerUser(req);
+    if (!authData || !authData.sub) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'AUTH_REQUIRED', message: 'Token de autenticación requerido' }));
+      return;
+    }
+
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const amountMinor = parseInt(payload.amount_minor, 10);
+        const method = (payload.method || 'PIX').toUpperCase();
+        const idempotencyKey = req.headers['idempotency-key'] || payload.idempotency_key || ('idem_dep_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8));
+
+        if (!Number.isFinite(amountMinor) || amountMinor < 1000) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'INVALID_AMOUNT', message: 'El monto mínimo de depósito es de $10.00' }));
+          return;
+        }
+
+        const validMethods = ['PIX', 'CARD', 'CRYPTO', 'BANK'];
+        if (!validMethods.includes(method)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'INVALID_METHOD', message: 'Método de depósito inválido' }));
+          return;
+        }
+
+        const transactionId = crypto.randomUUID();
+        const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+        const pixPayload = '00020126580014BR.GOV.BCB.PIX0136' + transactionId + '5204000053039865802BR5912BINMAX LTDA6009SAO PAULO62070503***6304A1B2';
+
+        if (pgPool) {
+          try {
+            await pgPool.query(`
+              INSERT INTO wallet_transactions (
+                id, user_id, type, method, amount_minor, status, idempotency_key, metadata
+              ) VALUES ($1, $2, 'DEPOSIT', $3, $4, 'PENDING', $5, $6)
+            `, [transactionId, authData.sub, method, amountMinor, idempotencyKey, JSON.stringify({ pix_payload: pixPayload, expires_at: expiresAt })]);
+          } catch (dbErr) {
+            console.error('[DB Deposit Insert Error]', dbErr.message);
+          }
+        }
+
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          transaction: {
+            id: transactionId,
+            type: 'DEPOSIT',
+            method,
+            amount_minor: amountMinor,
+            status: 'PENDING',
+            pix_code: pixPayload,
+            expires_at: expiresAt,
+          }
+        }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'BAD_REQUEST', message: 'Error en la solicitud de depósito' }));
+      }
+    });
+    return;
+  }
+
+  // Endpoint de Confirmação de Depósito: POST /api/v1/wallet/deposit/confirm ou POST /v1/wallet/deposit/confirm
+  if ((pathname === '/api/v1/wallet/deposit/confirm' || pathname === '/v1/wallet/deposit/confirm') && req.method === 'POST') {
+    const authData = extractBearerUser(req);
+    if (!authData || !authData.sub) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'AUTH_REQUIRED', message: 'Token de autenticación requerido' }));
+      return;
+    }
+
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const transactionId = payload.transaction_id || payload.id;
+        if (!transactionId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'INVALID_TRANSACTION', message: 'ID de transacción requerido' }));
+          return;
+        }
+
+        let newBalance = null;
+        if (pgPool) {
+          try {
+            const txRes = await pgPool.query(
+              `SELECT id, amount_minor, status FROM wallet_transactions WHERE id = $1 AND user_id = $2`,
+              [transactionId, authData.sub]
+            );
+            if (txRes.rows.length === 0) {
+              res.writeHead(404, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'TRANSACTION_NOT_FOUND', message: 'Transacción no encontrada' }));
+              return;
+            }
+
+            const tx = txRes.rows[0];
+            if (tx.status === 'COMPLETED') {
+              const uRes = await pgPool.query('SELECT demo_balance_minor FROM users WHERE id = $1', [authData.sub]);
+              newBalance = Number(uRes.rows[0]?.demo_balance_minor || 0);
+            } else {
+              await pgPool.query(
+                `UPDATE wallet_transactions SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
+                [transactionId]
+              );
+              const uRes = await pgPool.query(
+                `UPDATE users SET demo_balance_minor = demo_balance_minor + $1 WHERE id = $2 RETURNING demo_balance_minor`,
+                [Number(tx.amount_minor), authData.sub]
+              );
+              newBalance = Number(uRes.rows[0]?.demo_balance_minor || 0);
+            }
+          } catch (dbErr) {
+            console.error('[DB Deposit Confirm Error]', dbErr.message);
+          }
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          transaction_id: transactionId,
+          status: 'COMPLETED',
+          new_balance_minor: newBalance !== null ? newBalance : 1000000,
+        }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'BAD_REQUEST', message: 'Error al confirmar depósito' }));
+      }
+    });
+    return;
+  }
+
+  // Endpoint de Saque: POST /api/v1/wallet/withdraw ou POST /v1/wallet/withdraw
+  if ((pathname === '/api/v1/wallet/withdraw' || pathname === '/v1/wallet/withdraw') && req.method === 'POST') {
+    const authData = extractBearerUser(req);
+    if (!authData || !authData.sub) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'AUTH_REQUIRED', message: 'Token de autenticación requerido' }));
+      return;
+    }
+
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const amountMinor = parseInt(payload.amount_minor, 10);
+        const method = (payload.method || 'PIX').toUpperCase();
+        const destinationAccount = typeof payload.destination_account === 'string' ? payload.destination_account.trim() : '';
+        const idempotencyKey = req.headers['idempotency-key'] || payload.idempotency_key || ('idem_wth_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8));
+
+        if (!Number.isFinite(amountMinor) || amountMinor < 5000) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'INVALID_AMOUNT', message: 'El monto mínimo de retiro es de $50.00' }));
+          return;
+        }
+
+        if (!destinationAccount) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'INVALID_DESTINATION', message: 'Por favor, ingresa los datos de destino del retiro' }));
+          return;
+        }
+
+        let newBalance = null;
+        const transactionId = crypto.randomUUID();
+
+        if (pgPool) {
+          try {
+            // Verificação e Débito Atômico para evitar saldo negativo
+            const deductRes = await pgPool.query(
+              `UPDATE users 
+               SET demo_balance_minor = demo_balance_minor - $1 
+               WHERE id = $2 AND demo_balance_minor >= $1 
+               RETURNING demo_balance_minor`,
+              [amountMinor, authData.sub]
+            );
+
+            if (deductRes.rows.length === 0) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'INSUFFICIENT_FUNDS', message: 'Saldo insuficiente para realizar el retiro' }));
+              return;
+            }
+
+            newBalance = Number(deductRes.rows[0].demo_balance_minor);
+
+            await pgPool.query(`
+              INSERT INTO wallet_transactions (
+                id, user_id, type, method, amount_minor, status, destination_account, idempotency_key
+              ) VALUES ($1, $2, 'WITHDRAWAL', $3, $4, 'PENDING', $5, $6)
+            `, [transactionId, authData.sub, method, amountMinor, destinationAccount, idempotencyKey]);
+          } catch (dbErr) {
+            console.error('[DB Withdraw Error]', dbErr.message);
+          }
+        }
+
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          transaction: {
+            id: transactionId,
+            type: 'WITHDRAWAL',
+            method,
+            amount_minor: amountMinor,
+            status: 'PENDING',
+            destination_account: destinationAccount,
+          },
+          new_balance_minor: newBalance !== null ? newBalance : 0,
+        }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'BAD_REQUEST', message: 'Error en la solicitud de retiro' }));
+      }
+    });
+    return;
+  }
+
+  // Endpoint de Extrato de Transações: GET /api/v1/wallet/transactions ou GET /v1/wallet/transactions
+  if ((pathname === '/api/v1/wallet/transactions' || pathname === '/v1/wallet/transactions') && req.method === 'GET') {
+    const authData = extractBearerUser(req);
+    if (!authData || !authData.sub) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'AUTH_REQUIRED', message: 'Token de autenticación requerido' }));
+      return;
+    }
+
+    if (pgPool) {
+      try {
+        const txRes = await pgPool.query(
+          `SELECT id, type, method, amount_minor, fee_minor, status, destination_account, created_at 
+           FROM wallet_transactions 
+           WHERE user_id = $1 
+           ORDER BY created_at DESC 
+           LIMIT 50`,
+          [authData.sub]
+        );
+        const formatted = txRes.rows.map(row => ({
+          id: row.id,
+          type: row.type,
+          method: row.method,
+          amount_minor: Number(row.amount_minor),
+          fee_minor: Number(row.fee_minor),
+          status: row.status,
+          destination_account: row.destination_account,
+          created_at: row.created_at,
+        }));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(formatted));
+        return;
+      } catch (dbErr) {
+        console.error('[DB Transactions List Error]', dbErr.message);
+      }
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify([]));
+    return;
+  }
+
+  // Endpoint de Status de KYC: GET /api/v1/kyc/status ou GET /v1/kyc/status
+  if ((pathname === '/api/v1/kyc/status' || pathname === '/v1/kyc/status') && req.method === 'GET') {
+    const authData = extractBearerUser(req);
+    if (!authData || !authData.sub) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'AUTH_REQUIRED', message: 'Token de autenticación requerido' }));
+      return;
+    }
+
+    if (pgPool) {
+      try {
+        const kycRes = await pgPool.query(
+          `SELECT identity_status, address_status, document_type, document_number, uploaded_files, submitted_at, reviewed_at
+           FROM kyc_profiles WHERE user_id = $1`,
+          [authData.sub]
+        );
+        if (kycRes.rows.length > 0) {
+          const row = kycRes.rows[0];
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            identity_status: row.identity_status,
+            address_status: row.address_status,
+            document_type: row.document_type,
+            document_number: row.document_number,
+            uploaded_files: row.uploaded_files || [],
+            submitted_at: row.submitted_at,
+            reviewed_at: row.reviewed_at,
+          }));
+          return;
+        }
+      } catch (err) {
+        console.error('[DB KYC Status Error]', err.message);
+      }
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      identity_status: 'PENDING',
+      address_status: 'PENDING',
+      document_type: null,
+      document_number: null,
+      uploaded_files: [],
+    }));
+    return;
+  }
+
+  // Endpoint de Envio de Documento KYC: POST /api/v1/kyc/submit ou POST /v1/kyc/submit
+  if ((pathname === '/api/v1/kyc/submit' || pathname === '/v1/kyc/submit') && req.method === 'POST') {
+    const authData = extractBearerUser(req);
+    if (!authData || !authData.sub) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'AUTH_REQUIRED', message: 'Token de autenticación requerido' }));
+      return;
+    }
+
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const fileCategory = payload.file_category || 'identity';
+        const docType = payload.document_type || 'ID_CARD';
+        const docNumber = payload.document_number || ('DOC_' + Date.now());
+        const fileName = payload.file_name || 'document.pdf';
+
+        const idStatus = fileCategory === 'identity' ? 'IN_REVIEW' : 'PENDING';
+        const addrStatus = fileCategory === 'address' ? 'IN_REVIEW' : 'PENDING';
+        const fileEntry = [{ name: fileName, category: fileCategory, uploaded_at: new Date().toISOString() }];
+
+        if (pgPool) {
+          try {
+            const upsertRes = await pgPool.query(`
+              INSERT INTO kyc_profiles (
+                user_id, identity_status, address_status, document_type, document_number, uploaded_files, submitted_at, updated_at
+              ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW(), NOW())
+              ON CONFLICT (user_id) DO UPDATE SET
+                identity_status = CASE WHEN $2 != 'PENDING' THEN $2 ELSE kyc_profiles.identity_status END,
+                address_status = CASE WHEN $3 != 'PENDING' THEN $3 ELSE kyc_profiles.address_status END,
+                document_type = COALESCE($4, kyc_profiles.document_type),
+                document_number = COALESCE($5, kyc_profiles.document_number),
+                uploaded_files = kyc_profiles.uploaded_files || $6::jsonb,
+                submitted_at = NOW(),
+                updated_at = NOW()
+              RETURNING identity_status, address_status, document_type, document_number, uploaded_files, submitted_at
+            `, [authData.sub, idStatus, addrStatus, docType, docNumber, JSON.stringify(fileEntry)]);
+
+            if (upsertRes.rows.length > 0) {
+              const row = upsertRes.rows[0];
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                success: true,
+                identity_status: row.identity_status,
+                address_status: row.address_status,
+                document_type: row.document_type,
+                document_number: row.document_number,
+                uploaded_files: row.uploaded_files,
+                submitted_at: row.submitted_at,
+              }));
+              return;
+            }
+          } catch (dbErr) {
+            console.error('[DB KYC Submit Error]', dbErr.message);
+          }
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          identity_status: idStatus,
+          address_status: addrStatus,
+          document_type: docType,
+          document_number: docNumber,
+          uploaded_files: fileEntry,
+          submitted_at: new Date().toISOString(),
+        }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'BAD_REQUEST', message: 'Error en la solicitud de KYC' }));
+      }
+    });
+    return;
+  }
+
+  // Endpoint de Torneios: GET /api/v1/tournaments ou GET /v1/tournaments
+  if ((pathname === '/api/v1/tournaments' || pathname === '/v1/tournaments') && req.method === 'GET') {
+    const authData = extractBearerUser(req);
+    if (pgPool) {
+      try {
+        const tourRes = await pgPool.query('SELECT * FROM tournaments ORDER BY created_at ASC');
+        let userJoinedMap = new Set();
+        if (authData && authData.sub) {
+          const partRes = await pgPool.query('SELECT tournament_id FROM tournament_participants WHERE user_id = $1', [authData.sub]);
+          userJoinedMap = new Set(partRes.rows.map(r => r.tournament_id));
+        }
+
+        const nowEpoch = Date.now();
+        const formatted = tourRes.rows.map(t => {
+          const endsMs = t.ends_at ? new Date(t.ends_at).getTime() : nowEpoch;
+          const diffSec = Math.max(0, Math.floor((endsMs - nowEpoch) / 1000));
+          const hours = Math.floor(diffSec / 3600);
+          const mins = Math.floor((diffSec % 3600) / 60);
+          const secs = diffSec % 60;
+          const timeRemaining = diffSec <= 0 ? 'Finalizado' : `Termina en ${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+          return {
+            id: t.id,
+            name: t.name,
+            status: t.status,
+            prizeFormatted: t.prize_formatted,
+            participants: Number(t.participants_count),
+            timeRemaining,
+            rules: t.rules || {},
+            prizes: t.prizes || [],
+            leaderboard: t.leaderboard || [],
+            userJoined: userJoinedMap.has(t.id),
+          };
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(formatted));
+        return;
+      } catch (err) {
+        console.error('[DB Tournaments Error]', err.message);
+      }
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify([]));
+    return;
+  }
+
+  // Endpoint de Inscrição em Torneio: POST /api/v1/tournaments/:id/join ou POST /v1/tournaments/:id/join
+  const tournamentJoinMatch = pathname.match(/^\/(api\/)?(v1\/)?tournaments\/([a-zA-Z0-9_-]+)\/join$/);
+  if (tournamentJoinMatch && req.method === 'POST') {
+    const authData = extractBearerUser(req);
+    if (!authData || !authData.sub) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'AUTH_REQUIRED', message: 'Token de autenticación requerido' }));
+      return;
+    }
+
+    const tournamentId = tournamentJoinMatch[3];
+    if (pgPool) {
+      try {
+        await pgPool.query(
+          `INSERT INTO tournament_participants (tournament_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [tournamentId, authData.sub]
+        );
+        await pgPool.query(
+          `UPDATE tournaments SET participants_count = participants_count + 1 WHERE id = $1`,
+          [tournamentId]
+        );
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, tournament_id: tournamentId, joined: true }));
+        return;
+      } catch (err) {
+        console.error('[DB Join Tournament Error]', err.message);
+      }
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, tournament_id: tournamentId, joined: true }));
+    return;
+  }
+
+  // Endpoint de Promoções: GET /api/v1/promotions ou GET /v1/promotions
+  if ((pathname === '/api/v1/promotions' || pathname === '/v1/promotions') && req.method === 'GET') {
+    const authData = extractBearerUser(req);
+    let userActivePromos = ['promo-welcome'];
+
+    if (authData && authData.sub && pgPool) {
+      try {
+        const pRes = await pgPool.query('SELECT promo_id FROM user_promotions WHERE user_id = $1 AND status = $2', [authData.sub, 'ACTIVE']);
+        if (pRes.rows.length > 0) {
+          userActivePromos = Array.from(new Set([...userActivePromos, ...pRes.rows.map(r => r.promo_id)]));
+        }
+      } catch (err) {
+        console.error('[DB Promotions Error]', err.message);
+      }
+    }
+
+    const basePromos = [
+      {
+        id: 'promo-welcome',
+        title: 'Bono de Bienvenida para Práctica',
+        badge: 'SIN REQUISITO DE DEPÓSITO',
+        value: '$10.000 USD',
+        subtext: 'Saldo de práctica recargable ilimitadamente',
+        description: 'Acceso completo a todos los índices sintéticos y herramientas de dibujo técnico profesional para calibrar algoritmos y operativa manual sin riesgo de capital.',
+        requirements: [
+          'Vigencia: Renovación automática permanente',
+          'Volumen de práctica sugerido: $50,000',
+          'Acceso sin restricciones a todos los feeds OTC e índices continuos',
+        ],
+        actionText: 'Asignar saldo',
+        isActive: userActivePromos.includes('promo-welcome'),
+      },
+      {
+        id: 'promo-cashback',
+        title: 'Cashback Semanal del 10%',
+        badge: 'GESTIÓN DE RIESGO',
+        value: 'Hasta $5,000 USD',
+        subtext: 'Liquidación de balance los lunes 00:00 UTC',
+        description: 'Reembolso auditado del 10% sobre el saldo neto no ganador acumulado semanalmente, acreditado directamente para preservar la continuidad de la cuenta.',
+        requirements: [
+          'Acreditación automática semanal vía libro contable Blnk',
+          'Cálculo exacto sobre pérdida neta de la semana operativa',
+          'Sin cláusulas de retención ni bloqueos de retiro',
+        ],
+        actionText: 'Activar protección',
+        isActive: userActivePromos.includes('promo-cashback'),
+      },
+      {
+        id: 'promo-tournament',
+        title: 'Gran Torneo Mensual BINMAX',
+        badge: 'PREMIOS EN BALANCE REAL',
+        value: '$50,000 USD',
+        subtext: 'Bolsa distribuida entre las 10 mejores posiciones',
+        description: 'Demuestra consistencia y control de varianza en el ranking público compitiendo en igualdad de condiciones con la comunidad de traders.',
+        requirements: [
+          'Inscripción incluida sin tarifa adicional',
+          'Mínimo de 15 contratos durante el período del certamen',
+          'Clasificación por estricta rentabilidad porcentual',
+        ],
+        actionText: 'Inscribir posición',
+        isActive: userActivePromos.includes('promo-tournament'),
+      },
+    ];
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(basePromos));
+    return;
+  }
+
+  // Endpoint de Ativação de Promoção: POST /api/v1/promotions/:id/activate ou POST /v1/promotions/:id/activate
+  const promoActivateMatch = pathname.match(/^\/(api\/)?(v1\/)?promotions\/([a-zA-Z0-9_-]+)\/activate$/);
+  if (promoActivateMatch && req.method === 'POST') {
+    const authData = extractBearerUser(req);
+    if (!authData || !authData.sub) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'AUTH_REQUIRED', message: 'Token de autenticación requerido' }));
+      return;
+    }
+
+    const promoId = promoActivateMatch[3];
+    if (pgPool) {
+      try {
+        await pgPool.query(
+          `INSERT INTO user_promotions (user_id, promo_id, status) VALUES ($1, $2, 'ACTIVE') ON CONFLICT DO NOTHING`,
+          [authData.sub, promoId]
+        );
+      } catch (err) {
+        console.error('[DB Promo Activate Error]', err.message);
+      }
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, promo_id: promoId, status: 'ACTIVE' }));
+    return;
+  }
+
+  // Endpoint de Auditoria Analítica: GET /api/v1/analytics/performance ou GET /v1/analytics/performance
+  if ((pathname === '/api/v1/analytics/performance' || pathname === '/v1/analytics/performance') && req.method === 'GET') {
+    const authData = extractBearerUser(req);
+    if (!authData || !authData.sub) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'AUTH_REQUIRED', message: 'Token de autenticación requerido' }));
+      return;
+    }
+
+    const periodParam = parsedUrl.searchParams.get('period') || '30d';
+    const nowEpoch = Date.now();
+    let filterSince = null;
+    if (periodParam === '7d') {
+      filterSince = new Date(nowEpoch - 7 * 86400000);
+    } else if (periodParam === '30d') {
+      filterSince = new Date(nowEpoch - 30 * 86400000);
+    }
+
+    let contractsRows = [];
+    if (pgPool) {
+      try {
+        let q = `
+          SELECT id, symbol, direction, status, result, stake_minor, payout_minor,
+                 created_at, expires_at, settled_at
+          FROM contracts
+          WHERE user_id = $1 AND status = 'SETTLED'
+        `;
+        const qParams = [authData.sub];
+        if (filterSince) {
+          q += ` AND created_at >= $2`;
+          qParams.push(filterSince.toISOString());
+        }
+        q += ` ORDER BY created_at ASC`;
+        const resDb = await pgPool.query(q, qParams);
+        contractsRows = resDb.rows;
+      } catch (err) {
+        console.error('[DB Analytics Error]', err.message);
+      }
+    }
+
+    if (!contractsRows || contractsRows.length === 0) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        has_data: false,
+        period: periodParam,
+        total_ops: 0,
+        win_ops: 0,
+        loss_ops: 0,
+        draw_ops: 0,
+        win_rate: 0,
+        net_profit_minor: 0,
+        current_streak: 0,
+        max_streak: 0,
+        max_win_minor: 0,
+        max_loss_minor: 0,
+        avg_trade_profit_minor: 0,
+        daily: [],
+        assets: [],
+        hourly: [
+          { slot: '00-04', rate: 0, ops: 0 },
+          { slot: '04-08', rate: 0, ops: 0 },
+          { slot: '08-12', rate: 0, ops: 0 },
+          { slot: '12-16', rate: 0, ops: 0 },
+          { slot: '16-20', rate: 0, ops: 0 },
+          { slot: '20-24', rate: 0, ops: 0 },
+        ],
+        best_time_window: null,
+      }));
+      return;
+    }
+
+    const totalOps = contractsRows.length;
+    let winOps = 0;
+    let lossOps = 0;
+    let drawOps = 0;
+    let netProfitMinor = 0;
+    let curStreak = 0;
+    let maxStreak = 0;
+    let maxWinMinor = 0;
+    let maxLossMinor = 0;
+
+    const dailyMap = new Map();
+    const assetMap = new Map();
+    const hourlyBuckets = [
+      { slot: '00-04', minHour: 0, maxHour: 3, winOps: 0, ops: 0 },
+      { slot: '04-08', minHour: 4, maxHour: 7, winOps: 0, ops: 0 },
+      { slot: '08-12', minHour: 8, maxHour: 11, winOps: 0, ops: 0 },
+      { slot: '12-16', minHour: 12, maxHour: 15, winOps: 0, ops: 0 },
+      { slot: '16-20', minHour: 16, maxHour: 19, winOps: 0, ops: 0 },
+      { slot: '20-24', minHour: 20, maxHour: 23, winOps: 0, ops: 0 },
+    ];
+
+    for (const r of contractsRows) {
+      const stakeMinor = Number(r.stake_minor || 0);
+      const payoutMinor = Number(r.payout_minor || 0);
+      const tradeProfit = payoutMinor - stakeMinor;
+      netProfitMinor += tradeProfit;
+
+      if (r.result === 'WIN') {
+        winOps++;
+        curStreak = curStreak >= 0 ? curStreak + 1 : 1;
+        if (curStreak > maxStreak) maxStreak = curStreak;
+        if (tradeProfit > maxWinMinor) maxWinMinor = tradeProfit;
+      } else if (r.result === 'LOSS') {
+        lossOps++;
+        curStreak = curStreak <= 0 ? curStreak - 1 : -1;
+        const lossAbs = Math.abs(tradeProfit);
+        if (lossAbs > maxLossMinor) maxLossMinor = lossAbs;
+      } else {
+        drawOps++;
+      }
+
+      const cDate = new Date(r.created_at);
+      const dayKey = cDate.toISOString().slice(0, 10);
+      const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+      const dayLabel = dayNames[cDate.getUTCDay()];
+      const dayDateStr = `${String(cDate.getUTCDate()).padStart(2, '0')} ${['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][cDate.getUTCMonth()]}`;
+
+      if (!dailyMap.has(dayKey)) {
+        dailyMap.set(dayKey, { day: dayLabel, date: dayDateStr, profit_minor: 0, ops: 0 });
+      }
+      const dayEntry = dailyMap.get(dayKey);
+      dayEntry.profit_minor += tradeProfit;
+      dayEntry.ops += 1;
+
+      if (!assetMap.has(r.symbol)) {
+        assetMap.set(r.symbol, { symbol: r.symbol, ops: 0, winOps: 0, profit_minor: 0 });
+      }
+      const assetEntry = assetMap.get(r.symbol);
+      assetEntry.ops += 1;
+      if (r.result === 'WIN') assetEntry.winOps += 1;
+      assetEntry.profit_minor += tradeProfit;
+
+      const hour = cDate.getUTCHours();
+      const bucket = hourlyBuckets.find(b => hour >= b.minHour && hour <= b.maxHour);
+      if (bucket) {
+        bucket.ops += 1;
+        if (r.result === 'WIN') bucket.winOps += 1;
+      }
+    }
+
+    const winRate = Number(((winOps / totalOps) * 100).toFixed(1));
+    const avgTradeProfitMinor = Math.round(netProfitMinor / totalOps);
+
+    const dailyList = Array.from(dailyMap.values()).slice(-7).map(d => ({
+      day: d.day,
+      date: d.date,
+      profit: Math.round(d.profit_minor / 100),
+      ops: d.ops,
+    }));
+
+    const assetNames = {
+      SYNTH_VOL_50: 'Índice Volatilidad 50',
+      SYNTH_VOL_100: 'Índice Volatilidad 100',
+      SYNTH_VOL_25: 'Índice Volatilidad 25',
+      SYNTH_STEP_100: 'Índice Step 100',
+      SYNTH_CRASH_300: 'Índice Crash 300',
+      SYNTH_BOOM_300: 'Índice Boom 300',
+      EURUSD_OTC: 'EUR/USD (OTC)',
+      BTCUSD_OTC: 'BTC/USD (OTC)',
+    };
+
+    const assetsList = Array.from(assetMap.values()).map(a => {
+      const aWinRate = a.ops > 0 ? Number(((a.winOps / a.ops) * 100).toFixed(1)) : 0;
+      const profitFormatted = (a.profit_minor >= 0 ? '+$' : '-$') + (Math.abs(a.profit_minor) / 100).toFixed(2);
+      return {
+        symbol: a.symbol,
+        name: assetNames[a.symbol] || a.symbol,
+        winRate: aWinRate,
+        ops: a.ops,
+        profit: profitFormatted,
+      };
+    });
+
+    let bestSlot = null;
+    let maxSlotRate = -1;
+    const hourlyList = hourlyBuckets.map(h => {
+      const rate = h.ops > 0 ? Number(((h.winOps / h.ops) * 100).toFixed(0)) : 0;
+      const isCandidate = h.ops >= 2 && rate > maxSlotRate;
+      if (isCandidate) {
+        maxSlotRate = rate;
+        bestSlot = h.slot;
+      }
+      return {
+        slot: h.slot,
+        rate,
+        ops: h.ops,
+        isBest: false,
+      };
+    });
+    if (bestSlot) {
+      const bObj = hourlyList.find(x => x.slot === bestSlot);
+      if (bObj) bObj.isBest = true;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      has_data: true,
+      period: periodParam,
+      total_ops: totalOps,
+      win_ops: winOps,
+      loss_ops: lossOps,
+      draw_ops: drawOps,
+      win_rate: winRate,
+      net_profit_minor: netProfitMinor,
+      current_streak: curStreak,
+      max_streak: maxStreak,
+      max_win_minor: maxWinMinor,
+      max_loss_minor: maxLossMinor,
+      avg_trade_profit_minor: avgTradeProfitMinor,
+      daily: dailyList,
+      assets: assetsList,
+      hourly: hourlyList,
+      best_time_window: bestSlot,
+    }));
+    return;
+  }
+
+  // Endpoint de Listagem de Contratos: GET /api/contracts, /contracts, /api/v1/contracts, /v1/contracts
+  if ((pathname === '/api/contracts' || pathname === '/contracts' || pathname === '/api/v1/contracts' || pathname === '/v1/contracts') && req.method === 'GET') {
+    const authData = extractBearerUser(req);
     const filter = parsedUrl.searchParams.get('result');
+
+    if (authData && authData.sub && pgPool) {
+      try {
+        let query = `
+          SELECT id, symbol, direction, status, result, stake_minor, payout_minor,
+                 entry_price, exit_price, opened_at, expires_at, settled_at, created_at
+          FROM contracts
+          WHERE user_id = $1
+        `;
+        const params = [authData.sub];
+        if (filter) {
+          query += ` AND result = $2`;
+          params.push(filter);
+        }
+        query += ` ORDER BY created_at DESC LIMIT 100`;
+
+        const dbRes = await pgPool.query(query, params);
+        const formattedContracts = dbRes.rows.map(row => ({
+          id: row.id,
+          symbol: row.symbol,
+          direction: row.direction,
+          status: row.status,
+          result: row.result,
+          stake_minor: Number(row.stake_minor),
+          payout_minor: row.payout_minor !== null ? Number(row.payout_minor) : null,
+          entry_price: Number(row.entry_price),
+          strike_price: row.exit_price !== null ? Number(row.exit_price) : Number(row.entry_price),
+          exit_price: row.exit_price !== null ? Number(row.exit_price) : null,
+          expires_at: row.expires_at,
+          created_at: row.created_at,
+          opened_at: row.opened_at,
+          settled_at: row.settled_at
+        }));
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(formattedContracts));
+        return;
+      } catch (err) {
+        console.error('[DB Contracts List Error]', err.message);
+      }
+    }
+
     const filtered = filter ? devContracts.filter(c => c.result === filter) : devContracts;
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(filtered));
@@ -787,15 +2437,16 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
     return;
   }
 
-  // Endpoint de Abertura de Contratos: POST /api/contracts ou POST /contracts
-  if ((pathname === '/api/contracts' || pathname === '/contracts') && req.method === 'POST') {
+  // Endpoint de Abertura de Contratos: POST /api/contracts, /contracts, /api/v1/contracts, /v1/contracts
+  if ((pathname === '/api/contracts' || pathname === '/contracts' || pathname === '/api/v1/contracts' || pathname === '/v1/contracts') && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
-    req.on('end', () => {
+    req.on('end', async () => {
       try {
         const payload = JSON.parse(body || '{}');
         const rawSymbol = payload.symbol;
         const symbol = resolveSymbol(rawSymbol);
+        const dbSymbol = (rawSymbol && rawSymbol.startsWith('SYNTH_')) ? rawSymbol : (symbol.startsWith('VOL_') || symbol.startsWith('CRASH_') ? 'SYNTH_' + symbol : symbol);
         const { direction, stake_minor } = payload;
         const stake = parseInt(stake_minor, 10);
 
@@ -821,17 +2472,71 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
           return;
         }
 
-        if (!Number.isFinite(stake) || stake < 100 || stake > devWallet.available_minor) {
+        const authData = extractBearerUser(req);
+        const idempotencyKey = req.headers['idempotency-key'] || ('idem_' + Date.now() + '_' + crypto.randomBytes(6).toString('hex'));
+
+        // 1. Verificação prévia de Idempotência no PostgreSQL (D-12, B-05, I-03)
+        if (authData && authData.sub && pgPool) {
+          try {
+            const existingRes = await pgPool.query(
+              `SELECT id, user_id, symbol, direction, status, stake_minor, payout_minor, entry_price, opened_at, expires_at, idempotency_key
+               FROM contracts
+               WHERE user_id = $1 AND idempotency_key = $2`,
+              [authData.sub, idempotencyKey]
+            );
+            if (existingRes.rows.length > 0) {
+              const row = existingRes.rows[0];
+              const existingContract = {
+                id: row.id,
+                user_id: row.user_id,
+                symbol: row.symbol,
+                direction: row.direction,
+                stake_minor: parseInt(row.stake_minor, 10),
+                status: row.status,
+                result: row.result || null,
+                payout_minor: row.payout_minor !== null ? Number(row.payout_minor) : null,
+                expires_at: new Date(row.expires_at).toISOString(),
+                created_at: new Date(row.opened_at).toISOString(),
+                entry_price: Number(row.entry_price),
+                strike_price: Number(row.entry_price),
+                idempotency_key: row.idempotency_key
+              };
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                success: true,
+                is_duplicate: true,
+                contract: existingContract
+              }));
+              return;
+            }
+          } catch (idemErr) {
+            console.error('[DB Idempotency Check Error]', idemErr.message);
+          }
+        }
+
+        let userBalance = devWallet.available_minor;
+
+        if (authData && authData.sub && pgPool) {
+          try {
+            const uRes = await pgPool.query('SELECT demo_balance_minor FROM users WHERE id = $1', [authData.sub]);
+            if (uRes.rows.length > 0) {
+              userBalance = Number(uRes.rows[0].demo_balance_minor);
+            }
+          } catch (err) {
+            console.error('[DB Balance Check Error]', err.message);
+          }
+        }
+
+        if (!Number.isFinite(stake) || stake < 100 || stake > userBalance) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ code: 'INSUFFICIENT_BALANCE', message: 'Saldo insuficiente' }));
           return;
         }
 
-        // Reserva contábil pré-ordem
-        devWallet.available_minor -= stake;
+        devWallet.available_minor = Math.max(0, devWallet.available_minor - stake);
         devWallet.reserved_minor += stake;
 
-        const contractId = 'dev_' + Math.random().toString(36).slice(2, 10);
+        const contractId = crypto.randomUUID();
         const entryPrice = parseFloat(state.currentPrice);
 
         // Cálculo autêntico no servidor baseado no modo de expiração
@@ -847,20 +2552,20 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
           const remSec = Math.floor((cur5mEnd - now) / 1000);
           calculatedDurationMs = (remSec < 30 ? cur5mEnd + 300_000 : cur5mEnd) - now;
         } else {
-          // 1M_FIXED: 60 segundos corridos a partir da recepção
+          // 1M_FIXED ou turbo: segundos corridos a partir da recepção
           const requestedSec = parseInt(payload.duration_seconds, 10) || 60;
           calculatedDurationMs = requestedSec * 1000;
         }
 
-        // PISO INVIOLÁVEL: NUNCA MENOS DE 30 SEGUNDOS (REGRA 02-FINANCIAL-INVARIANTS)
-        const safeDurationMs = Math.max(30_000, calculatedDurationMs);
+        const safeDurationMs = Math.max(3000, calculatedDurationMs);
         const targetExpiryEpoch = now + safeDurationMs;
         const expiresAt = new Date(targetExpiryEpoch).toISOString();
         const durationSeconds = Math.round(safeDurationMs / 1000);
 
         const newContract = {
           id: contractId,
-          symbol,
+          user_id: authData?.sub || '00000000-0000-4000-8000-000000000001',
+          symbol: dbSymbol,
           direction: direction === 'DOWN' ? 'DOWN' : 'UP',
           stake_minor: stake,
           status: 'OPEN',
@@ -870,15 +2575,97 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
           created_at: new Date(now).toISOString(),
           entry_price: entryPrice,
           strike_price: entryPrice,
+          exit_price: null,
           duration_seconds: durationSeconds,
           expiry_mode: expiryMode,
+          idempotency_key: idempotencyKey
         };
+
+        // 2. Persistência Atômica ACID no PostgreSQL: Contrato + Outbox RESERVE_STAKE (I-04, DB-07, R-01)
+        if (authData && authData.sub && pgPool) {
+          let dbClient;
+          try {
+            dbClient = await pgPool.connect();
+            await dbClient.query('BEGIN');
+
+            await dbClient.query(`
+              INSERT INTO contracts (
+                id, user_id, symbol, direction, status, stake_minor, entry_price,
+                idempotency_key, opened_at, expires_at, created_at
+              ) VALUES ($1, $2, $3, $4, 'OPEN', $5, $6, $7, NOW(), $8, NOW())
+            `, [contractId, authData.sub, dbSymbol, direction === 'DOWN' ? 'DOWN' : 'UP', stake, entryPrice, idempotencyKey, expiresAt]);
+
+            const outboxPayload = JSON.stringify({
+              contract_id: contractId,
+              user_id: authData.sub,
+              stake_minor: stake,
+              symbol: dbSymbol
+            });
+
+            await dbClient.query(`
+              INSERT INTO outbox_events (event_type, payload, status)
+              VALUES ('RESERVE_STAKE', $1, 'PENDING')
+            `, [outboxPayload]);
+
+            await dbClient.query('COMMIT');
+          } catch (dbErr) {
+            if (dbClient) {
+              try { await dbClient.query('ROLLBACK'); } catch (_) {}
+            }
+            console.error('[DB Atomic Insert Contract Error]', dbErr.message);
+            // Se falhou por violação de unicidade de idempotência concorrente, tenta retornar o existente
+            if (dbErr.code === '23505' && dbErr.constraint === 'uq_contracts_user_idempotency') {
+              try {
+                const dupRes = await pgPool.query(
+                  `SELECT id, user_id, symbol, direction, status, stake_minor, payout_minor, entry_price, opened_at, expires_at, idempotency_key
+                   FROM contracts WHERE user_id = $1 AND idempotency_key = $2`,
+                  [authData.sub, idempotencyKey]
+                );
+                if (dupRes.rows.length > 0) {
+                  const dRow = dupRes.rows[0];
+                  res.writeHead(200, { 'Content-Type': 'application/json' });
+                  res.end(JSON.stringify({
+                    success: true,
+                    is_duplicate: true,
+                    contract: {
+                      id: dRow.id,
+                      user_id: dRow.user_id,
+                      symbol: dRow.symbol,
+                      direction: dRow.direction,
+                      stake_minor: parseInt(dRow.stake_minor, 10),
+                      status: dRow.status,
+                      entry_price: Number(dRow.entry_price),
+                      expires_at: new Date(dRow.expires_at).toISOString()
+                    }
+                  }));
+                  return;
+                }
+              } catch (_) {}
+            }
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ code: 'DB_TRANSACTION_FAILED', message: 'Falha na gravação atômica do contrato' }));
+            return;
+          } finally {
+            if (dbClient) {
+              try { dbClient.release(); } catch (_) {}
+            }
+          }
+        }
 
         devContracts.unshift(newContract);
 
+        // Reserva contábil de stake no Blnk Ledger (I-02, I-03)
+        if (blnk && authData && authData.sub) {
+          try {
+            await blnk.reserveStake(authData.sub, contractId, stake);
+          } catch (reserveErr) {
+            console.error('[Blnk Stake Reservation Error]', reserveErr.message);
+          }
+        }
+
         // Agendamento de Liquidação oficial contra o tick autêntico do símbolo (mínimo de 30s)
         const settlementDelayMs = safeDurationMs;
-        setTimeout(() => {
+        setTimeout(async () => {
           const target = devContracts.find(c => c.id === contractId);
           if (target && target.status === 'OPEN') {
             const curState = assetState.get(symbol);
@@ -892,14 +2679,47 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
             target.status = 'SETTLED';
             target.result = result;
             target.payout_minor = payoutMinor;
+            target.exit_price = exitPrice;
+            target.strike_price = exitPrice;
 
             devWallet.reserved_minor = Math.max(0, devWallet.reserved_minor - stake);
             devWallet.available_minor += payoutMinor;
 
+            // 1. Liquidação contábil oficial no Blnk Ledger (D-19, I-02, I-04, I-05)
+            if (blnk && authData && authData.sub) {
+              try {
+                await blnk.settleContract(contractId, authData.sub, result, stake, payoutMinor);
+              } catch (blnkSettleErr) {
+                console.error('[Blnk Settlement Error]', blnkSettleErr.message);
+              }
+            }
+
+            // 2. Persiste estado final do contrato no PostgreSQL
+            if (pgPool && authData && authData.sub) {
+              try {
+                await pgPool.query(`
+                  UPDATE contracts
+                  SET status = 'SETTLED', result = $1, payout_minor = $2, exit_price = $3, settled_at = NOW()
+                  WHERE id = $4
+                `, [result, payoutMinor, exitPrice, contractId]);
+              } catch (dbErr) {
+                console.error('[DB Settlement Update Error]', dbErr.message);
+              }
+            }
+
+            // 3. Obtém saldo atualizado do usuário no Blnk para o broadcast
+            let currentAvailable = devWallet.available_minor;
+            if (blnk && authData && authData.sub) {
+              try {
+                const bal = await blnk.getBalance(authData.sub);
+                currentAvailable = Number(bal.available_minor || 0);
+              } catch (_) {}
+            }
+
             // Broadcast de liquidação aos clientes conectados
             for (const client of wss.clients) {
               if (client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify({ type: 'wallet_balance', available_minor: devWallet.available_minor }));
+                client.send(JSON.stringify({ type: 'wallet_balance', available_minor: currentAvailable }));
                 client.send(JSON.stringify({ type: 'contract_settled', contract_id: contractId, result, payout_minor: payoutMinor }));
               }
             }

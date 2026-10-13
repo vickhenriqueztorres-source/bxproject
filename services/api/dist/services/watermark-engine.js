@@ -1,7 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.WatermarkStreamEngine = void 0;
-class WatermarkStreamEngine {
+export class WatermarkStreamEngine {
     boundedDelayMs;
     symbolMaxEventTime = new Map();
     symbolWatermark = new Map();
@@ -66,4 +63,3 @@ class WatermarkStreamEngine {
         return sum;
     }
 }
-exports.WatermarkStreamEngine = WatermarkStreamEngine;

@@ -58,7 +58,7 @@ class BlnkClient {
                 if (!response.ok) {
                     const body = await response.text();
                     // Se for erro de idempotência ou conflito conhecido, não retenta
-                    if (response.status === 409 || response.status === 422) {
+                    if (response.status === 400 || response.status === 401 || response.status === 403 || response.status === 409 || response.status === 422) {
                         throw new Error(`BLNK_CLIENT_ERROR_${response.status}: ${body}`);
                     }
                     throw new Error(`BLNK_HTTP_ERROR_${response.status}: ${body}`);
@@ -70,7 +70,8 @@ class BlnkClient {
             catch (err) {
                 clearTimeout(timer);
                 if (attempt >= maxAttempts || err.message?.startsWith("BLNK_CLIENT_ERROR")) {
-                    this.recordFailure();
+                    if (!err.message?.startsWith("BLNK_CLIENT_ERROR"))
+                        this.recordFailure();
                     throw err;
                 }
                 // Exponential backoff com jitter: 50ms * 2^attempt + jitter
@@ -90,8 +91,9 @@ class BlnkClient {
                 body: JSON.stringify({ name: "Broker Demo Ledger", id: this.LEDGER_ID })
             });
         }
-        catch {
-            // Ignora se o ledger já existe
+        catch (err) {
+            if (!err.message?.startsWith("BLNK_CLIENT_ERROR_409"))
+                throw err;
         }
         const accounts = [
             { name: "House Revenue", number: this.HOUSE_REVENUE, ledger_id: this.LEDGER_ID, currency: "USD" },
@@ -105,8 +107,9 @@ class BlnkClient {
                     body: JSON.stringify(acc)
                 });
             }
-            catch {
-                // Ignora se conta já existe
+            catch (err) {
+                if (!err.message?.startsWith("BLNK_CLIENT_ERROR_409"))
+                    throw err;
             }
         }
     }
@@ -128,8 +131,9 @@ class BlnkClient {
                 })
             });
         }
-        catch {
-            // Já criada
+        catch (err) {
+            if (!err.message?.startsWith("BLNK_CLIENT_ERROR_409"))
+                throw err;
         }
         // 2. Cria conta de garantia
         try {
@@ -143,8 +147,9 @@ class BlnkClient {
                 })
             });
         }
-        catch {
-            // Já criada
+        catch (err) {
+            if (!err.message?.startsWith("BLNK_CLIENT_ERROR_409"))
+                throw err;
         }
         // 3. Credita saldo inicial demo de US$ 10.000,00 com referência idempotente
         try {

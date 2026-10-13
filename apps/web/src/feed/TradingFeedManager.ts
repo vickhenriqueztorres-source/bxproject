@@ -1,4 +1,5 @@
 import { accessToken, isGuestMode } from '../auth/oidc';
+import { getAssetBasePrice } from '../catalog/assets';
 import { calculateFullJitterDelay, reconnectDelay } from './backoff';
 import { FeedCircuitBreaker, type CircuitState } from './circuit-breaker';
 import { TokenBucketRateLimiter } from './token-bucket';
@@ -38,6 +39,7 @@ export class TradingFeedManager {
   private circuitBreaker = new FeedCircuitBreaker({ failureThreshold: 3, openDurationMs: 30000 });
   private tokenBucket = new TokenBucketRateLimiter({ capacity: 10, refillRatePerSecond: 1 });
   private initialConnectDone = false;
+  private connecting = false;
 
   private connected = false;
   private stale = true;
@@ -45,13 +47,15 @@ export class TradingFeedManager {
   private closed = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private staleInterval: ReturnType<typeof setInterval> | null = null;
+  private guestFallbackInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private wsUrl = import.meta.env.VITE_WS_URL ?? (
+  constructor(private wsUrl = (import.meta as any).env?.VITE_WS_URL ?? (
     typeof window !== 'undefined' && window.location
       ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
       : 'ws://localhost:3001/ws'
   )) {
     this.startStaleChecker();
+    this.startGuestFallback();
   }
 
   public setWsUrl(url: string) {
@@ -81,7 +85,8 @@ export class TradingFeedManager {
   }
 
   private doConnect() {
-    if (this.closed || (this.socket && this.socket.readyState === WebSocket.OPEN)) return;
+    if (this.closed || this.connecting || (this.socket &&
+      (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING))) return;
     if (isGuestMode()) {
       this.connectInternal(true);
       return;
@@ -99,7 +104,16 @@ export class TradingFeedManager {
     }
 
     // Token Bucket (Técnica 3): limita throughput de handshakes
-    await this.tokenBucket.waitForToken(1);
+    this.connecting = true;
+    try {
+      await this.tokenBucket.waitForToken(1);
+    } catch {
+      if (!this.closed) this.scheduleReconnect();
+      return;
+    } finally {
+      this.connecting = false;
+    }
+    if (this.closed) return;
 
     if (this.circuitBreaker.getState() === 'HALF_OPEN') {
       this.circuitBreaker.recordAttempt();
@@ -117,10 +131,11 @@ export class TradingFeedManager {
     const current = this.socket;
 
     current.onopen = async () => {
+      if (this.closed || current !== this.socket) return;
       try {
         if (!guest) {
           const token = await accessToken();
-          if (current.readyState === WebSocket.OPEN) {
+          if (!this.closed && current === this.socket && current.readyState === WebSocket.OPEN) {
             current.send(JSON.stringify({ type: 'auth', token }));
           }
         } else {
@@ -133,6 +148,7 @@ export class TradingFeedManager {
           this.resubscribeAll();
         }
       } catch {
+        if (this.closed || current !== this.socket) return;
         this.circuitBreaker.recordFailure();
         this.notifyCircuitBreakerStatus();
         current.close(4401, 'Authentication required');
@@ -140,6 +156,7 @@ export class TradingFeedManager {
     };
 
     current.onmessage = (message) => {
+      if (this.closed || current !== this.socket) return;
       let data: Record<string, unknown>;
       try {
         data = JSON.parse(String(message.data));
@@ -229,11 +246,13 @@ export class TradingFeedManager {
     };
 
     current.onerror = () => {
+      if (this.closed || current !== this.socket) return;
       this.connected = false;
       this.notifyStatus();
     };
 
     current.onclose = () => {
+      if (this.closed || current !== this.socket) return;
       this.connected = false;
       this.notifyStatus();
       this.circuitBreaker.recordFailure();
@@ -473,6 +492,31 @@ export class TradingFeedManager {
 
     callbacks.add(callback);
 
+    // Se o WS ainda não conectou no modo convidado, emite o tick inicial imediatamente
+    if (import.meta.env.VITE_DEMO_OFFLINE_FEED === '1' &&
+      (!this.connected || !this.socket || this.socket.readyState !== WebSocket.OPEN) && isGuestMode()) {
+      const isCrypto = symbol.startsWith('BTC') || symbol.startsWith('ETH');
+      const isJpy = symbol.includes('JPY');
+      const precision = isCrypto ? 2 : isJpy ? 3 : getAssetBasePrice(symbol) > 500 ? 2 : 5;
+      const initialPrice = this.symbolLastPrices.get(symbol) ?? getAssetBasePrice(symbol).toFixed(precision);
+      this.symbolLastPrices.set(symbol, initialPrice);
+      this.symbolLastTickAt.set(symbol, Date.now());
+      this.symbolStaleStates.set(symbol, false);
+      for (const listener of this.symbolStaleListeners.get(symbol) ?? []) listener(false, 0);
+      const seq = this.symbolLastSequences.get(symbol) ?? 1000;
+      setTimeout(() => {
+        try {
+          callback({
+            type: 'tick',
+            symbol,
+            sequence: seq,
+            price: initialPrice,
+            ts: new Date().toISOString(),
+          });
+        } catch { /* ignore */ }
+      }, 0);
+    }
+
     // Only send subscribe frame over WS if this is the FIRST chart asking for this symbol
     if (wasEmpty) {
       this.sendSubscribe(symbol, false);
@@ -523,7 +567,7 @@ export class TradingFeedManager {
 
     const last = this.symbolLastTickAt.get(symbol);
     const age = last ? Date.now() - last : Infinity;
-    const initialStale = !this.connected || age > 4000;
+    const initialStale = this.isSymbolStale(symbol);
     this.symbolStaleStates.set(symbol, initialStale);
     callback(initialStale, age === Infinity ? 99999 : age);
 
@@ -537,6 +581,10 @@ export class TradingFeedManager {
   }
 
   public isSymbolStale(symbol: string): boolean {
+    if (isGuestMode() && (this.symbolLastTickAt.get(symbol) ?? 0) > 0) {
+      const last = this.symbolLastTickAt.get(symbol)!;
+      return Date.now() - last > 4000;
+    }
     if (!this.connected) return true;
     const last = this.symbolLastTickAt.get(symbol);
     if (!last) return true;
@@ -553,6 +601,82 @@ export class TradingFeedManager {
     for (const cb of this.statusListeners) cb(this.connected, this.stale);
   }
 
+  private startGuestFallback() {
+    if ((import.meta as any).env?.VITE_DEMO_OFFLINE_FEED !== '1') return;
+    if (this.guestFallbackInterval) return;
+    this.guestFallbackInterval = setInterval(() => {
+      // Quando o WebSocket oficial está conectado, não interferir com ticks locais
+      if (this.socket && this.socket.readyState === WebSocket.OPEN && this.connected) return;
+      if (!isGuestMode()) return;
+
+      const now = Date.now();
+      for (const [symbol, callbacks] of this.symbolSubscribers.entries()) {
+        if (!callbacks || callbacks.size === 0) continue;
+        const lastTickTime = this.symbolLastTickAt.get(symbol) ?? 0;
+        if (now - lastTickTime < 450) continue;
+
+        let currentPrice = Number(this.symbolLastPrices.get(symbol));
+        if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
+          currentPrice = getAssetBasePrice(symbol);
+        }
+
+        const isCrypto = symbol.startsWith('BTC') || symbol.startsWith('ETH');
+        const isJpy = symbol.includes('JPY');
+        const step = isCrypto ? 2.5 : isJpy ? 0.02 : currentPrice > 500 ? 0.25 : 0.00015;
+        const precision = isCrypto ? 2 : isJpy ? 3 : currentPrice > 500 ? 2 : 5;
+
+        // Ornstein-Uhlenbeck drift leve em direção ao preço-base com ruído gaussiano (Box-Muller via CSPRNG)
+        const simSeq = (this.symbolLastSequences.get(symbol) ?? 1000) + 1;
+        const base = getAssetBasePrice(symbol);
+        const pull = (base - currentPrice) * 0.015;
+        
+        // CSPRNG Web Crypto (Conformidade M-01 / B-06 / A-07): Proibição total de Math.random
+        const randBuffer = new Uint32Array(2);
+        if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
+          window.crypto.getRandomValues(randBuffer);
+        } else {
+          randBuffer[0] = Math.floor(Date.now() % 4294967296);
+          randBuffer[1] = Math.floor((Date.now() * 31) % 4294967296);
+        }
+        const u1 = Math.max(1e-15, (randBuffer[0] + 1) / 4294967297.0);
+        const u2 = (randBuffer[1] + 1) / 4294967297.0;
+        const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+        const noise = z * step * 0.75;
+        const nextPrice = Math.max(0.0001, currentPrice + pull + noise);
+        const priceStr = nextPrice.toFixed(precision);
+
+        this.symbolLastSequences.set(symbol, simSeq);
+        this.symbolLastPrices.set(symbol, priceStr);
+        this.symbolLastTickAt.set(symbol, now);
+        this.symbolStaleStates.set(symbol, false);
+
+        const tick: Tick = {
+          type: 'tick',
+          symbol,
+          sequence: simSeq,
+          price: priceStr,
+          ts: new Date(now).toISOString(),
+        };
+
+        for (const cb of callbacks) {
+          try { cb(tick); } catch { /* ignore */ }
+        }
+
+        const staleListeners = this.symbolStaleListeners.get(symbol);
+        if (staleListeners) {
+          for (const cb of staleListeners) {
+            try { cb(false, 0); } catch { /* ignore */ }
+          }
+        }
+      }
+
+      if (this.stale && this.symbolSubscribers.size > 0) {
+        this.stale = false;
+        this.notifyStatus();
+      }
+    }, 500);
+  }
+
   private startStaleChecker() {
     this.staleInterval = setInterval(() => {
       const now = Date.now();
@@ -561,7 +685,9 @@ export class TradingFeedManager {
       for (const [symbol, callbacks] of this.symbolStaleListeners.entries()) {
         const last = this.symbolLastTickAt.get(symbol);
         const age = last ? now - last : Infinity;
-        const isStale = !this.connected || age > 4000;
+        const isStale = isGuestMode()
+          ? (age > 4000)
+          : (!this.connected || age > 4000);
         const prevStale = this.symbolStaleStates.get(symbol);
 
         if (prevStale !== isStale) {
@@ -580,7 +706,7 @@ export class TradingFeedManager {
           break;
         }
       }
-      const newStale = this.symbolLastTickAt.size > 0 ? !anyRecent : !this.connected;
+      const newStale = this.symbolLastTickAt.size > 0 ? !anyRecent : (!this.connected && !isGuestMode());
       if (newStale !== this.stale) {
         this.stale = newStale;
         this.notifyStatus();
@@ -592,6 +718,7 @@ export class TradingFeedManager {
     this.closed = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (this.staleInterval) clearInterval(this.staleInterval);
+    if (this.guestFallbackInterval) clearInterval(this.guestFallbackInterval);
     if (this.socket) {
       this.socket.close();
       this.socket = null;

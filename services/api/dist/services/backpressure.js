@@ -1,10 +1,7 @@
-"use strict";
 /**
  * Backpressure Guard para WebSocket Gateway (Padrão de Resiliência contra Clientes Lentos)
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.BackpressureGuard = void 0;
-class BackpressureGuard {
+export class BackpressureGuard {
     timeFn;
     maxBufferedBytes;
     slowClientTimeoutMs;
@@ -81,4 +78,3 @@ class BackpressureGuard {
         return this.maxBufferedBytes;
     }
 }
-exports.BackpressureGuard = BackpressureGuard;

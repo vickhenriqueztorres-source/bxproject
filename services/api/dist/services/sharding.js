@@ -1,10 +1,7 @@
-"use strict";
 /**
  * Symbol Sharding Router (Padrão de Resiliência para Escala Horizontal de Fan-Out)
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.SymbolShardingRouter = void 0;
-class SymbolShardingRouter {
+export class SymbolShardingRouter {
     numNodes;
     constructor(numNodes = 1) {
         this.numNodes = Math.max(1, Math.floor(numNodes));
@@ -37,4 +34,3 @@ class SymbolShardingRouter {
         return this.numNodes;
     }
 }
-exports.SymbolShardingRouter = SymbolShardingRouter;

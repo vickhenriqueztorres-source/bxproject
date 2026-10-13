@@ -7,6 +7,14 @@ export function formatMinor(minor: number | bigint | string): string {
   return usd.format(Number(amount) / 100);
 }
 
+export function formatCurrencyBinmax(minor: number | bigint | string): string {
+  const amount = BigInt(minor);
+  if (amount > BigInt(Number.MAX_SAFE_INTEGER) || amount < BigInt(Number.MIN_SAFE_INTEGER))
+    throw new Error('INVALID_MINOR_AMOUNT');
+  const val = Number(amount) / 100;
+  return `$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export function parseStakeInput(text: string): number | null {
   const match = /^(\d{1,3})(?:,(\d{1,2}))?$/.exec(text.trim());
   if (!match) return null;

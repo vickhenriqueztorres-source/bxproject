@@ -1,7 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.CatchupHandler = void 0;
-class CatchupHandler {
+export class CatchupHandler {
     redis;
     MAX_CATCHUP_BUFFER = 1000;
     constructor(redis) {
@@ -51,4 +48,3 @@ class CatchupHandler {
         return { resyncRequired: false, ticks };
     }
 }
-exports.CatchupHandler = CatchupHandler;

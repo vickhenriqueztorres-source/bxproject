@@ -1,10 +1,7 @@
-"use strict";
 /**
  * Token Bucket Rate Limiter (Padrão de Resiliência contra Reconnect Storm & Throttling)
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.TokenBucketRateLimiter = void 0;
-class TokenBucketRateLimiter {
+export class TokenBucketRateLimiter {
     timeFn;
     capacity;
     refillRatePerSecond;
@@ -52,4 +49,3 @@ class TokenBucketRateLimiter {
         this.lastRefillTime = this.timeFn();
     }
 }
-exports.TokenBucketRateLimiter = TokenBucketRateLimiter;

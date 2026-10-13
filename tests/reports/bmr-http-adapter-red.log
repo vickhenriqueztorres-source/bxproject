@@ -1,0 +1,285 @@
+
+ RUN  v3.2.7 D:/brokerproject
+
+ ❯ tests/unit/bmr-http-adapter.test.ts (15 tests | 14 failed) 99ms
+   × [AC-E1-1] authenticated HTTP adapter unit, not real integration > [AC-E1-1] wallet uses local v1 route and returns only the supplied fixture 22ms
+     → promise rejected "Error: REQUEST_FAILED { …(2) }" instead of resolving
+   × [AC-E1-1] authenticated HTTP adapter unit, not real integration > [S-05] opening uses v1 and preserves strict fields and intent key 3ms
+     → promise rejected "Error: REQUEST_FAILED { …(2) }" instead of resolving
+   × [AC-E1-1] authenticated HTTP adapter unit, not real integration > [AC-E1-1] unwraps server Receipt independently of route discovery 13ms
+     → expected { success: true, …(2) } to deeply equal { …(3) }
+   ✓ [AC-E1-1] authenticated HTTP adapter unit, not real integration > [AC-E1-1] wallet preserves a transport error without local fallback 10ms
+   × [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 0 5ms
+     → promise resolved "{}" instead of rejecting
+   × [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 1 7ms
+     → promise resolved "{ …(3) }" instead of rejecting
+   × [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 2 2ms
+     → promise resolved "{ contract: null }" instead of rejecting
+   × [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 3 4ms
+     → promise resolved "{ contract: { status: 'OPEN', …(1) } }" instead of rejecting
+   × [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 4 6ms
+     → promise resolved "{ contract: { id: '', …(2) } }" instead of rejecting
+   × [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 5 7ms
+     → promise resolved "{ contract: { …(2) } }" instead of rejecting
+   × [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 6 2ms
+     → promise resolved "{ contract: { …(3) } }" instead of rejecting
+   × [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 7 7ms
+     → promise resolved "{ contract: { …(3) } }" instead of rejecting
+   × [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 8 5ms
+     → promise resolved "{ contract: { …(2) } }" instead of rejecting
+   × [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 9 2ms
+     → promise resolved "{ contract: { …(3) } }" instead of rejecting
+   × [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 10 1ms
+     → promise resolved "{ contract: { …(3) } }" instead of rejecting
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 14 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/unit/bmr-http-adapter.test.ts > [AC-E1-1] authenticated HTTP adapter unit, not real integration > [AC-E1-1] wallet uses local v1 route and returns only the supplied fixture
+AssertionError: promise rejected "Error: REQUEST_FAILED { …(2) }" instead of resolving
+ ❯ tests/unit/bmr-http-adapter.test.ts:42:29
+     40| describe('[AC-E1-1] authenticated HTTP adapter unit, not real integrat…
+     41|   it('[AC-E1-1] wallet uses local v1 route and returns only the suppli…
+     42|     await expect(getWallet()).resolves.toEqual(wallet);
+       |                             ^
+     43|     expect(transport.mock.calls[0][0]).toBe('/api/v1/wallet');
+     44|   });
+
+Caused by: Error: REQUEST_FAILED
+ ❯ api apps/web/src/api/client.ts:126:11
+ ❯ tests/unit/bmr-http-adapter.test.ts:42:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { status: 404, code: 'REQUEST_FAILED' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/14]⎯
+
+ FAIL  tests/unit/bmr-http-adapter.test.ts > [AC-E1-1] authenticated HTTP adapter unit, not real integration > [S-05] opening uses v1 and preserves strict fields and intent key
+AssertionError: promise rejected "Error: REQUEST_FAILED { …(2) }" instead of resolving
+ ❯ tests/unit/bmr-http-adapter.test.ts:46:24
+     44|   });
+     45|   it('[S-05] opening uses v1 and preserves strict fields and intent ke…
+     46|     await expect(open()).resolves.toEqual(receipt);
+       |                        ^
+     47|     const [url, init] = transport.mock.calls[0];
+     48|     expect(url).toBe('/api/v1/contracts'); expect(init?.method).toBe('…
+
+Caused by: Error: REQUEST_FAILED
+ ❯ api apps/web/src/api/client.ts:126:11
+ ❯ tests/unit/bmr-http-adapter.test.ts:46:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { status: 404, code: 'REQUEST_FAILED' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/14]⎯
+
+ FAIL  tests/unit/bmr-http-adapter.test.ts > [AC-E1-1] authenticated HTTP adapter unit, not real integration > [AC-E1-1] unwraps server Receipt independently of route discovery
+AssertionError: expected { success: true, …(2) } to deeply equal { …(3) }
+
+- Expected
++ Received
+
+  {
++   "contract": {
++     "direction": "UP",
++     "entry_price": "500.000000",
+      "expires_at": "2026-10-09T12:01:00.000Z",
+      "id": "12345678-1234-4234-8234-123456789012",
++     "idempotency_key": "unit-e1-intent",
++     "opened_at": "2026-10-09T12:00:00.000Z",
++     "payout_minor": null,
++     "stake_minor": 101,
+      "status": "OPEN",
++     "symbol": "SYNTH_VOL_50",
++     "user_id": "unit-user",
++   },
++   "is_duplicate": false,
++   "success": true,
+  }
+
+ ❯ tests/unit/bmr-http-adapter.test.ts:57:5
+     55|     // One response at any path isolates envelope decoding from the se…
+     56|     transport.mockResolvedValueOnce(json({ success: true, is_duplicate…
+     57|     await expect(open()).resolves.toEqual(receipt);
+       |     ^
+     58|   });
+     59|   it('[AC-E1-1] wallet preserves a transport error without local fallb…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/14]⎯
+
+ FAIL  tests/unit/bmr-http-adapter.test.ts > [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 0
+AssertionError: promise resolved "{}" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
+- }
++ {}
+
+ ❯ tests/unit/bmr-http-adapter.test.ts:77:24
+     75|     // Explicit malformed fixture at any path prevents a 404 from hidi…
+     76|     transport.mockResolvedValueOnce(json(body, 201));
+     77|     await expect(open()).rejects.toBeInstanceOf(ApiError);
+       |                        ^
+     78|     transport.mockResolvedValueOnce(json(body, 201));
+     79|     await expect(open()).rejects.toMatchObject({ status: 502, code: 'I…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/14]⎯
+
+ FAIL  tests/unit/bmr-http-adapter.test.ts > [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 1
+AssertionError: promise resolved "{ …(3) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "expires_at": "2026-10-09T12:01:00.000Z",
++   "id": "12345678-1234-4234-8234-123456789012",
++   "status": "OPEN",
+  }
+
+ ❯ tests/unit/bmr-http-adapter.test.ts:77:24
+     75|     // Explicit malformed fixture at any path prevents a 404 from hidi…
+     76|     transport.mockResolvedValueOnce(json(body, 201));
+     77|     await expect(open()).rejects.toBeInstanceOf(ApiError);
+       |                        ^
+     78|     transport.mockResolvedValueOnce(json(body, 201));
+     79|     await expect(open()).rejects.toMatchObject({ status: 502, code: 'I…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/14]⎯
+
+ FAIL  tests/unit/bmr-http-adapter.test.ts > [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 2
+AssertionError: promise resolved "{ contract: null }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "contract": null,
+  }
+
+ ❯ tests/unit/bmr-http-adapter.test.ts:77:24
+     75|     // Explicit malformed fixture at any path prevents a 404 from hidi…
+     76|     transport.mockResolvedValueOnce(json(body, 201));
+     77|     await expect(open()).rejects.toBeInstanceOf(ApiError);
+       |                        ^
+     78|     transport.mockResolvedValueOnce(json(body, 201));
+     79|     await expect(open()).rejects.toMatchObject({ status: 502, code: 'I…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/14]⎯
+
+ FAIL  tests/unit/bmr-http-adapter.test.ts > [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 3
+AssertionError: promise resolved "{ contract: { status: 'OPEN', …(1) } }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "contract": {
++     "expires_at": "2026-10-09T12:01:00.000Z",
++     "status": "OPEN",
++   },
+  }
+
+ ❯ tests/unit/bmr-http-adapter.test.ts:77:24
+     75|     // Explicit malformed fixture at any path prevents a 404 from hidi…
+     76|     transport.mockResolvedValueOnce(json(body, 201));
+     77|     await expect(open()).rejects.toBeInstanceOf(ApiError);
+       |                        ^
+     78|     transport.mockResolvedValueOnce(json(body, 201));
+     79|     await expect(open()).rejects.toMatchObject({ status: 502, code: 'I…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/14]⎯
+
+ FAIL  tests/unit/bmr-http-adapter.test.ts > [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 4
+AssertionError: promise resolved "{ contract: { id: '', …(2) } }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "contract": {
++     "expires_at": "2026-10-09T12:01:00.000Z",
++     "id": "",
++     "status": "OPEN",
++   },
+  }
+
+ ❯ tests/unit/bmr-http-adapter.test.ts:77:24
+     75|     // Explicit malformed fixture at any path prevents a 404 from hidi…
+     76|     transport.mockResolvedValueOnce(json(body, 201));
+     77|     await expect(open()).rejects.toBeInstanceOf(ApiError);
+       |                        ^
+     78|     transport.mockResolvedValueOnce(json(body, 201));
+     79|     await expect(open()).rejects.toMatchObject({ status: 502, code: 'I…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/14]⎯
+
+ FAIL  tests/unit/bmr-http-adapter.test.ts > [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 5
+ FAIL  tests/unit/bmr-http-adapter.test.ts > [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 8
+AssertionError: promise resolved "{ contract: { …(2) } }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "contract": {
++     "expires_at": "2026-10-09T12:01:00.000Z",
++     "id": "12345678-1234-4234-8234-123456789012",
++   },
+  }
+
+ ❯ tests/unit/bmr-http-adapter.test.ts:77:24
+     75|     // Explicit malformed fixture at any path prevents a 404 from hidi…
+     76|     transport.mockResolvedValueOnce(json(body, 201));
+     77|     await expect(open()).rejects.toBeInstanceOf(ApiError);
+       |                        ^
+     78|     transport.mockResolvedValueOnce(json(body, 201));
+     79|     await expect(open()).rejects.toMatchObject({ status: 502, code: 'I…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/14]⎯
+
+ FAIL  tests/unit/bmr-http-adapter.test.ts > [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 6
+ FAIL  tests/unit/bmr-http-adapter.test.ts > [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 7
+ FAIL  tests/unit/bmr-http-adapter.test.ts > [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 9
+ FAIL  tests/unit/bmr-http-adapter.test.ts > [AC-E1-2] malformed 201 is a protocol error, not an order rejection > [AC-E1-2] rejects malformed envelope 10
+AssertionError: promise resolved "{ contract: { …(3) } }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "contract": {
++     "expires_at": "2026-10-09T12:01:00.000Z",
++     "id": "12345678-1234-4234-8234-123456789012",
++     "status": 123,
++   },
+  }
+
+ ❯ tests/unit/bmr-http-adapter.test.ts:77:24
+     75|     // Explicit malformed fixture at any path prevents a 404 from hidi…
+     76|     transport.mockResolvedValueOnce(json(body, 201));
+     77|     await expect(open()).rejects.toBeInstanceOf(ApiError);
+       |                        ^
+     78|     transport.mockResolvedValueOnce(json(body, 201));
+     79|     await expect(open()).rejects.toMatchObject({ status: 502, code: 'I…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/14]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  14 failed | 1 passed (15)
+   Start at  15:04:44
+   Duration  1.97s (transform 973ms, setup 0ms, collect 685ms, tests 99ms, environment 0ms, prepare 621ms)
+

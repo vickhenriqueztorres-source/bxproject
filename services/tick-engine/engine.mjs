@@ -5,7 +5,7 @@ import { Counter, Gauge, Registry } from 'prom-client';
 import { createServer } from 'node:http';
 import { canonicalHash, createPriceGenerator, nextSequence } from './core.mjs';
 
-const defaultSymbol = process.env.TICK_SYMBOL ?? 'SYNTH_VOL_50';
+const defaultSymbol = process.env.TICK_SYMBOL ?? 'VOL_50';
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://redis:6379', {
   lazyConnect: true,
   commandTimeout: 2000,

@@ -1,13 +1,14 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.contractRoutes = void 0;
-const shared_1 = require("@broker/shared");
-const contract_service_js_1 = require("../services/contract-service.js");
-const contractRoutes = async (server) => {
-    const contractService = new contract_service_js_1.ContractService(server.pg, server.redis);
+import { OpenContractSchema } from "@broker/shared";
+import { ContractService } from "../services/contract-service.js";
+export const contractRoutes = async (server) => {
+    const contractService = new ContractService(server.pg, server.redis);
     // POST /api/v1/contracts (Abertura de contrato UP/DOWN)
+    const preHandlers = [server.authenticate];
+    if (typeof server.enforceTradingEnabled === 'function') {
+        preHandlers.push(server.enforceTradingEnabled);
+    }
     server.post("/api/v1/contracts", {
-        preHandler: [server.authenticate]
+        preHandler: preHandlers
     }, async (request, reply) => {
         const user = request.user;
         if (!user) {
@@ -21,7 +22,7 @@ const contractRoutes = async (server) => {
             });
         }
         // Validação estrita com Zod (rejeita qualquer campo extra)
-        const parseResult = shared_1.OpenContractSchema.safeParse(request.body);
+        const parseResult = OpenContractSchema.safeParse(request.body);
         if (!parseResult.success) {
             return reply.status(400).send({
                 error: "VALIDATION_ERROR",
@@ -93,4 +94,3 @@ const contractRoutes = async (server) => {
         return { contract };
     });
 };
-exports.contractRoutes = contractRoutes;

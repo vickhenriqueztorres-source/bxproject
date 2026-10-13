@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SyntheticOUEngine, RandomSource } from "../src/engine/ou-generator.js";
+import { SyntheticOUEngine, RandomSource, CSPRNGRandomSource } from "../src/engine/ou-generator.js";
 
 class DeterministicRNG implements RandomSource {
   constructor(private readonly sequence: number[]) {
@@ -70,3 +70,59 @@ describe("SyntheticOUEngine (Ornstein-Uhlenbeck OTC Generator)", () => {
     expect(next.priceNumeric).toBe(1002.0);
   });
 });
+
+describe("CSPRNGRandomSource (Entropia Criptográfica M-01 / B-06)", () => {
+  it("deve gerar valores uniformes estritamente no intervalo aberto-fechado (0, 1]", () => {
+    const rng = new CSPRNGRandomSource();
+    for (let i = 0; i < 1000; i++) {
+      const u = rng.nextUniform();
+      expect(u).toBeGreaterThan(0);
+      expect(u).toBeLessThanOrEqual(1);
+      expect(Number.isFinite(u)).toBe(true);
+    }
+  });
+
+  it("deve gerar ruído gaussiano Box-Muller com média ~ 0 e variância ~ 1 sem NaN", () => {
+    const rng = new CSPRNGRandomSource();
+    const samples: number[] = [];
+    const N = 5000;
+    let sum = 0;
+
+    for (let i = 0; i < N; i++) {
+      const z = rng.nextGaussian();
+      expect(Number.isNaN(z)).toBe(false);
+      expect(Number.isFinite(z)).toBe(true);
+      samples.push(z);
+      sum += z;
+    }
+
+    const mean = sum / N;
+    const variance = samples.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / N;
+
+    // Intervalo de confiança a 99% para média de N=5000: |mean| < 2.58 / sqrt(5000) ~ 0.036
+    expect(Math.abs(mean)).toBeLessThan(0.08);
+    expect(variance).toBeGreaterThan(0.85);
+    expect(variance).toBeLessThan(1.15);
+  });
+
+  it("deve operar sem invocar Math.random() garantindo CSPRNG puro do Node.js", () => {
+    const rng = new CSPRNGRandomSource();
+    const originalMathRandom = Math.random;
+    let mathRandomCalled = false;
+    Math.random = () => {
+      mathRandomCalled = true;
+      return 0.5;
+    };
+
+    try {
+      for (let i = 0; i < 100; i++) {
+        rng.nextUniform();
+        rng.nextGaussian();
+      }
+      expect(mathRandomCalled).toBe(false);
+    } finally {
+      Math.random = originalMathRandom;
+    }
+  });
+});
+

@@ -1,0 +1,476 @@
+[
+  {
+    "path": "apps\\web\\src\\App.tsx",
+    "errors": 5,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\api\\client-cache-invalidation.unit.test.ts",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\api\\client.ts",
+    "errors": 3,
+    "rules": "@typescript-eslint/no-explicit-any,prefer-const",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\auth\\auth-service.ts",
+    "errors": 3,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\auth\\auth-service.unit.test.ts",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\ChartDrawingOverlay.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\chart\\ChartErrorBoundary.tsx",
+    "errors": 4,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\chart\\IsolatedChartHost.tsx",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\chart\\PriceChart.tsx",
+    "errors": 10,
+    "rules": "@typescript-eslint/no-explicit-any,@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\chart\\TimeLinesOverlay.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\chart\\chart-chaos-isolation.unit.test.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\chart-isolation-stress-chaos-security.unit.test.ts",
+    "errors": 3,
+    "rules": "@typescript-eslint/no-explicit-any,@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\chart-phase2-hardening.unit.test.tsx",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\chart-sandbox.unit.test.tsx",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-explicit-any,@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\chart-sanitizer.unit.test.ts",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\chart-scale-normalizer.unit.test.ts",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\drawing-sanitizer.ts",
+    "errors": 4,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\chart\\drawing-sanitizer.unit.test.ts",
+    "errors": 7,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\drawing.unit.test.ts",
+    "errors": 13,
+    "rules": "@typescript-eslint/no-explicit-any,@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\indicator-stress.unit.test.ts",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\multichart-chaos-stress.unit.test.tsx",
+    "errors": 3,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\pricechart-decoupling.unit.test.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\raf-multisymbol.unit.test.ts",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\raf-tick-lifecycle.unit.test.ts",
+    "errors": 3,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\subetapa-01-parity-and-scale-hardening.unit.test.ts",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\subetapa-01-price-lines-leak.unit.test.ts",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\subetapa-04-integrated-chaos-stress.unit.test.ts",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-explicit-any,@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\subetapa-18-03-grafico-overlays.unit.test.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\chart\\subetapa-ux-04-drawing-toolbar.unit.test.tsx",
+    "errors": 5,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\components\\KYCTierBadge.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\components\\chart\\TradingViewCanvas.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\components\\drawer\\BinmaxHistoryDrawer.tsx",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-explicit-any,@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\components\\drawer\\BinmaxPortfolioDrawer.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\components\\drawer\\PortfolioDrawer.tsx",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\components\\drawer\\TournamentsDrawer.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\components\\header\\AccountSelectorDropdown.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\components\\header\\TerminalHeader.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\components\\layout\\MobileTraderoomLayout.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\components\\modals\\AssetCatalogModal.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\components\\trading\\TradeTicket.tsx",
+    "errors": 3,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\feed\\TradingFeedManager.ts",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\i18n\\index.tsx",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-explicit-any,@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\lib\\feature-flags.ts",
+    "errors": 4,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\news\\news.unit.test.ts",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\pages\\AnalysisPage.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\pages\\HistoryPage.tsx",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\pages\\LandingPage.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\pages\\LoginPage.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\pages\\PasswordRecoveryPage.tsx",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\pages\\PreviewHubPage.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\pages\\RegisterPage.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\pages\\TournamentsPage.tsx",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-explicit-any,@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\pages\\VerificationPage.tsx",
+    "errors": 5,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\pages\\auth-full-lifecycle-e2e.unit.test.tsx",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\pages\\auth-pages.unit.test.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\pages\\history-portfolio.unit.test.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\styles\\tokens-precision.unit.test.ts",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\OrderTicket.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\trade\\asset-catalog-modal.unit.test.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\chart-drawing-tools.unit.test.tsx",
+    "errors": 5,
+    "rules": "@typescript-eslint/no-explicit-any,@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\expiry-calculator.unit.test.ts",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\final-certification.unit.test.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\history-expansion.unit.test.ts",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\in-chart-asset-selector.unit.test.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\layout-spacing-overlays.unit.test.tsx",
+    "errors": 6,
+    "rules": "@typescript-eslint/no-explicit-any,@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\logo.unit.test.ts",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\portfolio-refinement-stress-chaos.unit.test.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\portfolio-subetapa-02-04-cards-and-timers.unit.test.tsx",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\sidebar.unit.test.tsx",
+    "errors": 4,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\smoke.unit.test.ts",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\subetapa-03-sidebar-fidelity.unit.test.tsx",
+    "errors": 3,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\subetapa-10-onboarding.unit.test.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\subetapa-18-02-tipografia-moeda.unit.test.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\subetapa-18-05-certificacao-final.unit.test.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\subetapa-refine-02-sidebar-expansion.unit.test.tsx",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\ticket-ergonomic.unit.test.tsx",
+    "errors": 2,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\trade\\ticket.unit.test.ts",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": true
+  },
+  {
+    "path": "apps\\web\\src\\wallet\\BinmaxWithdrawModal.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-unused-vars",
+    "test": false
+  },
+  {
+    "path": "apps\\web\\src\\wallet\\TransactionHistoryTable.tsx",
+    "errors": 1,
+    "rules": "@typescript-eslint/no-explicit-any",
+    "test": false
+  }
+]

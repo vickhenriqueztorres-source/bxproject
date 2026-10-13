@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" fill="none">
+  <!-- Fundo Noche (#0D0F14) com cantos arredondados a 22% (112.6px) -->
+  <rect width="512" height="512" rx="112.6" fill="#0D0F14" />
+  <!-- Símbolo escalado centralizado (48x48 escalado por 6.5x -> 312x312 com offset 100, 100) -->
+  <g transform="translate(100, 100) scale(6.5)">
+    <path d="M 9 26 L 24 11 L 39 26" stroke="#DCE1EA" stroke-width="6.5" stroke-linejoin="miter" stroke-linecap="square" />
+    <path d="M 9 41 L 24 26 L 39 41" stroke="#8A92A1" stroke-width="6.5" stroke-linejoin="miter" stroke-linecap="square" />
+  </g>
+</svg>

@@ -1,0 +1,28 @@
+{
+  "exit_code": 1,
+  "files": 341,
+  "errors": 343.0,
+  "warnings": 0.0,
+  "rules": [
+    {
+      "Name": "@typescript-eslint/no-explicit-any",
+      "Count": 192
+    },
+    {
+      "Name": "@typescript-eslint/no-unused-vars",
+      "Count": 135
+    },
+    {
+      "Name": "no-undef",
+      "Count": 8
+    },
+    {
+      "Name": "prefer-const",
+      "Count": 6
+    },
+    {
+      "Name": "no-empty",
+      "Count": 2
+    }
+  ]
+}

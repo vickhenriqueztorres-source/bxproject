@@ -1,9 +1,6 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.globalClockMonitor = exports.ClockSyncMonitor = exports.MAX_CLOCK_OFFSET_CRITICAL_MS = exports.MAX_CLOCK_OFFSET_WARNING_MS = void 0;
-exports.MAX_CLOCK_OFFSET_WARNING_MS = 100;
-exports.MAX_CLOCK_OFFSET_CRITICAL_MS = 500;
-class ClockSyncMonitor {
+export const MAX_CLOCK_OFFSET_WARNING_MS = 100;
+export const MAX_CLOCK_OFFSET_CRITICAL_MS = 500;
+export class ClockSyncMonitor {
     warningThresholdMs;
     criticalThresholdMs;
     offsetMs = 0;
@@ -11,7 +8,7 @@ class ClockSyncMonitor {
     alert = false;
     severity = 'OK';
     lastChecked = 0;
-    constructor(warningThresholdMs = exports.MAX_CLOCK_OFFSET_WARNING_MS, criticalThresholdMs = exports.MAX_CLOCK_OFFSET_CRITICAL_MS) {
+    constructor(warningThresholdMs = MAX_CLOCK_OFFSET_WARNING_MS, criticalThresholdMs = MAX_CLOCK_OFFSET_CRITICAL_MS) {
         this.warningThresholdMs = warningThresholdMs;
         this.criticalThresholdMs = criticalThresholdMs;
     }
@@ -74,5 +71,4 @@ class ClockSyncMonitor {
         return this.alert;
     }
 }
-exports.ClockSyncMonitor = ClockSyncMonitor;
-exports.globalClockMonitor = new ClockSyncMonitor();
+export const globalClockMonitor = new ClockSyncMonitor();

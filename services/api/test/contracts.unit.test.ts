@@ -10,18 +10,29 @@ describe("Contract Routes & Risk Cap Tests", () => {
   function buildTestApp(customPg?: any, customRedis?: any, currentUser = mockUserA) {
     const app = Fastify();
 
-    // Mock autenticação
+    // Mock autenticação e trading enabled
     (app as any).decorate("authenticate", async (req: any) => {
       req.user = currentUser;
     });
+    (app as any).decorate("enforceTradingEnabled", async () => {});
 
     const defaultPg = {
       query: async (sql: string, params: any[]) => {
         if (sql.includes("FROM contracts WHERE user_id = $1 AND idempotency_key = $2")) {
           return { rows: [] };
         }
-        if (sql.includes("FROM ticks WHERE symbol = $1")) {
-          return { rows: [{ price: "1.48520", ts: new Date() }] };
+        if (sql.includes("FROM index_state") || sql.includes("FROM ticks WHERE symbol = $1")) {
+          return {
+            rows: [
+              {
+                last_sequence: "100",
+                last_price: "1.48520",
+                last_ts: new Date(),
+                price: "1.48520",
+                ts: new Date()
+              }
+            ]
+          };
         }
         return { rows: [] };
       },
@@ -54,7 +65,8 @@ describe("Contract Routes & Risk Cap Tests", () => {
 
     const defaultRedis = {
       exists: async () => 1,
-      get: async () => "100000000",
+      get: async (key: string) => (key?.includes("deposit_float") ? "100000000" : null),
+      set: async () => "OK",
       eval: async () => [1, "APPROVED", 850],
       zadd: async () => 1
     };
@@ -134,7 +146,8 @@ describe("Contract Routes & Risk Cap Tests", () => {
   it("POST /api/v1/contracts rejects with 422 when risk cap exceeds 3% of float", async () => {
     const rejectingRedis = {
       exists: async () => 1,
-      get: async () => "100000000",
+      get: async (key: string) => (key?.includes("deposit_float") ? "100000000" : null),
+      set: async () => "OK",
       eval: async () => [-2, "ERR_RISK_CAP_EXCEEDED"],
       zadd: async () => 1
     };

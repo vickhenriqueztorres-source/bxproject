@@ -7,7 +7,7 @@ import { CandleRepository } from "./persistence/candle-repository.js";
 
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 const DATABASE_URL = process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/broker";
-const SYMBOL = process.env.SYMBOL || "SYNTH_VOL_50";
+const SYMBOL = process.env.SYMBOL || "VOL_50";
 const CONSUMER_ID = process.env.CONSUMER_ID || `candle-worker-${process.pid}`;
 
 async function main() {

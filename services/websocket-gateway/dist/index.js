@@ -1,22 +1,18 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const fastify_1 = __importDefault(require("fastify"));
-const websocket_1 = __importDefault(require("@fastify/websocket"));
-const ioredis_1 = require("ioredis");
-const jose_1 = require("jose");
-const catchup_handler_js_1 = require("./handlers/catchup-handler.js");
+import Fastify from "fastify";
+import websocket from "@fastify/websocket";
+import { Redis } from "ioredis";
+import { jwtVerify, createRemoteJWKSet } from "jose";
+import { RED_ZONE_COUNTRIES } from "@broker/shared";
+import { CatchupHandler } from "./handlers/catchup-handler.js";
 const PORT = parseInt(process.env.WS_PORT || "3001", 10);
 const HOST = process.env.WS_HOST || "0.0.0.0";
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL || "http://localhost:8080";
 const REALM = process.env.KEYCLOAK_REALM || "broker-demo";
-const app = (0, fastify_1.default)({ logger: { level: process.env.LOG_LEVEL || "info" } });
-const redisSub = new ioredis_1.Redis(REDIS_URL);
-const redisClient = new ioredis_1.Redis(REDIS_URL);
-const catchupHandler = new catchup_handler_js_1.CatchupHandler(redisClient);
+const app = Fastify({ logger: { level: process.env.LOG_LEVEL || "info" } });
+const redisSub = new Redis(REDIS_URL);
+const redisClient = new Redis(REDIS_URL);
+const catchupHandler = new CatchupHandler(redisClient);
 // Mapa de conexões ativas por usuário para aplicar o limite de 5 conexões (B-16)
 const activeConnectionsByUser = new Map();
 // Mapa de subscrições: symbol -> Set de sockets
@@ -25,7 +21,7 @@ const subscriptionsBySymbol = new Map();
 let JWKS = null;
 try {
     const jwksUri = new URL(`${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/certs`);
-    JWKS = (0, jose_1.createRemoteJWKSet)(jwksUri);
+    JWKS = createRemoteJWKSet(jwksUri);
 }
 catch {
     // Ignora em ambientes de inicialização sem keycloak ativo
@@ -36,7 +32,7 @@ async function verifyToken(token) {
         return { userId: "demo-user-id", roles: ["USER"] };
     }
     try {
-        const { payload } = await (0, jose_1.jwtVerify)(token, JWKS, {
+        const { payload } = await jwtVerify(token, JWKS, {
             issuer: `${KEYCLOAK_URL}/realms/${REALM}`,
             algorithms: ["RS256"]
         });
@@ -48,7 +44,7 @@ async function verifyToken(token) {
     }
 }
 async function main() {
-    await app.register(websocket_1.default);
+    await app.register(websocket);
     // Escuta ticks do Redis Pub/Sub e distribui aos clientes inscritos
     await redisSub.psubscribe("market:ticks:*", "market:events:*");
     redisSub.on("pmessage", (_pattern, channel, message) => {
@@ -77,6 +73,24 @@ async function main() {
         }
     });
     app.get("/ws", { websocket: true }, (socket, req) => {
+        // Interceptação de Geoblocking e Risco Regulatório no Handshake WSS
+        const rawCountry = req.headers["cf-ipcountry"] || req.headers["x-country-code"] || req.headers["x-test-country"];
+        const code = (rawCountry && typeof rawCountry === "string") ? rawCountry.trim().toUpperCase() : "BR";
+        // Brasil é 100% livre: aceita conexão incondicionalmente
+        if (code === "BR") {
+            // Conexão permitida sem bloqueio
+        }
+        else if (RED_ZONE_COUNTRIES.includes(code)) {
+            socket.close(4403, "Red zone regulatory block: retail trading prohibited");
+            return;
+        }
+        else {
+            const allowedCountries = ["BR", "MX", "CO", "AR", "CL", "PE"];
+            if (/^[A-Z]{2}$/.test(code) && !allowedCountries.includes(code)) {
+                socket.close(4403, "Geo-blocked: region not supported");
+                return;
+            }
+        }
         let isAuthenticated = false;
         let currentUserId = null;
         const clientSubscriptions = new Set();
@@ -155,39 +169,44 @@ async function main() {
                     socket.close(4401, "Must authenticate first");
                     return;
                 }
-                // 2. Mensagem de Subscrição de Ativo
+                // 2. Mensagem de Subscrição de Ativo (Suporta símbolo único ou lote multiplexado)
                 if (msg.type === "subscribe") {
-                    const symbol = msg.symbol;
-                    if (!symbol)
+                    const rawSymbols = Array.isArray(msg.symbols) ? msg.symbols : (msg.symbol ? [msg.symbol] : []);
+                    if (rawSymbols.length === 0)
                         return;
-                    if (clientSubscriptions.size >= 10) {
+                    if (clientSubscriptions.size + rawSymbols.length > 10) {
                         socket.send(JSON.stringify({ type: "error", message: "Max 10 symbol subscriptions per connection" }));
                         return;
                     }
-                    clientSubscriptions.add(symbol);
-                    if (!subscriptionsBySymbol.has(symbol)) {
-                        subscriptionsBySymbol.set(symbol, new Set());
-                    }
-                    subscriptionsBySymbol.get(symbol).add(socket);
-                    // Se solicitou catch-up por lastSequence (M-06)
-                    if (msg.lastSequence !== undefined) {
-                        const catchup = await catchupHandler.getCatchupTicks(symbol, BigInt(msg.lastSequence));
-                        if (catchup.resyncRequired) {
-                            socket.send(JSON.stringify({ type: "resync_required", symbol }));
+                    for (const symbol of rawSymbols) {
+                        clientSubscriptions.add(symbol);
+                        if (!subscriptionsBySymbol.has(symbol)) {
+                            subscriptionsBySymbol.set(symbol, new Set());
                         }
-                        else if (catchup.ticks.length > 0) {
-                            socket.send(JSON.stringify({ type: "catchup_ticks", symbol, ticks: catchup.ticks }));
+                        subscriptionsBySymbol.get(symbol).add(socket);
+                        // Se solicitou catch-up por lastSequence (M-06)
+                        if (msg.lastSequence !== undefined) {
+                            const catchup = await catchupHandler.getCatchupTicks(symbol, BigInt(msg.lastSequence));
+                            if (catchup.resyncRequired) {
+                                socket.send(JSON.stringify({ type: "resync_required", symbol }));
+                            }
+                            else if (catchup.ticks.length > 0) {
+                                socket.send(JSON.stringify({ type: "catchup_ticks", symbol, ticks: catchup.ticks }));
+                            }
                         }
+                        socket.send(JSON.stringify({ type: "subscribed", symbol }));
                     }
-                    socket.send(JSON.stringify({ type: "subscribed", symbol }));
                     return;
                 }
-                // 3. Unsubscribe
+                // 3. Unsubscribe (Suporta símbolo único ou lote multiplexado)
                 if (msg.type === "unsubscribe") {
-                    const symbol = msg.symbol;
-                    clientSubscriptions.delete(symbol);
-                    subscriptionsBySymbol.get(symbol)?.delete(socket);
-                    socket.send(JSON.stringify({ type: "unsubscribed", symbol }));
+                    const rawSymbols = Array.isArray(msg.symbols) ? msg.symbols : (msg.symbol ? [msg.symbol] : []);
+                    for (const symbol of rawSymbols) {
+                        clientSubscriptions.delete(symbol);
+                        subscriptionsBySymbol.get(symbol)?.delete(socket);
+                        socket.send(JSON.stringify({ type: "unsubscribed", symbol }));
+                    }
+                    return;
                 }
             }
             catch (err) {

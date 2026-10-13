@@ -1,0 +1,175 @@
+{
+  "common": {
+    "title": "Binmax Option — Trading Room",
+    "latency": "Latencia",
+    "online": "Conectado",
+    "offline": "Desconectado",
+    "loading": "Cargando...",
+    "error": "Ha ocurrido un error",
+    "buttons": {
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "close": "Cerrar",
+      "confirm": "Confirmar"
+    },
+    "currencies": {
+      "select_currency": "Moneda de Visualización",
+      "brl": "Real Brasileño (BRL)",
+      "mxn": "Peso Mexicano (MXN)",
+      "cop": "Peso Colombiano (COP)",
+      "ars": "Peso Argentino (ARS)",
+      "clp": "Peso Chileno (CLP)",
+      "pen": "Sol Peruano (PEN)",
+      "usd": "Dólar Estadounidense (USD - Base)"
+    },
+    "tabs": {
+      "forex": "Forex",
+      "crypto": "Cripto",
+      "commodities": "Materias Primas",
+      "synthetics": "Sintéticos",
+      "all": "Todos"
+    },
+    "geoblock": {
+      "title": "Acceso no disponible en tu región",
+      "message": "Nuestra plataforma opera actualmente en la Fase 2 exclusivamente en los siguientes 6 países de América Latina:",
+      "countries": "Brasil, México, Colombia, Argentina, Chile y Perú.",
+      "support": "Si resides en uno de estos países y estás usando VPN, por favor desactívala para acceder.",
+      "button_retry": "Verificar nuevamente"
+    }
+  },
+  "auth": {
+    "login": "Iniciar sesión",
+    "register": "Registrarse",
+    "logout": "Cerrar sesión",
+    "sign_out": "Cerrar sesión",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "session_expired": "Tu sesión ha expirado. Inicia sesión nuevamente.",
+    "unauthorized": "Acceso no autorizado."
+  },
+  "wallet": {
+    "demo_badge": "Cuenta demo",
+    "live_badge": "Cuenta real",
+    "deposit": "Depositar",
+    "reload_demo": "Recargar saldo",
+    "reload_success": "Saldo demo recargado a $ 10.000,00",
+    "balance": "Saldo",
+    "withdraw_demo": {
+      "notice": "Cuenta demo · Simulación de retiro. No se enviarán fondos reales.",
+      "unavailable": "No disponible en esta demostración",
+      "action": "Simular solicitud",
+      "processing": "Simulando solicitud...",
+      "complete": "Simulación completada",
+      "complete_message": "Esta demostración no envía fondos ni confirma una transferencia bancaria.",
+      "kyc": "Primer retiro requiere verificación de identidad. Esta simulación no verifica ni aprueba tu identidad.",
+      "last_withdraw": "Último retiro",
+      "failure": "No se pudo completar la simulación. Puedes volver a intentarlo.",
+      "amount": "Monto simulado",
+      "fee": "No aplica en la simulación"
+    }
+  },
+  "contracts": {
+    "call": "SUBE",
+    "put": "BAJA",
+    "stake": "Monto",
+    "payout": "Retorno",
+    "profit": "Ganancia",
+    "duration": "Expiración",
+    "seconds": "segundos",
+    "market_closed": "Mercado cerrado",
+    "trading_disabled": "Operaciones pausadas",
+    "open_contract": "Abrir operación",
+    "strike_price": "Precio de entrada",
+    "insufficient_balance": "Saldo insuficiente. Deposita y sigue operando.",
+    "empty_portfolio": "Aún no tienes operaciones abiertas. Elige SUBE o BAJA para empezar.",
+    "empty_history": "Aún no tienes operaciones cerradas.",
+    "win_toast": "¡Ganaste!",
+    "loss_toast": "No esta vez",
+    "draw_toast": "Empate"
+  },
+  "admin": {
+    "title": "Panel de Administración Multi-País",
+    "country_status": "Estado de Países",
+    "active": "Activo",
+    "inactive": "Inactivo",
+    "toggle_flag": "Alternar Característica",
+    "flags": {
+      "payments_enabled": "Pagos Reales",
+      "kyc_required": "KYC Obligatorio",
+      "otc_enabled": "Mercado OTC Demo",
+      "synthetic_enabled": "Índices Sintéticos"
+    },
+    "metrics": {
+      "requests": "Peticiones",
+      "geoblocked": "Bloqueos Geográficos",
+      "latency_p95": "Latencia p95"
+    }
+  },
+  "app": {
+    "title": "Binmax Option — Trading Room",
+    "demo_badge": "Cuenta demo",
+    "live_badge": "Cuenta real",
+    "deposit": "Depositar",
+    "reload_demo": "Recargar saldo",
+    "sign_out": "Cerrar sesión",
+    "latency": "Latencia",
+    "online": "Conectado",
+    "offline": "Desconectado"
+  },
+  "geoblock": {
+    "title": "Acceso no disponible en tu región",
+    "message": "Nuestra plataforma opera actualmente en la Fase 2 exclusivamente en los siguientes 6 países de América Latina:",
+    "countries": "Brasil, México, Colombia, Argentina, Chile y Perú.",
+    "support": "Si resides en uno de estos países y estás usando VPN, por favor desactívala para acceder.",
+    "button_retry": "Verificar nuevamente"
+  },
+  "currencies": {
+    "select_currency": "Moneda de Visualización",
+    "brl": "Real Brasileño (BRL)",
+    "mxn": "Peso Mexicano (MXN)",
+    "cop": "Peso Colombiano (COP)",
+    "ars": "Peso Argentino (ARS)",
+    "clp": "Peso Chileno (CLP)",
+    "pen": "Sol Peruano (PEN)",
+    "usd": "Dólar Estadounidense (USD - Base)"
+  },
+  "tabs": {
+    "forex": "Forex",
+    "crypto": "Cripto",
+    "commodities": "Materias Primas",
+    "synthetics": "Sintéticos",
+    "all": "Todos"
+  },
+  "trade": {
+    "call": "SUBE",
+    "put": "BAJA",
+    "stake": "Monto",
+    "payout": "Retorno",
+    "profit": "Ganancia",
+    "duration": "Expiración",
+    "seconds": "segundos",
+    "market_closed": "Mercado cerrado",
+    "trading_disabled": "Operaciones pausadas",
+    "open_contract": "Abrir operación",
+    "strike_price": "Precio de entrada",
+    "insufficient_balance": "Saldo insuficiente. Deposita y sigue operando.",
+    "empty_portfolio": "Aún no tienes operaciones abiertas. Elige SUBE o BAJA para empezar.",
+    "empty_history": "Aún no tienes operaciones cerradas.",
+    "win_toast": "¡Ganaste!",
+    "loss_toast": "No esta vez",
+    "draw_toast": "Empate"
+  },
+  "withdraw_demo": {
+    "notice": "Cuenta demo · Simulación de retiro. No se enviarán fondos reales.",
+    "unavailable": "No disponible en esta demostración",
+    "action": "Simular solicitud",
+    "processing": "Simulando solicitud...",
+    "complete": "Simulación completada",
+    "complete_message": "Esta demostración no envía fondos ni confirma una transferencia bancaria.",
+    "kyc": "Primer retiro requiere verificación de identidad. Esta simulación no verifica ni aprueba tu identidad.",
+    "last_withdraw": "Último retiro",
+    "failure": "No se pudo completar la simulación. Puedes volver a intentarlo.",
+    "amount": "Monto simulado",
+    "fee": "No aplica en la simulación"
+  }
+}

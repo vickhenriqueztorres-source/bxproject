@@ -6,7 +6,7 @@ import { HashChain } from "./engine/hash-chain.js";
 import { LeaderElector } from "./cluster/leader-elector.js";
 import { TickRepository } from "./persistence/tick-repository.js";
 
-const symbol = process.env.INDEX_SYMBOL || "SYNTH_VOL_50";
+const symbol = process.env.INDEX_SYMBOL || "VOL_50";
 const instanceId = `tick_worker_${randomUUID()}`;
 
 const pool = new pg.Pool({

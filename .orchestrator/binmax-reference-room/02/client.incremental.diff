@@ -1,0 +1,14 @@
+diff --git a/.orchestrator/binmax-reference-room/02/client.before.ts b/apps/web/src/api/client.ts
+index 8480195..3bbcb12 100644
+--- a/.orchestrator/binmax-reference-room/02/client.before.ts
++++ b/apps/web/src/api/client.ts
+@@ -469,9 +469,6 @@ export const openContract = async (
+       symbol,
+       direction,
+       stake_minor: stakeMinor,
+-      duration_seconds: durationSeconds,
+-      expires_at: expiresAt,
+-      expiry_mode: expiryMode,
+     }),
+   });
+ };

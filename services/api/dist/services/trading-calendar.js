@@ -1,18 +1,14 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.TRADING_CALENDARS = void 0;
-exports.isMarketOpen = isMarketOpen;
 const ALL_DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri'];
 // Calendários canônicos institucionais para os 36 ativos (Perigo 7 / Técnica 1)
-exports.TRADING_CALENDARS = {};
+export const TRADING_CALENDARS = {};
 // 1. Cripto (24/7 ininterrupto)
 const CRYPTO_SYMBOLS = [
     'BTCUSD_OTC', 'ETHUSD_OTC', 'SOLUSD_OTC', 'XRPUSD_OTC', 'ADAUSD_OTC',
     'DOGEUSD_OTC', 'DOTUSD_OTC', 'AVAXUSD_OTC', 'LINKUSD_OTC', 'LTCUSD_OTC'
 ];
 for (const sym of CRYPTO_SYMBOLS) {
-    exports.TRADING_CALENDARS[sym] = {
+    TRADING_CALENDARS[sym] = {
         symbol: sym,
         category: 'crypto',
         sessions: [{ open: '00:00', close: '23:59' }],
@@ -27,7 +23,7 @@ const SYNTHETIC_SYMBOLS = [
     'CRASH500_OTC', 'CRASH1000_OTC', 'BOOM500_OTC', 'BOOM1000_OTC', 'STEP_OTC', 'RANGE_OTC'
 ];
 for (const sym of SYNTHETIC_SYMBOLS) {
-    exports.TRADING_CALENDARS[sym] = {
+    TRADING_CALENDARS[sym] = {
         symbol: sym,
         category: 'synthetics',
         sessions: [{ open: '00:00', close: '23:59' }],
@@ -42,7 +38,7 @@ const FOREX_SYMBOLS = [
     'USDCAD_OTC', 'NZDUSD_OTC', 'EURGBP_OTC', 'EURJPY_OTC', 'GBPJPY_OTC'
 ];
 for (const sym of FOREX_SYMBOLS) {
-    exports.TRADING_CALENDARS[sym] = {
+    TRADING_CALENDARS[sym] = {
         symbol: sym,
         category: 'forex',
         sessions: [{ open: '00:00', close: '23:59' }],
@@ -57,7 +53,7 @@ const COMMODITY_SYMBOLS = [
     'SPX500_OTC', 'NAS100_OTC', 'US30_OTC', 'GER40_OTC', 'UK100_OTC', 'JPN225_OTC'
 ];
 for (const sym of COMMODITY_SYMBOLS) {
-    exports.TRADING_CALENDARS[sym] = {
+    TRADING_CALENDARS[sym] = {
         symbol: sym,
         category: 'commodities',
         sessions: [
@@ -73,8 +69,8 @@ for (const sym of COMMODITY_SYMBOLS) {
  * Validação algorítmica de mercado aberto em UTC (Técnica 1, 3 e 4).
  * Retorna true se o mercado estiver aberto para o símbolo no timestamp especificado.
  */
-function isMarketOpen(symbol, timeInput = new Date()) {
-    const cal = exports.TRADING_CALENDARS[symbol];
+export function isMarketOpen(symbol, timeInput = new Date()) {
+    const cal = TRADING_CALENDARS[symbol];
     if (!cal) {
         // Se o ativo não tiver calendário explicitamente cadastrado, adota fail-safe
         return true;

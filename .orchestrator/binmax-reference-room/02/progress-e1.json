@@ -1,0 +1,13 @@
+{
+  "files": 342,
+  "errors": 332.0,
+  "warnings": 0.0,
+  "unit_files": 77,
+  "unit_tests": 409,
+  "unit_failed": 0,
+  "unit_success": true,
+  "feature_stage": "02",
+  "gate": "BLOCKED",
+  "security_e1": "APPROVED_INCREMENTAL",
+  "financial_e1": "PENDING"
+}

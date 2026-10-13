@@ -100,7 +100,8 @@ class SoundEngine {
   }
 
   /**
-   * Som comemorativo de vitória (WIN Chime / Arpeggio Tríade Maior)
+   * Som comemorativo de vitória (WIN Chime / Arpeggio Cristalino Dopaminérgico)
+   * Harmônicos puros de quartzo com shimmer de alta frequência para feedback satisfatório.
    */
   public playWin(): void {
     if (this.muted) return;
@@ -108,26 +109,32 @@ class SoundEngine {
     if (!ctx) return;
 
     try {
-      // Notas do arpeggio: C5 (523Hz), E5 (659Hz), G5 (784Hz), C6 (1046Hz)
-      const notes = [523.25, 659.25, 783.99, 1046.5];
+      // Arpeggio ascendente dopaminérgico: C5, G5, C6, E6 + Shimmer E7
+      const notes = [
+        { freq: 523.25, time: 0.00, dur: 0.40, vol: 0.09 },
+        { freq: 783.99, time: 0.06, dur: 0.40, vol: 0.09 },
+        { freq: 1046.50, time: 0.12, dur: 0.48, vol: 0.11 },
+        { freq: 1318.51, time: 0.18, dur: 0.55, vol: 0.12 },
+        { freq: 2637.02, time: 0.22, dur: 0.25, vol: 0.04 }, // Shimmer cristalino
+      ];
       const start = ctx.currentTime;
 
-      notes.forEach((freq, index) => {
-        const noteStart = start + index * 0.07;
+      notes.forEach(({ freq, time, dur, vol }) => {
+        const noteStart = start + time;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
 
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq, noteStart);
 
-        gain.gain.setValueAtTime(0.08, noteStart);
-        gain.gain.exponentialRampToValueAtTime(0.001, noteStart + 0.35);
+        gain.gain.setValueAtTime(vol, noteStart);
+        gain.gain.exponentialRampToValueAtTime(0.0001, noteStart + dur);
 
         osc.connect(gain);
         gain.connect(ctx.destination);
 
         osc.start(noteStart);
-        osc.stop(noteStart + 0.35);
+        osc.stop(noteStart + dur);
 
         osc.onended = () => {
           osc.disconnect();
@@ -140,7 +147,8 @@ class SoundEngine {
   }
 
   /**
-   * Som neutro e suave de encerramento sem lucro (LOSS)
+   * Som de precisão e encerramento sem lucro (LOSS)
+   * Pulso acústico suave amortecido sem estrondos ou atrito frustrante.
    */
   public playLoss(): void {
     if (this.muted) return;
@@ -152,17 +160,17 @@ class SoundEngine {
       const gain = ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(380, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.18);
+      osc.frequency.setValueAtTime(220, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(130, ctx.currentTime + 0.14);
 
-      gain.gain.setValueAtTime(0.05, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.14);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
 
       osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.18);
+      osc.stop(ctx.currentTime + 0.14);
 
       osc.onended = () => {
         osc.disconnect();

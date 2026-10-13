@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prueba local de retiro demo</title></head>
+<body><div id="root"></div><script type="module">
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { BinmaxWithdrawModal } from '/src/wallet/BinmaxWithdrawModal.tsx';
+const h = React.createElement;
+function Fixture() {
+  const [open, setOpen] = React.useState(true);
+  const [mounted, setMounted] = React.useState(true);
+  const [calls, setCalls] = React.useState(0);
+  const [lastRequest, setLastRequest] = React.useState('');
+  const [failCallback, setFailCallback] = React.useState(false);
+  const submit = () => document.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  return h('main', null,
+    h('h1', null, 'Fixture local: ninguna transacción externa'),
+    h('output', { 'data-testid': 'callback-count' }, String(calls)),
+    h('output', { 'data-testid': 'last-request' }, lastRequest),
+    h('aside', { style: { position: 'fixed', left: 0, top: 0, zIndex: 10000, background: 'white', padding: 4 } },
+      h('button', { type: 'button', onClick: () => setOpen(true) }, 'Abrir fixture'),
+      h('button', { type: 'button', onClick: () => { for (let i = 0; i < 20; i++) submit(); } }, 'Ráfaga de 20 submits'),
+      h('button', { type: 'button', onClick: () => { submit(); setOpen(false); } }, 'Enviar y cerrar'),
+      h('button', { type: 'button', onClick: () => { submit(); setMounted(false); } }, 'Enviar y desmontar'),
+      h('button', { type: 'button', onClick: () => setFailCallback(true) }, 'Callback falla'),
+    ),
+    mounted && h(BinmaxWithdrawModal, {
+      isOpen: open, availableBalanceFormatted: new URLSearchParams(location.search).has('without_balance') ? undefined : '$123.45',
+      onClose: () => setOpen(false),
+      onWithdrawRequested: (amount, address) => {
+        if (failCallback) throw new Error('Fallo controlado del callback demo');
+        setCalls(n => n + 1);
+        setLastRequest(JSON.stringify({ amount, address }));
+      },
+    }),
+  );
+}
+createRoot(document.getElementById('root')).render(h(React.StrictMode, null, h(Fixture)));
+</script></body></html>

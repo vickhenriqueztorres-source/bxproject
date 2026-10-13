@@ -59,11 +59,9 @@ export class SyntheticOUEngine {
 
   public generateNextPrice(): { priceNumeric: number; priceString: string } {
     const z = this.rng.nextGaussian();
-    // Reversão à média com theta e correção de Itô
-    const meanReversionDrift = this.theta * ((this.basePrice - this.currentPrice) / this.basePrice) * this.dt;
-    const itoDrift = -0.5 * (this.sigma ** 2) * this.dt;
-    const diffusion = this.sigma * Math.sqrt(this.dt) * z;
-    const next = this.currentPrice * Math.exp(meanReversionDrift + itoDrift + diffusion);
+    const drift = this.theta * (this.basePrice - this.currentPrice) * this.dt;
+    const diffusion = this.sigma * this.currentPrice * Math.sqrt(this.dt) * z;
+    const next = this.currentPrice + drift + diffusion;
 
     // Barreira de proteção: impede preços negativos ou desvios absurdos (< 10% do preço base)
     const minPrice = this.basePrice * 0.1;

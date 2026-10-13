@@ -1,0 +1,1965 @@
+
+> broker-synthetic-platform@1.0.0 lint D:\brokerproject
+> eslint . --ext .ts,.tsx
+
+
+D:\brokerproject\apps\admin\src\App.tsx
+   36:10  error  'showModal' is assigned a value but never used          @typescript-eslint/no-unused-vars
+   50:24  error  'setGeoblockLogs' is assigned a value but never used    @typescript-eslint/no-unused-vars
+  102:9   error  'handleToggleIndex' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\admin\src\pages\RegulatoryMirrorsPage.tsx
+  44:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\App.tsx
+   43:9   error  'candles' is assigned a value but never used          @typescript-eslint/no-unused-vars
+   83:9   error  'priceFlashClass' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  116:10  error  'showHistory' is assigned a value but never used      @typescript-eslint/no-unused-vars
+  116:23  error  'setShowHistory' is assigned a value but never used   @typescript-eslint/no-unused-vars
+  212:17  error  'setError' is assigned a value but never used         @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\api\client-cache-invalidation.unit.test.ts
+  69:11  error  'base' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\api\client.ts
+  163:7  error  'u2' is never reassigned. Use 'const' instead  prefer-const
+
+D:\brokerproject\apps\web\src\chart\ChartDrawingOverlay.tsx
+  340:79  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\ChartErrorBoundary.tsx
+   48:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   65:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   77:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  105:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\IsolatedChartHost.tsx
+  34:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  46:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\PriceChart.tsx
+    4:8   error  'AreaData' is defined but never used              @typescript-eslint/no-unused-vars
+   15:3   error  'candleData' is defined but never used            @typescript-eslint/no-unused-vars
+   16:3   error  'candleFromTick' is defined but never used        @typescript-eslint/no-unused-vars
+   18:3   error  'timeframeSeconds' is defined but never used      @typescript-eslint/no-unused-vars
+   19:3   error  'isSubMinuteTimeframe' is defined but never used  @typescript-eslint/no-unused-vars
+   76:9   error  'host' is assigned a value but never used         @typescript-eslint/no-unused-vars
+   81:52  error  Unexpected any. Specify a different type          @typescript-eslint/no-explicit-any
+  202:18  error  Unexpected any. Specify a different type          @typescript-eslint/no-explicit-any
+  296:24  error  Unexpected any. Specify a different type          @typescript-eslint/no-explicit-any
+  298:57  error  Unexpected any. Specify a different type          @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\TimeLinesOverlay.tsx
+  74:84  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\chart-chaos-isolation.unit.test.tsx
+  76:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\chart-isolation-stress-chaos-security.unit.test.ts
+    3:32  error  'Timeframe' is defined but never used     @typescript-eslint/no-unused-vars
+    4:15  error  'Tick' is defined but never used          @typescript-eslint/no-unused-vars
+  164:29  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\chart-phase2-hardening.unit.test.tsx
+   68:35  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  104:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\chart-sandbox.unit.test.tsx
+   1:32  error  'vi' is defined but never used            @typescript-eslint/no-unused-vars
+  31:29  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\chart-sanitizer.unit.test.ts
+   87:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  130:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\chart-scale-normalizer.unit.test.ts
+   74:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  104:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\drawing-sanitizer.ts
+  41:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  62:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  77:59  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  78:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\drawing-sanitizer.unit.test.ts
+   14:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   30:33  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   77:26  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   91:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  100:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  119:35  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  126:35  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\drawing.unit.test.ts
+   35:37  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+   36:51  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+   93:65  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+   94:63  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+   95:60  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+   95:98  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  113:9   error  'frameUpdates' is assigned a value but never used       @typescript-eslint/no-unused-vars
+  114:9   error  'finalAppliedPoint' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  188:26  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  207:26  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  208:26  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  242:26  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  243:26  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\indicator-stress.unit.test.ts
+  77:52  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\multichart-chaos-stress.unit.test.tsx
+   12:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   95:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  102:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\pricechart-decoupling.unit.test.tsx
+  42:26  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\raf-multisymbol.unit.test.ts
+  99:52  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\raf-tick-lifecycle.unit.test.ts
+   79:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   94:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  125:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\subetapa-01-parity-and-scale-hardening.unit.test.ts
+  34:52  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  61:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\subetapa-01-price-lines-leak.unit.test.ts
+  23:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  28:41  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\chart\subetapa-04-integrated-chaos-stress.unit.test.ts
+   2:10  error  'ASSET_CATALOG' is defined but never used  @typescript-eslint/no-unused-vars
+  14:43  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\components\KYCTierBadge.tsx
+  21:9  error  'percentage' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\components\chart\TradingViewCanvas.tsx
+  18:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\components\drawer\PortfolioDrawer.tsx
+  18:3  error  'currentPrice' is defined but never used   @typescript-eslint/no-unused-vars
+  19:3  error  'currentSymbol' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\components\header\AccountSelectorDropdown.tsx
+  2:10  error  'formatMinor' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\components\layout\MobileTraderoomLayout.tsx
+  180:17  error  'meta' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\components\modals\AssetCatalogModal.tsx
+  2:50  error  'AssetOption' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\components\trading\TradeTicket.tsx
+  10:10  error  'direction' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  10:21  error  'setDirection' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  68:14  error  'err' is defined but never used                    @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\feed\TradingFeedManager.ts
+  3:36  error  'reconnectDelay' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\i18n\index.tsx
+   1:54  error  'useEffect' is defined but never used     @typescript-eslint/no-unused-vars
+  13:36  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\lib\feature-flags.ts
+  17:89  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  18:73  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  41:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  55:89  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\news\news.unit.test.ts
+  2:37  error  'MarketNewsArticle' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\trade\OrderTicket.tsx
+  100:9  error  'candleRemaining' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\trade\asset-catalog-modal.unit.test.tsx
+  5:10  error  'ASSET_CATALOG' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\trade\chart-drawing-tools.unit.test.tsx
+    1:32  error  'vi' is defined but never used               @typescript-eslint/no-unused-vars
+    7:10  error  'resampleCandles' is defined but never used  @typescript-eslint/no-unused-vars
+    8:15  error  'Candle' is defined but never used           @typescript-eslint/no-unused-vars
+  142:46  error  Unexpected any. Specify a different type     @typescript-eslint/no-explicit-any
+  143:52  error  Unexpected any. Specify a different type     @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\trade\expiry-calculator.unit.test.ts
+  6:3  error  'formatTimeHhMm' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\trade\final-certification.unit.test.tsx
+  1:36  error  'beforeEach' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\trade\history-expansion.unit.test.ts
+  55:33  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\trade\in-chart-asset-selector.unit.test.tsx
+  6:10  error  'ASSET_CATALOG' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\trade\layout-spacing-overlays.unit.test.tsx
+  18:41  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  41:41  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  63:41  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  75:11  error  'purchaseYTop' is assigned a value but never used       @typescript-eslint/no-unused-vars
+  80:11  error  'expirationYBottom' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  94:41  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\trade\logo.unit.test.ts
+  2:8  error  'React' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\trade\sidebar.unit.test.tsx
+   45:26  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  105:26  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  146:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  188:26  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\trade\smoke.unit.test.ts
+  19:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\trade\subetapa-03-sidebar-fidelity.unit.test.tsx
+  13:24  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  61:81  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  70:87  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\apps\web\src\trade\ticket-ergonomic.unit.test.tsx
+  8:10  error  'calculateExecutionExpiry' is defined but never used  @typescript-eslint/no-unused-vars
+  8:36  error  'calculateExpirySlots' is defined but never used      @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\trade\ticket.unit.test.ts
+  1:32  error  'vi' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\apps\web\src\wallet\TransactionHistoryTable.tsx
+  71:41  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\packages\shared\src\currency.ts
+  1:31  error  'PHASE2_DISPLAY_CURRENCIES' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\scratch\test-fast-settlement.mjs
+   2:3   error  'console' is not defined     no-undef
+   3:21  error  'fetch' is not defined       no-undef
+  18:3   error  'console' is not defined     no-undef
+  19:3   error  'console' is not defined     no-undef
+  20:3   error  'console' is not defined     no-undef
+  21:3   error  'console' is not defined     no-undef
+  23:3   error  'console' is not defined     no-undef
+  24:28  error  'setTimeout' is not defined  no-undef
+  26:23  error  'fetch' is not defined       no-undef
+  28:3   error  'console' is not defined     no-undef
+  29:3   error  'console' is not defined     no-undef
+  30:3   error  'console' is not defined     no-undef
+  31:3   error  'console' is not defined     no-undef
+  32:3   error  'console' is not defined     no-undef
+  35:13  error  'console' is not defined     no-undef
+
+D:\brokerproject\scratch\test-vps-api.mjs
+   2:21  error  'fetch' is not defined    no-undef
+  16:3   error  'console' is not defined  no-undef
+  18:3   error  'console' is not defined  no-undef
+  21:14  error  'console' is not defined  no-undef
+
+D:\brokerproject\scratch\test_ws.mjs
+   1:16  error  'WebSocket' is not defined   no-undef
+   4:3   error  'console' is not defined     no-undef
+   9:3   error  'console' is not defined     no-undef
+  11:3   error  'process' is not defined     no-undef
+  15:3   error  'console' is not defined     no-undef
+  19:3   error  'console' is not defined     no-undef
+  20:3   error  'process' is not defined     no-undef
+  23:1   error  'setTimeout' is not defined  no-undef
+  24:3   error  'console' is not defined     no-undef
+  25:3   error  'process' is not defined     no-undef
+
+D:\brokerproject\scripts\check-vps-status.mjs
+   5:3   error  'console' is not defined  no-undef
+  10:7   error  'process' is not defined  no-undef
+  12:28  error  'process' is not defined  no-undef
+  13:35  error  'process' is not defined  no-undef
+
+D:\brokerproject\scripts\deploy-admin-update.mjs
+   13:3   error  'console' is not defined  no-undef
+  116:5   error  'console' is not defined  no-undef
+  124:9   error  'console' is not defined  no-undef
+  143:13  error  'console' is not defined  no-undef
+  145:13  error  'process' is not defined  no-undef
+  147:34  error  'process' is not defined  no-undef
+  148:41  error  'process' is not defined  no-undef
+  162:14  error  'console' is not defined  no-undef
+
+D:\brokerproject\scripts\deploy-features.mjs
+  12:3   error  'console' is not defined  no-undef
+  20:5   error  'console' is not defined  no-undef
+  30:9   error  'console' is not defined  no-undef
+  37:11  error  'console' is not defined  no-undef
+  51:15  error  'console' is not defined  no-undef
+  53:15  error  'process' is not defined  no-undef
+  55:36  error  'process' is not defined  no-undef
+  56:43  error  'process' is not defined  no-undef
+  73:14  error  'console' is not defined  no-undef
+
+D:\brokerproject\scripts\deploy-frontend-update.mjs
+  13:3   error  'console' is not defined  no-undef
+  21:7   error  'console' is not defined  no-undef
+  34:5   error  'console' is not defined  no-undef
+  56:11  error  'console' is not defined  no-undef
+  58:11  error  'process' is not defined  no-undef
+  60:32  error  'process' is not defined  no-undef
+  61:39  error  'process' is not defined  no-undef
+  72:14  error  'console' is not defined  no-undef
+
+D:\brokerproject\scripts\deploy-to-vps.mjs
+   13:3  error  'console' is not defined  no-undef
+   15:3  error  'console' is not defined  no-undef
+   23:7  error  'console' is not defined  no-undef
+   34:5  error  'console' is not defined  no-undef
+   39:9  error  'process' is not defined  no-undef
+   43:9  error  'process' is not defined  no-undef
+   69:3  error  'console' is not defined  no-undef
+  122:3  error  'console' is not defined  no-undef
+  127:3  error  'console' is not defined  no-undef
+  128:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\scripts\deploy-web-fix.mjs
+  12:3   error  'console' is not defined  no-undef
+  20:5   error  'console' is not defined  no-undef
+  28:9   error  'console' is not defined  no-undef
+  40:13  error  'console' is not defined  no-undef
+  42:13  error  'process' is not defined  no-undef
+  44:34  error  'process' is not defined  no-undef
+  45:41  error  'process' is not defined  no-undef
+  59:14  error  'console' is not defined  no-undef
+
+D:\brokerproject\scripts\dev-live-feed.mjs
+   294:25  error  'URL' is not defined            no-undef
+   612:9   error  'setTimeout' is not defined     no-undef
+   877:24  error  'setInterval' is not defined    no-undef
+   880:29  error  'clearTimeout' is not defined   no-undef
+   881:26  error  'setTimeout' is not defined     no-undef
+   883:9   error  'clearInterval' is not defined  no-undef
+   905:11  error  'clearTimeout' is not defined   no-undef
+   983:5   error  'clearInterval' is not defined  no-undef
+   984:27  error  'clearTimeout' is not defined   no-undef
+   994:1   error  'setInterval' is not defined    no-undef
+  1070:3   error  'console' is not defined        no-undef
+
+D:\brokerproject\scripts\import-keycloak-realm.mjs
+  12:7   error  'console' is not defined  no-undef
+  22:11  error  'console' is not defined  no-undef
+  24:11  error  'process' is not defined  no-undef
+  26:32  error  'process' is not defined  no-undef
+  27:39  error  'process' is not defined  no-undef
+
+D:\brokerproject\scripts\remote-exec.mjs
+   3:13  error  'process' is not defined  no-undef
+   5:3   error  'console' is not defined  no-undef
+   6:3   error  'process' is not defined  no-undef
+  15:7   error  'process' is not defined  no-undef
+  17:28  error  'process' is not defined  no-undef
+  18:35  error  'process' is not defined  no-undef
+
+D:\brokerproject\scripts\test-vps-connection.mjs
+   5:1   error  'console' is not defined            no-undef
+   8:3   error  'console' is not defined            no-undef
+  12:31  error  'signal' is defined but never used  @typescript-eslint/no-unused-vars
+  13:7   error  'console' is not defined            no-undef
+  14:7   error  'console' is not defined            no-undef
+  15:7   error  'console' is not defined            no-undef
+  16:7   error  'console' is not defined            no-undef
+  21:7   error  'console' is not defined            no-undef
+  25:3   error  'console' is not defined            no-undef
+
+D:\brokerproject\scripts\upload-compose-and-restart-blnk.mjs
+  11:7   error  'console' is not defined  no-undef
+  16:11  error  'process' is not defined  no-undef
+  18:32  error  'process' is not defined  no-undef
+  19:39  error  'process' is not defined  no-undef
+
+D:\brokerproject\scripts\verify-live-deployment.mjs
+   4:3   error  'console' is not defined  no-undef
+   5:21  error  'fetch' is not defined    no-undef
+   7:3   error  'console' is not defined  no-undef
+   9:25  error  'fetch' is not defined    no-undef
+  11:3   error  'console' is not defined  no-undef
+  15:3   error  'console' is not defined  no-undef
+  33:23  error  'fetch' is not defined    no-undef
+  43:5   error  'console' is not defined  no-undef
+  44:5   error  'console' is not defined  no-undef
+  45:5   error  'console' is not defined  no-undef
+  46:5   error  'console' is not defined  no-undef
+  47:5   error  'console' is not defined  no-undef
+  53:5   error  'console' is not defined  no-undef
+  58:7   error  'console' is not defined  no-undef
+  67:5   error  'console' is not defined  no-undef
+  68:5   error  'console' is not defined  no-undef
+  69:5   error  'console' is not defined  no-undef
+  71:5   error  'console' is not defined  no-undef
+  72:5   error  'process' is not defined  no-undef
+
+D:\brokerproject\services\api\src\routes\chart.ts
+   34:86  error  'reply' is defined but never used                      @typescript-eslint/no-unused-vars
+   40:9   error  'pricescale' is never reassigned. Use 'const' instead  prefer-const
+  136:19  error  Unexpected any. Specify a different type               @typescript-eslint/no-explicit-any
+  176:19  error  Unexpected any. Specify a different type               @typescript-eslint/no-explicit-any
+  190:48  error  Unexpected any. Specify a different type               @typescript-eslint/no-explicit-any
+  190:60  error  Unexpected any. Specify a different type               @typescript-eslint/no-explicit-any
+  203:21  error  Unexpected any. Specify a different type               @typescript-eslint/no-explicit-any
+  216:33  error  Unexpected any. Specify a different type               @typescript-eslint/no-explicit-any
+  230:19  error  Unexpected any. Specify a different type               @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\api\src\routes\contracts.ts
+    9:35  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   10:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   11:33  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   55:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   90:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  107:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\api\src\routes\kyc.ts
+  28:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  44:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  87:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\api\src\routes\mirrors.ts
+  44:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  82:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\api\src\routes\wallet.ts
+  11:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  38:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\api\src\services\backpressure.ts
+  14:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\api\src\services\compliance-kyc.ts
+   2:3   error  'CountryCode' is defined but never used   @typescript-eslint/no-unused-vars
+  28:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  29:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\api\src\services\contract-service.ts
+  2:9  error  'Pool' is assigned a value but only used as a type  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\services\api\src\services\mirror-domains.ts
+   12:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   13:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   24:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   34:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  122:26  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  194:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\api\src\services\regulatory-zones.ts
+    4:3   error  'YELLOW_ZONE_COUNTRIES' is defined but never used  @typescript-eslint/no-unused-vars
+    5:3   error  'GREEN_ZONE_COUNTRIES' is defined but never used   @typescript-eslint/no-unused-vars
+   75:18  error  Unexpected any. Specify a different type           @typescript-eslint/no-explicit-any
+   76:21  error  Unexpected any. Specify a different type           @typescript-eslint/no-explicit-any
+  164:46  error  Unexpected any. Specify a different type           @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\api\src\services\risk-manager.ts
+  2:8  error  'fs' is defined but never used    @typescript-eslint/no-unused-vars
+  3:8  error  'path' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\services\api\test\chart-api.unit.test.ts
+   7:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  11:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  17:10  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\api\test\contracts.unit.test.ts
+   10:36  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   10:55  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   14:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   14:55  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   17:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   20:34  error  'params' is defined but never used        @typescript-eslint/no-unused-vars
+   20:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   40:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  177:21  error  'sql' is defined but never used           @typescript-eslint/no-unused-vars
+  177:34  error  'params' is defined but never used        @typescript-eslint/no-unused-vars
+  177:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\candle-worker\src\scripts\rebuild-candles.ts
+  4:43  error  'TickInput' is defined but never used   @typescript-eslint/no-unused-vars
+  4:54  error  'CandleData' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\services\candle-worker\src\stream\consumer-group.ts
+  25:19  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  50:17  error  '_stream' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  50:45  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  77:33  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  88:14  error  'err' is defined but never used               @typescript-eslint/no-unused-vars
+
+D:\brokerproject\services\candle-worker\test\aggregator.unit.test.ts
+  28:9  error  'open' is never reassigned. Use 'const' instead  prefer-const
+
+D:\brokerproject\services\settlement-worker\src\reconciliation\financial-reconciler.ts
+    2:9   error  'Pool' is assigned a value but only used as a type   @typescript-eslint/no-unused-vars
+    4:8   error  'crypto' is defined but never used                   @typescript-eslint/no-unused-vars
+   52:13  error  'totalOpenStake' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   56:19  error  Unexpected any. Specify a different type             @typescript-eslint/no-explicit-any
+   74:19  error  Unexpected any. Specify a different type             @typescript-eslint/no-explicit-any
+   91:19  error  Unexpected any. Specify a different type             @typescript-eslint/no-explicit-any
+  125:19  error  Unexpected any. Specify a different type             @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\settlement-worker\src\scheduler\expiry-dispatcher.ts
+  18:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\settlement-worker\src\settlement\settler.ts
+    2:9   error  'Pool' is assigned a value but only used as a type  @typescript-eslint/no-unused-vars
+  192:17  error  '_stream' is assigned a value but never used        @typescript-eslint/no-unused-vars
+  192:45  error  Unexpected any. Specify a different type            @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\settlement-worker\test\reconciler.unit.test.ts
+   8:34  error  'params' is defined but never used        @typescript-eslint/no-unused-vars
+   8:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  31:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  32:60  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  43:34  error  'params' is defined but never used        @typescript-eslint/no-unused-vars
+  43:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  67:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  68:60  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  78:34  error  'params' is defined but never used        @typescript-eslint/no-unused-vars
+  78:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  96:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  97:60  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\settlement-worker\test\settler.unit.test.ts
+   11:36  error  'params' is defined but never used        @typescript-eslint/no-unused-vars
+   11:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   52:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   52:71  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   52:88  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   67:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  126:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  126:71  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  126:88  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\tick-engine\engine.mjs
+    8:23  error  'process' is not defined           no-undef
+    9:25  error  'process' is not defined           no-undef
+   17:21  error  'process' is not defined           no-undef
+   21:8   error  'process' is not defined           no-undef
+   21:43  error  'process' is not defined           no-undef
+   78:36  error  'setTimeout' is not defined        no-undef
+   95:11  error  'process' is not defined           no-undef
+  102:7   error  'process' is not defined           no-undef
+  154:5   error  'process' is not defined           no-undef
+  250:8   error  'process' is not defined           no-undef
+  264:3   error  'process' is not defined           no-undef
+  268:26  error  'process' is not defined           no-undef
+  268:53  error  'process' is not defined           no-undef
+  275:38  error  'setTimeout' is not defined        no-undef
+  281:9   error  'process' is not defined           no-undef
+  298:18  error  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  304:40  error  'setTimeout' is not defined        no-undef
+  329:38  error  'setTimeout' is not defined        no-undef
+  340:5   error  'process' is not defined           no-undef
+
+D:\brokerproject\services\wallet-adapter\src\blnk-client.ts
+   96:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  191:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  317:77  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\websocket-gateway\src\backpressure.ts
+  20:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\services\websocket-gateway\src\handlers\catchup-handler.ts
+  53:17  error  '_id' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\services\websocket-gateway\src\index.ts
+   21:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   23:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   26:11  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  104:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  128:38  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  228:16  error  'err' is defined but never used           @typescript-eslint/no-unused-vars
+
+D:\brokerproject\services\websocket-gateway\test\catchup-handler.unit.test.ts
+  13:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  33:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  49:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\skills\11-chart-trading-tools\scripts\verify-chart-integrity.mjs
+    8:1  error  'console' is not defined                             no-undef
+    9:1  error  'console' is not defined                             no-undef
+   10:1  error  'console' is not defined                             no-undef
+   18:5  error  'console' is not defined                             no-undef
+   21:5  error  'console' is not defined                             no-undef
+   22:5  error  'console' is not defined                             no-undef
+   59:7  error  'executedFrames' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   67:7  error  'queueMicrotask' is not defined                      no-undef
+  118:9  error  'prices' is assigned a value but never used          @typescript-eslint/no-unused-vars
+  119:9  error  'period' is assigned a value but never used          @typescript-eslint/no-unused-vars
+  150:1  error  'console' is not defined                             no-undef
+  151:1  error  'console' is not defined                             no-undef
+  152:1  error  'console' is not defined                             no-undef
+  155:3  error  'process' is not defined                             no-undef
+  157:3  error  'console' is not defined                             no-undef
+  158:3  error  'process' is not defined                             no-undef
+
+D:\brokerproject\skills\11-chart-trading-tools\tests\chart-tools.test.ts
+   2:28  error  'DEFAULT_INDICATORS' is defined but never used     @typescript-eslint/no-unused-vars
+  16:10  error  'resampleCandles' is defined but never used        @typescript-eslint/no-unused-vars
+  63:11  error  'rafScheduled' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\tests\chaos\C-01-max-pairs.test.ts
+  64:11  error  'symbol' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\tests\chaos\chaos-scenarios.test.ts
+   9:9   error  'sequence' is never reassigned. Use 'const' instead  prefer-const
+  56:11  error  'containerClock' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\tests\chaos\phase2-chaos-scenarios.test.ts
+  34:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  35:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  45:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  73:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\tests\integration\test-exchange-rates-api.test.ts
+  18:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  28:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  52:43  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\tests\integration\test-geoblock-api.test.ts
+   17:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   18:41  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   56:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   67:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   67:56  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   83:24  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   83:36  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  156:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\tests\integration\test-phase2-e2e.test.ts
+  25:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  26:41  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  75:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  85:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  85:56  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  92:32  error  'role' is defined but never used          @typescript-eslint/no-unused-vars
+
+D:\brokerproject\tests\load\contracts-multi.k6.js
+   1:11  error  'open' is defined but never used  @typescript-eslint/no-unused-vars
+  11:13  error  '__ENV' is not defined            no-undef
+  53:32  error  '__ENV' is not defined            no-undef
+
+D:\brokerproject\tests\load\k6-broker-load.js
+  17:18  error  '__ENV' is not defined   no-undef
+  35:32  error  '__VU' is not defined    no-undef
+  35:40  error  '__ITER' is not defined  no-undef
+
+D:\brokerproject\tests\load\max-pairs-ramp.k6.js
+   1:11  error  'open' is defined but never used                     @typescript-eslint/no-unused-vars
+  10:13  error  '__ENV' is not defined                               no-undef
+  12:7   error  'tickIntervalMs' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\tests\load\phase2-multicountry-ramp.k6.js
+  18:18  error  '__ENV' is not defined  no-undef
+
+D:\brokerproject\tests\load\ws-fanout.k6.js
+   1:11  error  'open' is defined but never used  @typescript-eslint/no-unused-vars
+  11:15  error  '__ENV' is not defined            no-undef
+
+D:\brokerproject\tests\math\nist-entropy.test.ts
+  16:12  error  'negativeCount' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\tests\test-candles-loading-pipeline.mjs
+    3:1   error  'console' is not defined  no-undef
+    8:3   error  'console' is not defined  no-undef
+   12:23  error  'fetch' is not defined    no-undef
+   27:5   error  'console' is not defined  no-undef
+   30:3   error  'console' is not defined  no-undef
+   72:3   error  'console' is not defined  no-undef
+   74:3   error  'console' is not defined  no-undef
+   75:21  error  'fetch' is not defined    no-undef
+   86:3   error  'console' is not defined  no-undef
+  108:3   error  'console' is not defined  no-undef
+  110:3   error  'console' is not defined  no-undef
+  163:3   error  'console' is not defined  no-undef
+  165:3   error  'console' is not defined  no-undef
+  166:3   error  'console' is not defined  no-undef
+  167:3   error  'console' is not defined  no-undef
+  168:3   error  'console' is not defined  no-undef
+  172:3   error  'console' is not defined  no-undef
+  173:3   error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-chart-history-hardening.mjs
+    3:1  error  'console' is not defined  no-undef
+  114:3  error  'console' is not defined  no-undef
+  140:5  error  'console' is not defined  no-undef
+  143:3  error  'console' is not defined  no-undef
+  174:3  error  'console' is not defined  no-undef
+  176:3  error  'console' is not defined  no-undef
+  192:3  error  'console' is not defined  no-undef
+  194:3  error  'console' is not defined  no-undef
+  212:3  error  'console' is not defined  no-undef
+  214:3  error  'console' is not defined  no-undef
+  223:3  error  'console' is not defined  no-undef
+  225:3  error  'console' is not defined  no-undef
+  245:3  error  'console' is not defined  no-undef
+  247:3  error  'console' is not defined  no-undef
+  248:3  error  'console' is not defined  no-undef
+  249:3  error  'console' is not defined  no-undef
+  250:3  error  'console' is not defined  no-undef
+  254:3  error  'console' is not defined  no-undef
+  255:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-fase1-mvp-eight-features.mjs
+   21:7  error  'WEB_PORT' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   50:3  error  'console' is not defined                       no-undef
+   51:3  error  'console' is not defined                       no-undef
+   52:3  error  'console' is not defined                       no-undef
+   53:3  error  'console' is not defined                       no-undef
+   61:3  error  'console' is not defined                       no-undef
+   73:5  error  'console' is not defined                       no-undef
+   76:5  error  'console' is not defined                       no-undef
+   82:3  error  'console' is not defined                       no-undef
+   96:5  error  'console' is not defined                       no-undef
+   99:5  error  'console' is not defined                       no-undef
+  105:3  error  'console' is not defined                       no-undef
+  123:5  error  'console' is not defined                       no-undef
+  126:5  error  'console' is not defined                       no-undef
+  132:3  error  'console' is not defined                       no-undef
+  160:5  error  'console' is not defined                       no-undef
+  163:5  error  'console' is not defined                       no-undef
+  169:3  error  'console' is not defined                       no-undef
+  195:5  error  'console' is not defined                       no-undef
+  198:5  error  'console' is not defined                       no-undef
+  204:3  error  'console' is not defined                       no-undef
+  229:5  error  'console' is not defined                       no-undef
+  232:5  error  'console' is not defined                       no-undef
+  238:3  error  'console' is not defined                       no-undef
+  259:5  error  'console' is not defined                       no-undef
+  262:5  error  'console' is not defined                       no-undef
+  268:3  error  'console' is not defined                       no-undef
+  279:5  error  'console' is not defined                       no-undef
+  282:5  error  'console' is not defined                       no-undef
+  288:3  error  'console' is not defined                       no-undef
+  290:5  error  'console' is not defined                       no-undef
+  291:5  error  'console' is not defined                       no-undef
+  292:5  error  'console' is not defined                       no-undef
+  293:5  error  'process' is not defined                       no-undef
+  295:5  error  'console' is not defined                       no-undef
+  296:5  error  'process' is not defined                       no-undef
+  301:3  error  'console' is not defined                       no-undef
+  302:3  error  'process' is not defined                       no-undef
+
+D:\brokerproject\tests\test-keycloak-blnk-wallet-e2e.mjs
+   14:1   error  'console' is not defined       no-undef
+   15:1   error  'console' is not defined       no-undef
+   16:1   error  'console' is not defined       no-undef
+   20:10  error  'Buffer' is not defined        no-undef
+   24:10  error  'Buffer' is not defined        no-undef
+  112:3   error  'console' is not defined       no-undef
+  119:3   error  'console' is not defined       no-undef
+  124:3   error  'console' is not defined       no-undef
+  147:3   error  'console' is not defined       no-undef
+  152:3   error  'console' is not defined       no-undef
+  166:3   error  'console' is not defined       no-undef
+  171:3   error  'console' is not defined       no-undef
+  185:3   error  'console' is not defined       no-undef
+  190:3   error  'console' is not defined       no-undef
+  223:3   error  'console' is not defined       no-undef
+  228:3   error  'console' is not defined       no-undef
+  229:51  error  '_' is defined but never used  @typescript-eslint/no-unused-vars
+  229:54  error  'i' is defined but never used  @typescript-eslint/no-unused-vars
+  242:3   error  'console' is not defined       no-undef
+  248:3   error  'console' is not defined       no-undef
+  249:3   error  'console' is not defined       no-undef
+  250:3   error  'console' is not defined       no-undef
+  251:3   error  'console' is not defined       no-undef
+  252:3   error  'console' is not defined       no-undef
+  253:3   error  'console' is not defined       no-undef
+  254:3   error  'console' is not defined       no-undef
+  255:3   error  'console' is not defined       no-undef
+  256:3   error  'console' is not defined       no-undef
+  257:3   error  'console' is not defined       no-undef
+  258:3   error  'console' is not defined       no-undef
+  259:3   error  'console' is not defined       no-undef
+  263:3   error  'console' is not defined       no-undef
+  264:3   error  'process' is not defined       no-undef
+
+D:\brokerproject\tests\test-multi-01-db-seed.mjs
+   6:1  error  'console' is not defined  no-undef
+  32:1  error  'console' is not defined  no-undef
+  39:1  error  'console' is not defined  no-undef
+  44:1  error  'console' is not defined  no-undef
+  50:1  error  'console' is not defined  no-undef
+  55:1  error  'console' is not defined  no-undef
+  57:1  error  'console' is not defined  no-undef
+  58:1  error  'console' is not defined  no-undef
+
+D:\brokerproject\tests\test-multi-02-tick-engine.mjs
+    4:10  error  'SymbolState' is defined but never used  @typescript-eslint/no-unused-vars
+    6:1   error  'console' is not defined                 no-undef
+   57:1   error  'console' is not defined                 no-undef
+   93:1   error  'console' is not defined                 no-undef
+  119:1   error  'console' is not defined                 no-undef
+  121:1   error  'console' is not defined                 no-undef
+  140:1   error  'console' is not defined                 no-undef
+  142:1   error  'console' is not defined                 no-undef
+  143:1   error  'console' is not defined                 no-undef
+  145:1   error  'process' is not defined                 no-undef
+
+D:\brokerproject\tests\test-multi-03-candles-api.mjs
+    4:1   error  'console' is not defined  no-undef
+   56:1   error  'console' is not defined  no-undef
+   97:1   error  'console' is not defined  no-undef
+  101:19  error  'URL' is not defined      no-undef
+  128:1   error  'console' is not defined  no-undef
+  134:1   error  'console' is not defined  no-undef
+  136:1   error  'console' is not defined  no-undef
+  137:1   error  'console' is not defined  no-undef
+  139:1   error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-multi-04-contracts-settlement.mjs
+    3:10  error  'priceUnits' is defined but never used  @typescript-eslint/no-unused-vars
+    5:1   error  'console' is not defined                no-undef
+   27:1   error  'console' is not defined                no-undef
+   79:1   error  'console' is not defined                no-undef
+  127:1   error  'console' is not defined                no-undef
+  167:1   error  'console' is not defined                no-undef
+  169:1   error  'console' is not defined                no-undef
+  170:1   error  'console' is not defined                no-undef
+  172:1   error  'process' is not defined                no-undef
+
+D:\brokerproject\tests\test-multi-05-ws-single-connection.mjs
+    3:1  error  'console' is not defined                     no-undef
+   75:7  error  'unsub3' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   76:7  error  'unsub4' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   81:1  error  'console' is not defined                     no-undef
+  102:1  error  'console' is not defined                     no-undef
+  112:1  error  'console' is not defined                     no-undef
+  114:1  error  'console' is not defined                     no-undef
+  115:1  error  'console' is not defined                     no-undef
+  117:1  error  'process' is not defined                     no-undef
+
+D:\brokerproject\tests\test-multi-06-multi-grid.mjs
+   5:1  error  'console' is not defined  no-undef
+  17:1  error  'console' is not defined  no-undef
+  21:1  error  'console' is not defined  no-undef
+  26:1  error  'console' is not defined  no-undef
+  32:1  error  'console' is not defined  no-undef
+  34:1  error  'console' is not defined  no-undef
+  35:1  error  'console' is not defined  no-undef
+  37:1  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-multi-07-institutional-suite.mjs
+    4:10  error  'priceUnits' is defined but never used    @typescript-eslint/no-unused-vars
+    6:1   error  'console' is not defined                  no-undef
+   29:1   error  'console' is not defined                  no-undef
+   53:13  error  'sym' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   62:1   error  'console' is not defined                  no-undef
+   67:1   error  'console' is not defined                  no-undef
+  114:1   error  'console' is not defined                  no-undef
+  119:1   error  'console' is not defined                  no-undef
+  217:1   error  'console' is not defined                  no-undef
+  222:1   error  'console' is not defined                  no-undef
+  243:1   error  'console' is not defined                  no-undef
+  248:1   error  'console' is not defined                  no-undef
+  249:1   error  'console' is not defined                  no-undef
+  250:1   error  'console' is not defined                  no-undef
+  251:1   error  'console' is not defined                  no-undef
+  252:1   error  'console' is not defined                  no-undef
+  253:1   error  'console' is not defined                  no-undef
+  255:1   error  'console' is not defined                  no-undef
+  256:1   error  'console' is not defined                  no-undef
+  257:1   error  'console' is not defined                  no-undef
+  258:1   error  'console' is not defined                  no-undef
+
+D:\brokerproject\tests\test-multi-post-verifier.mjs
+    4:1  error  'console' is not defined                                     no-undef
+    5:1  error  'console' is not defined                                     no-undef
+   11:1  error  'console' is not defined                                     no-undef
+   16:7  error  'EXPECTED_CATALOG_COUNT' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   26:1  error  'console' is not defined                                     no-undef
+   35:1  error  'console' is not defined                                     no-undef
+   44:1  error  'console' is not defined                                     no-undef
+   57:1  error  'console' is not defined                                     no-undef
+   64:1  error  'console' is not defined                                     no-undef
+   79:1  error  'console' is not defined                                     no-undef
+   95:1  error  'console' is not defined                                     no-undef
+  102:1  error  'console' is not defined                                     no-undef
+  109:1  error  'console' is not defined                                     no-undef
+  116:1  error  'console' is not defined                                     no-undef
+  123:1  error  'console' is not defined                                     no-undef
+  132:1  error  'console' is not defined                                     no-undef
+  137:1  error  'console' is not defined                                     no-undef
+  139:1  error  'console' is not defined                                     no-undef
+  140:1  error  'console' is not defined                                     no-undef
+  141:1  error  'console' is not defined                                     no-undef
+  142:1  error  'console' is not defined                                     no-undef
+  143:1  error  'console' is not defined                                     no-undef
+
+D:\brokerproject\tests\test-perigo-5-settlement-orders.mjs
+    4:1   error  'console' is not defined  no-undef
+   10:3   error  'console' is not defined  no-undef
+   21:3   error  'console' is not defined  no-undef
+   24:3   error  'console' is not defined  no-undef
+   57:3   error  'console' is not defined  no-undef
+   60:3   error  'console' is not defined  no-undef
+   89:3   error  'console' is not defined  no-undef
+   92:3   error  'console' is not defined  no-undef
+  113:3   error  'console' is not defined  no-undef
+  116:3   error  'console' is not defined  no-undef
+  134:3   error  'console' is not defined  no-undef
+  137:3   error  'console' is not defined  no-undef
+  138:25  error  'fetch' is not defined    no-undef
+  147:3   error  'console' is not defined  no-undef
+  150:3   error  'console' is not defined  no-undef
+  188:3   error  'console' is not defined  no-undef
+  190:3   error  'console' is not defined  no-undef
+  191:3   error  'console' is not defined  no-undef
+  192:3   error  'console' is not defined  no-undef
+  193:3   error  'console' is not defined  no-undef
+  197:3   error  'console' is not defined  no-undef
+  198:3   error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-perigo-7-calendars-sessions.mjs
+    5:1  error  'console' is not defined  no-undef
+   11:3  error  'console' is not defined  no-undef
+   46:5  error  'console' is not defined  no-undef
+   52:3  error  'console' is not defined  no-undef
+   58:5  error  'console' is not defined  no-undef
+   64:3  error  'console' is not defined  no-undef
+   76:5  error  'console' is not defined  no-undef
+   82:3  error  'console' is not defined  no-undef
+  112:5  error  'console' is not defined  no-undef
+  118:3  error  'console' is not defined  no-undef
+  147:5  error  'console' is not defined  no-undef
+  150:3  error  'console' is not defined  no-undef
+  151:3  error  'console' is not defined  no-undef
+  152:3  error  'console' is not defined  no-undef
+  153:3  error  'process' is not defined  no-undef
+  157:3  error  'console' is not defined  no-undef
+  158:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-phase2-final-certification.mjs
+   10:1  error  'console' is not defined  no-undef
+   11:1  error  'console' is not defined  no-undef
+   12:1  error  'console' is not defined  no-undef
+   24:1  error  'console' is not defined  no-undef
+   36:1  error  'console' is not defined  no-undef
+   49:1  error  'console' is not defined  no-undef
+   63:1  error  'console' is not defined  no-undef
+   72:1  error  'console' is not defined  no-undef
+   96:1  error  'console' is not defined  no-undef
+  105:1  error  'console' is not defined  no-undef
+  116:1  error  'console' is not defined  no-undef
+  118:1  error  'console' is not defined  no-undef
+  119:1  error  'console' is not defined  no-undef
+  120:1  error  'console' is not defined  no-undef
+
+D:\brokerproject\tests\test-phase2-subetapa-1-db-seed.mjs
+   5:1  error  'console' is not defined  no-undef
+  28:1  error  'console' is not defined  no-undef
+  46:1  error  'console' is not defined  no-undef
+  53:1  error  'console' is not defined  no-undef
+  60:1  error  'console' is not defined  no-undef
+  68:1  error  'console' is not defined  no-undef
+  73:1  error  'console' is not defined  no-undef
+  79:1  error  'console' is not defined  no-undef
+  81:1  error  'console' is not defined  no-undef
+  82:1  error  'console' is not defined  no-undef
+  83:1  error  'console' is not defined  no-undef
+
+D:\brokerproject\tests\test-phase2-subetapa-2-geoblock-flags.mjs
+   5:1   error  'console' is not defined            no-undef
+  13:1   error  'console' is not defined            no-undef
+  24:1   error  'console' is not defined            no-undef
+  35:1   error  'console' is not defined            no-undef
+  39:22  error  'params' is defined but never used  @typescript-eslint/no-unused-vars
+  56:1   error  'console' is not defined            no-undef
+  58:1   error  'console' is not defined            no-undef
+  59:1   error  'console' is not defined            no-undef
+  60:1   error  'console' is not defined            no-undef
+
+D:\brokerproject\tests\test-phase2-subetapa-3-display-currencies.mjs
+   2:10  error  'formatCurrency' is defined but never used  @typescript-eslint/no-unused-vars
+   4:1   error  'console' is not defined                    no-undef
+  11:1   error  'console' is not defined                    no-undef
+  20:1   error  'console' is not defined                    no-undef
+  44:1   error  'console' is not defined                    no-undef
+  49:1   error  'console' is not defined                    no-undef
+  51:1   error  'console' is not defined                    no-undef
+  52:1   error  'console' is not defined                    no-undef
+  53:1   error  'console' is not defined                    no-undef
+
+D:\brokerproject\tests\test-phase2-subetapa-4-real-feed-adapter.mjs
+   5:1  error  'console' is not defined  no-undef
+  14:1  error  'console' is not defined  no-undef
+  22:1  error  'console' is not defined  no-undef
+  33:1  error  'console' is not defined  no-undef
+  40:1  error  'console' is not defined  no-undef
+  42:1  error  'console' is not defined  no-undef
+  43:1  error  'console' is not defined  no-undef
+  44:1  error  'console' is not defined  no-undef
+
+D:\brokerproject\tests\test-phase2-subetapa-5-admin-panel.mjs
+   1:8  error  'fs' is defined but never used  @typescript-eslint/no-unused-vars
+   6:1  error  'console' is not defined        no-undef
+  19:1  error  'console' is not defined        no-undef
+  26:1  error  'console' is not defined        no-undef
+  33:1  error  'console' is not defined        no-undef
+  39:1  error  'console' is not defined        no-undef
+  44:1  error  'console' is not defined        no-undef
+  46:1  error  'console' is not defined        no-undef
+  47:1  error  'console' is not defined        no-undef
+  48:1  error  'console' is not defined        no-undef
+
+D:\brokerproject\tests\test-phase2-subetapa-6-frontend-localization.mjs
+   5:1  error  'console' is not defined  no-undef
+  18:1  error  'console' is not defined  no-undef
+  27:1  error  'console' is not defined  no-undef
+  34:1  error  'console' is not defined  no-undef
+  40:1  error  'console' is not defined  no-undef
+  45:1  error  'console' is not defined  no-undef
+  47:1  error  'console' is not defined  no-undef
+  48:1  error  'console' is not defined  no-undef
+  49:1  error  'console' is not defined  no-undef
+
+D:\brokerproject\tests\test-phase2-subetapa-7-monitoring.mjs
+   6:1  error  'console' is not defined  no-undef
+  18:1  error  'console' is not defined  no-undef
+  32:1  error  'console' is not defined  no-undef
+  38:1  error  'console' is not defined  no-undef
+  40:1  error  'console' is not defined  no-undef
+  41:1  error  'console' is not defined  no-undef
+  42:1  error  'console' is not defined  no-undef
+
+D:\brokerproject\tests\test-reg-brasil-100-percent-free.mjs
+   6:1  error  'console' is not defined  no-undef
+  11:1  error  'console' is not defined  no-undef
+  22:1  error  'console' is not defined  no-undef
+  35:1  error  'console' is not defined  no-undef
+  49:1  error  'console' is not defined  no-undef
+  51:1  error  'console' is not defined  no-undef
+  52:1  error  'console' is not defined  no-undef
+  53:1  error  'console' is not defined  no-undef
+
+D:\brokerproject\tests\test-reg-final-certification.mjs
+    6:3  error  'RED_ZONE_COUNTRIES' is defined but never used     @typescript-eslint/no-unused-vars
+    7:3  error  'YELLOW_ZONE_COUNTRIES' is defined but never used  @typescript-eslint/no-unused-vars
+    8:3  error  'GREEN_ZONE_COUNTRIES' is defined but never used   @typescript-eslint/no-unused-vars
+   11:1  error  'console' is not defined                           no-undef
+   12:1  error  'console' is not defined                           no-undef
+   13:1  error  'console' is not defined                           no-undef
+   18:1  error  'console' is not defined                           no-undef
+   32:1  error  'console' is not defined                           no-undef
+   76:1  error  'console' is not defined                           no-undef
+   87:1  error  'console' is not defined                           no-undef
+   92:1  error  'console' is not defined                           no-undef
+  110:1  error  'console' is not defined                           no-undef
+  115:1  error  'console' is not defined                           no-undef
+  153:1  error  'console' is not defined                           no-undef
+  158:1  error  'console' is not defined                           no-undef
+  161:1  error  'console' is not defined                           no-undef
+  166:1  error  'console' is not defined                           no-undef
+  178:1  error  'console' is not defined                           no-undef
+  183:1  error  'console' is not defined                           no-undef
+  184:1  error  'console' is not defined                           no-undef
+  185:1  error  'console' is not defined                           no-undef
+  186:1  error  'console' is not defined                           no-undef
+  188:1  error  'console' is not defined                           no-undef
+  189:1  error  'console' is not defined                           no-undef
+  190:1  error  'console' is not defined                           no-undef
+
+D:\brokerproject\tests\test-reg-subetapa-1-db-seed.mjs
+  12:1  error  'console' is not defined  no-undef
+  27:1  error  'console' is not defined  no-undef
+  36:1  error  'console' is not defined  no-undef
+  45:1  error  'console' is not defined  no-undef
+  53:1  error  'console' is not defined  no-undef
+  66:1  error  'console' is not defined  no-undef
+  87:1  error  'console' is not defined  no-undef
+  92:1  error  'console' is not defined  no-undef
+  94:1  error  'console' is not defined  no-undef
+  95:1  error  'console' is not defined  no-undef
+  96:1  error  'console' is not defined  no-undef
+
+D:\brokerproject\tests\test-reg-subetapa-2-edge-georoute.mjs
+   3:10  error  'RED_ZONE_COUNTRIES' is defined but never used     @typescript-eslint/no-unused-vars
+   3:30  error  'YELLOW_ZONE_COUNTRIES' is defined but never used  @typescript-eslint/no-unused-vars
+   3:53  error  'GREEN_ZONE_COUNTRIES' is defined but never used   @typescript-eslint/no-unused-vars
+   5:1   error  'console' is not defined                           no-undef
+  20:1   error  'console' is not defined                           no-undef
+  34:1   error  'console' is not defined                           no-undef
+  43:1   error  'console' is not defined                           no-undef
+  52:1   error  'console' is not defined                           no-undef
+  67:1   error  'console' is not defined                           no-undef
+  95:1   error  'console' is not defined                           no-undef
+  97:1   error  'console' is not defined                           no-undef
+  98:1   error  'console' is not defined                           no-undef
+  99:1   error  'console' is not defined                           no-undef
+
+D:\brokerproject\tests\test-reg-subetapa-3-mirror-rotation.mjs
+    4:1   error  'console' is not defined         no-undef
+   19:15  error  'key' is defined but never used  @typescript-eslint/no-unused-vars
+   20:15  error  'key' is defined but never used  @typescript-eslint/no-unused-vars
+   20:20  error  'val' is defined but never used  @typescript-eslint/no-unused-vars
+   21:15  error  'key' is defined but never used  @typescript-eslint/no-unused-vars
+   89:1   error  'console' is not defined         no-undef
+   96:1   error  'console' is not defined         no-undef
+  102:1   error  'console' is not defined         no-undef
+  110:1   error  'console' is not defined         no-undef
+  116:1   error  'console' is not defined         no-undef
+  118:1   error  'console' is not defined         no-undef
+  119:1   error  'console' is not defined         no-undef
+  120:1   error  'console' is not defined         no-undef
+
+D:\brokerproject\tests\test-reg-subetapa-4-tiered-kyc.mjs
+    4:1   error  'console' is not defined         no-undef
+   64:15  error  'key' is defined but never used  @typescript-eslint/no-unused-vars
+   75:1   error  'console' is not defined         no-undef
+   84:1   error  'console' is not defined         no-undef
+   90:1   error  'console' is not defined         no-undef
+  112:1   error  'console' is not defined         no-undef
+  135:1   error  'console' is not defined         no-undef
+  137:1   error  'console' is not defined         no-undef
+  138:1   error  'console' is not defined         no-undef
+  139:1   error  'console' is not defined         no-undef
+
+D:\brokerproject\tests\test-reg-subetapa-5-frontend-admin.mjs
+   3:1  error  'console' is not defined  no-undef
+  43:1  error  'console' is not defined  no-undef
+  55:1  error  'console' is not defined  no-undef
+  66:1  error  'console' is not defined  no-undef
+  74:1  error  'console' is not defined  no-undef
+  82:1  error  'console' is not defined  no-undef
+  84:1  error  'console' is not defined  no-undef
+  85:1  error  'console' is not defined  no-undef
+  86:1  error  'console' is not defined  no-undef
+
+D:\brokerproject\tests\test-seven-day-macro-history.mjs
+    3:1   error  'console' is not defined      no-undef
+  174:3   error  'console' is not defined      no-undef
+  189:5   error  'console' is not defined      no-undef
+  192:3   error  'console' is not defined      no-undef
+  200:3   error  'console' is not defined      no-undef
+  206:3   error  'console' is not defined      no-undef
+  212:3   error  'console' is not defined      no-undef
+  214:3   error  'console' is not defined      no-undef
+  226:3   error  'console' is not defined      no-undef
+  228:3   error  'console' is not defined      no-undef
+  243:3   error  'console' is not defined      no-undef
+  245:3   error  'console' is not defined      no-undef
+  247:20  error  'performance' is not defined  no-undef
+  249:23  error  'performance' is not defined  no-undef
+  253:3   error  'console' is not defined      no-undef
+  255:3   error  'console' is not defined      no-undef
+  262:3   error  'console' is not defined      no-undef
+  264:3   error  'console' is not defined      no-undef
+  265:3   error  'console' is not defined      no-undef
+  266:3   error  'console' is not defined      no-undef
+  267:3   error  'console' is not defined      no-undef
+  271:3   error  'console' is not defined      no-undef
+  272:3   error  'process' is not defined      no-undef
+
+D:\brokerproject\tests\test-subetapa-1-cross-sync-timing.mjs
+    4:1   error  'console' is not defined  no-undef
+   58:3   error  'console' is not defined  no-undef
+   72:3   error  'console' is not defined  no-undef
+   85:3   error  'console' is not defined  no-undef
+   98:3   error  'console' is not defined  no-undef
+  125:21  error  'fetch' is not defined    no-undef
+  131:3   error  'console' is not defined  no-undef
+  135:3   error  'console' is not defined  no-undef
+  136:3   error  'console' is not defined  no-undef
+  137:3   error  'console' is not defined  no-undef
+  138:3   error  'process' is not defined  no-undef
+  142:3   error  'console' is not defined  no-undef
+  143:3   error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-1-fe-multiplex-unsub.mjs
+    3:1   error  'console' is not defined          no-undef
+   78:16  error  'tick' is defined but never used  @typescript-eslint/no-unused-vars
+   83:3   error  'console' is not defined          no-undef
+   86:16  error  'tick' is defined but never used  @typescript-eslint/no-unused-vars
+   90:3   error  'console' is not defined          no-undef
+   96:3   error  'console' is not defined          no-undef
+  104:3   error  'console' is not defined          no-undef
+  119:3   error  'console' is not defined          no-undef
+  127:3   error  'console' is not defined          no-undef
+  131:3   error  'console' is not defined          no-undef
+  132:3   error  'console' is not defined          no-undef
+  133:3   error  'console' is not defined          no-undef
+  134:3   error  'process' is not defined          no-undef
+  138:3   error  'console' is not defined          no-undef
+  139:3   error  'process' is not defined          no-undef
+
+D:\brokerproject\tests\test-subetapa-1-full-jitter.mjs
+   8:1  error  'console' is not defined  no-undef
+  14:3  error  'console' is not defined  no-undef
+  28:3  error  'console' is not defined  no-undef
+  41:3  error  'console' is not defined  no-undef
+  61:3  error  'console' is not defined  no-undef
+  63:3  error  'console' is not defined  no-undef
+  64:3  error  'console' is not defined  no-undef
+  65:3  error  'console' is not defined  no-undef
+  66:3  error  'process' is not defined  no-undef
+  70:3  error  'console' is not defined  no-undef
+  71:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-1-keycloak-oidc.mjs
+  14:1  error  'console' is not defined  no-undef
+  15:1  error  'console' is not defined  no-undef
+  16:1  error  'console' is not defined  no-undef
+  19:1  error  'console' is not defined  no-undef
+  34:1  error  'console' is not defined  no-undef
+  37:1  error  'console' is not defined  no-undef
+  45:1  error  'console' is not defined  no-undef
+  48:1  error  'console' is not defined  no-undef
+  58:1  error  'console' is not defined  no-undef
+  61:1  error  'console' is not defined  no-undef
+  68:1  error  'console' is not defined  no-undef
+  70:1  error  'console' is not defined  no-undef
+  71:1  error  'console' is not defined  no-undef
+  72:1  error  'console' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-1-pubsub-backplane.mjs
+    4:1   error  'console' is not defined      no-undef
+   73:3   error  'console' is not defined      no-undef
+   84:18  error  'performance' is not defined  no-undef
+   86:21  error  'performance' is not defined  no-undef
+  101:3   error  'console' is not defined      no-undef
+  102:3   error  'console' is not defined      no-undef
+  104:3   error  'console' is not defined      no-undef
+  105:3   error  'console' is not defined      no-undef
+  106:3   error  'console' is not defined      no-undef
+  107:3   error  'process' is not defined      no-undef
+  111:3   error  'console' is not defined      no-undef
+  112:3   error  'process' is not defined      no-undef
+
+D:\brokerproject\tests\test-subetapa-1-staleness-gate.mjs
+    4:1  error  'console' is not defined  no-undef
+    8:1  error  'console' is not defined  no-undef
+   15:1  error  'console' is not defined  no-undef
+   28:1  error  'console' is not defined  no-undef
+   39:1  error  'console' is not defined  no-undef
+   85:1  error  'console' is not defined  no-undef
+   94:1  error  'console' is not defined  no-undef
+  103:1  error  'console' is not defined  no-undef
+  105:1  error  'console' is not defined  no-undef
+  106:1  error  'console' is not defined  no-undef
+  107:1  error  'console' is not defined  no-undef
+  108:1  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-2-backend-auth-bola.mjs
+   12:1   error  'console' is not defined                             no-undef
+   13:1   error  'console' is not defined                             no-undef
+   14:1   error  'console' is not defined                             no-undef
+   18:10  error  'Buffer' is not defined                              no-undef
+   22:10  error  'Buffer' is not defined                              no-undef
+   88:3   error  'console' is not defined                             no-undef
+   95:22  error  'attackerPubKey' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  102:3   error  'console' is not defined                             no-undef
+  105:3   error  'console' is not defined                             no-undef
+  118:3   error  'console' is not defined                             no-undef
+  121:3   error  'console' is not defined                             no-undef
+  137:3   error  'console' is not defined                             no-undef
+  140:3   error  'console' is not defined                             no-undef
+  155:3   error  'console' is not defined                             no-undef
+  158:3   error  'console' is not defined                             no-undef
+  175:3   error  'console' is not defined                             no-undef
+  178:3   error  'console' is not defined                             no-undef
+  194:3   error  'console' is not defined                             no-undef
+  197:3   error  'console' is not defined                             no-undef
+  220:3   error  'console' is not defined                             no-undef
+  223:3   error  'console' is not defined                             no-undef
+  246:3   error  'console' is not defined                             no-undef
+  248:3   error  'console' is not defined                             no-undef
+  249:3   error  'console' is not defined                             no-undef
+  250:3   error  'console' is not defined                             no-undef
+  254:3   error  'console' is not defined                             no-undef
+  255:3   error  'process' is not defined                             no-undef
+
+D:\brokerproject\tests\test-subetapa-2-circuit-breaker.mjs
+   4:1  error  'console' is not defined  no-undef
+  14:3  error  'console' is not defined  no-undef
+  31:3  error  'console' is not defined  no-undef
+  38:3  error  'console' is not defined  no-undef
+  46:3  error  'console' is not defined  no-undef
+  53:3  error  'console' is not defined  no-undef
+  64:3  error  'console' is not defined  no-undef
+  78:3  error  'console' is not defined  no-undef
+  80:3  error  'console' is not defined  no-undef
+  81:3  error  'console' is not defined  no-undef
+  82:3  error  'console' is not defined  no-undef
+  83:3  error  'process' is not defined  no-undef
+  87:3  error  'console' is not defined  no-undef
+  88:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-2-coalescing.mjs
+   4:1   error  'console' is not defined     no-undef
+  27:26  error  'setTimeout' is not defined  no-undef
+  38:3   error  'console' is not defined     no-undef
+  49:26  error  'setTimeout' is not defined  no-undef
+  58:3   error  'console' is not defined     no-undef
+  60:3   error  'console' is not defined     no-undef
+  61:3   error  'console' is not defined     no-undef
+  62:3   error  'console' is not defined     no-undef
+  63:3   error  'process' is not defined     no-undef
+  67:3   error  'console' is not defined     no-undef
+  68:3   error  'process' is not defined     no-undef
+
+D:\brokerproject\tests\test-subetapa-2-fe-aggressive-cleanup.mjs
+    3:1  error  'console' is not defined  no-undef
+  102:3  error  'console' is not defined  no-undef
+  105:3  error  'console' is not defined  no-undef
+  119:3  error  'console' is not defined  no-undef
+  120:3  error  'console' is not defined  no-undef
+  122:3  error  'console' is not defined  no-undef
+  123:3  error  'console' is not defined  no-undef
+  124:3  error  'console' is not defined  no-undef
+  125:3  error  'process' is not defined  no-undef
+  129:3  error  'console' is not defined  no-undef
+  130:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-2-heartbeat.mjs
+    8:1   error  'console' is not defined                            no-undef
+   14:5   error  'activeSockets' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   22:24  error  'setInterval' is not defined                        no-undef
+   25:19  error  'setTimeout' is not defined                         no-undef
+   28:9   error  'clearInterval' is not defined                      no-undef
+   38:11  error  'clearTimeout' is not defined                       no-undef
+   42:13  error  Empty block statement                               no-empty
+   47:5   error  'clearInterval' is not defined                      no-undef
+   48:20  error  'clearTimeout' is not defined                       no-undef
+   54:1   error  'console' is not defined                            no-undef
+   68:32  error  'setTimeout' is not defined                         no-undef
+   71:1   error  'console' is not defined                            no-undef
+   85:32  error  'setTimeout' is not defined                         no-undef
+   90:1   error  'console' is not defined                            no-undef
+  112:7   error  'setTimeout' is not defined                         no-undef
+  119:32  error  'setTimeout' is not defined                         no-undef
+  124:32  error  'setTimeout' is not defined                         no-undef
+  127:1   error  'console' is not defined                            no-undef
+  132:1   error  'console' is not defined                            no-undef
+  133:1   error  'console' is not defined                            no-undef
+  134:1   error  'console' is not defined                            no-undef
+  135:1   error  'process' is not defined                            no-undef
+
+D:\brokerproject\tests\test-subetapa-2-watermark-engine.mjs
+    3:1  error  'console' is not defined  no-undef
+   80:3  error  'console' is not defined  no-undef
+   87:3  error  'console' is not defined  no-undef
+   97:3  error  'console' is not defined  no-undef
+  103:3  error  'console' is not defined  no-undef
+  114:3  error  'console' is not defined  no-undef
+  116:3  error  'console' is not defined  no-undef
+  117:3  error  'console' is not defined  no-undef
+  118:3  error  'console' is not defined  no-undef
+  119:3  error  'process' is not defined  no-undef
+  123:3  error  'console' is not defined  no-undef
+  124:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-3-backpressure.mjs
+   4:1  error  'console' is not defined  no-undef
+  22:3  error  'console' is not defined  no-undef
+  33:3  error  'console' is not defined  no-undef
+  42:3  error  'console' is not defined  no-undef
+  62:3  error  'console' is not defined  no-undef
+  68:3  error  'console' is not defined  no-undef
+  70:3  error  'console' is not defined  no-undef
+  71:3  error  'console' is not defined  no-undef
+  72:3  error  'console' is not defined  no-undef
+  73:3  error  'process' is not defined  no-undef
+  77:3  error  'console' is not defined  no-undef
+  78:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-3-blnk-onboarding.mjs
+   11:1  error  'console' is not defined  no-undef
+   12:1  error  'console' is not defined  no-undef
+   13:1  error  'console' is not defined  no-undef
+  114:3  error  'console' is not defined  no-undef
+  120:3  error  'console' is not defined  no-undef
+  123:3  error  'console' is not defined  no-undef
+  139:3  error  'console' is not defined  no-undef
+  142:3  error  'console' is not defined  no-undef
+  161:3  error  'console' is not defined  no-undef
+  164:3  error  'console' is not defined  no-undef
+  179:3  error  'console' is not defined  no-undef
+  181:3  error  'console' is not defined  no-undef
+  182:3  error  'console' is not defined  no-undef
+  183:3  error  'console' is not defined  no-undef
+  187:3  error  'console' is not defined  no-undef
+  188:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-3-fe-max-charts-limit.mjs
+   4:1  error  'console' is not defined  no-undef
+  13:3  error  'console' is not defined  no-undef
+  33:3  error  'console' is not defined  no-undef
+  41:3  error  'console' is not defined  no-undef
+  46:3  error  'console' is not defined  no-undef
+  48:3  error  'console' is not defined  no-undef
+  49:3  error  'console' is not defined  no-undef
+  50:3  error  'console' is not defined  no-undef
+  51:3  error  'process' is not defined  no-undef
+  55:3  error  'console' is not defined  no-undef
+  56:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-3-per-symbol-staleness.mjs
+    3:1  error  'console' is not defined                     no-undef
+   65:5  error  'eurAge' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   67:5  error  'btcAge' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   82:1  error  'console' is not defined                     no-undef
+   90:1  error  'console' is not defined                     no-undef
+  110:1  error  'console' is not defined                     no-undef
+  115:1  error  'console' is not defined                     no-undef
+  117:1  error  'console' is not defined                     no-undef
+  118:1  error  'console' is not defined                     no-undef
+  119:1  error  'console' is not defined                     no-undef
+  120:1  error  'process' is not defined                     no-undef
+
+D:\brokerproject\tests\test-subetapa-3-time-window-validation.mjs
+   5:3  error  'MAX_INDIVIDUAL_TICK_AGE_MS' is defined but never used  @typescript-eslint/no-unused-vars
+   8:1  error  'console' is not defined                                no-undef
+  20:3  error  'console' is not defined                                no-undef
+  30:3  error  'console' is not defined                                no-undef
+  42:3  error  'console' is not defined                                no-undef
+  52:3  error  'console' is not defined                                no-undef
+  54:3  error  'console' is not defined                                no-undef
+  55:3  error  'console' is not defined                                no-undef
+  56:3  error  'console' is not defined                                no-undef
+  57:3  error  'process' is not defined                                no-undef
+  61:3  error  'console' is not defined                                no-undef
+  62:3  error  'process' is not defined                                no-undef
+
+D:\brokerproject\tests\test-subetapa-3-token-bucket.mjs
+   4:1  error  'console' is not defined  no-undef
+  13:3  error  'console' is not defined  no-undef
+  21:3  error  'console' is not defined  no-undef
+  26:3  error  'console' is not defined  no-undef
+  34:3  error  'console' is not defined  no-undef
+  39:3  error  'console' is not defined  no-undef
+  44:3  error  'console' is not defined  no-undef
+  61:3  error  'console' is not defined  no-undef
+  63:3  error  'console' is not defined  no-undef
+  64:3  error  'console' is not defined  no-undef
+  65:3  error  'console' is not defined  no-undef
+  66:3  error  'process' is not defined  no-undef
+  70:3  error  'console' is not defined  no-undef
+  71:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-4-fe-raf-throttling.mjs
+    3:1   error  'console' is not defined                 no-undef
+   25:17  error  'id' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   26:10  error  'performance' is not defined             no-undef
+  100:3   error  'console' is not defined                 no-undef
+  101:3   error  'console' is not defined                 no-undef
+  116:3   error  'console' is not defined                 no-undef
+  128:3   error  'console' is not defined                 no-undef
+  130:3   error  'console' is not defined                 no-undef
+  131:3   error  'console' is not defined                 no-undef
+  132:3   error  'console' is not defined                 no-undef
+  133:3   error  'process' is not defined                 no-undef
+  137:3   error  'console' is not defined                 no-undef
+  138:3   error  'process' is not defined                 no-undef
+
+D:\brokerproject\tests\test-subetapa-4-gap-snapshot.mjs
+    4:1   error  'console' is not defined      no-undef
+   61:23  error  'fetch' is not defined        no-undef
+  139:21  error  'URL' is not defined          no-undef
+  159:3   error  'console' is not defined      no-undef
+  170:3   error  'console' is not defined      no-undef
+  179:3   error  'console' is not defined      no-undef
+  200:3   error  'console' is not defined      no-undef
+  221:3   error  'console' is not defined      no-undef
+  224:20  error  'performance' is not defined  no-undef
+  226:23  error  'fetch' is not defined        no-undef
+  229:23  error  'performance' is not defined  no-undef
+  231:3   error  'console' is not defined      no-undef
+  234:3   error  'console' is not defined      no-undef
+  235:3   error  'console' is not defined      no-undef
+  236:3   error  'console' is not defined      no-undef
+  237:3   error  'process' is not defined      no-undef
+  241:3   error  'console' is not defined      no-undef
+  242:3   error  'process' is not defined      no-undef
+
+D:\brokerproject\tests\test-subetapa-4-multiplexing.mjs
+    3:1   error  'console' is not defined     no-undef
+   19:13  error  Empty block statement        no-empty
+   24:26  error  'setTimeout' is not defined  no-undef
+   28:3   error  'console' is not defined     no-undef
+   37:26  error  'setTimeout' is not defined  no-undef
+   46:3   error  'console' is not defined     no-undef
+   59:26  error  'setTimeout' is not defined  no-undef
+   63:3   error  'console' is not defined     no-undef
+   67:26  error  'setTimeout' is not defined  no-undef
+   73:3   error  'console' is not defined     no-undef
+   80:26  error  'setTimeout' is not defined  no-undef
+   88:3   error  'console' is not defined     no-undef
+   92:3   error  'console' is not defined     no-undef
+   93:3   error  'console' is not defined     no-undef
+   94:3   error  'console' is not defined     no-undef
+   95:3   error  'process' is not defined     no-undef
+   99:3   error  'console' is not defined     no-undef
+  100:3   error  'process' is not defined     no-undef
+
+D:\brokerproject\tests\test-subetapa-4-ntp-clock-sync.mjs
+   4:1  error  'console' is not defined  no-undef
+  16:3  error  'console' is not defined  no-undef
+  24:3  error  'console' is not defined  no-undef
+  32:3  error  'console' is not defined  no-undef
+  40:3  error  'console' is not defined  no-undef
+  62:3  error  'console' is not defined  no-undef
+  64:3  error  'console' is not defined  no-undef
+  65:3  error  'console' is not defined  no-undef
+  66:3  error  'console' is not defined  no-undef
+  67:3  error  'process' is not defined  no-undef
+  71:3  error  'console' is not defined  no-undef
+  72:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-4-staggered-startup.mjs
+   7:1  error  'console' is not defined  no-undef
+  12:3  error  'console' is not defined  no-undef
+  17:3  error  'console' is not defined  no-undef
+  23:3  error  'console' is not defined  no-undef
+  41:3  error  'console' is not defined  no-undef
+  43:3  error  'console' is not defined  no-undef
+  44:3  error  'console' is not defined  no-undef
+  45:3  error  'console' is not defined  no-undef
+  46:3  error  'process' is not defined  no-undef
+  50:3  error  'console' is not defined  no-undef
+  51:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-4-trading-ledger-cycle.mjs
+   11:1  error  'console' is not defined  no-undef
+   12:1  error  'console' is not defined  no-undef
+   13:1  error  'console' is not defined  no-undef
+   80:3  error  'console' is not defined  no-undef
+   89:3  error  'console' is not defined  no-undef
+   92:3  error  'console' is not defined  no-undef
+  108:3  error  'console' is not defined  no-undef
+  111:3  error  'console' is not defined  no-undef
+  134:3  error  'console' is not defined  no-undef
+  137:3  error  'console' is not defined  no-undef
+  164:3  error  'console' is not defined  no-undef
+  167:3  error  'console' is not defined  no-undef
+  177:3  error  'console' is not defined  no-undef
+  179:3  error  'console' is not defined  no-undef
+  180:3  error  'console' is not defined  no-undef
+  181:3  error  'console' is not defined  no-undef
+  185:3  error  'console' is not defined  no-undef
+  186:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-5-fe-lazy-virtualization.mjs
+    3:1   error  'console' is not defined                 no-undef
+   25:17  error  'id' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   26:10  error  'performance' is not defined             no-undef
+   89:3   error  'console' is not defined                 no-undef
+  103:3   error  'console' is not defined                 no-undef
+  115:3   error  'console' is not defined                 no-undef
+  117:3   error  'console' is not defined                 no-undef
+  118:3   error  'console' is not defined                 no-undef
+  119:3   error  'console' is not defined                 no-undef
+  120:3   error  'process' is not defined                 no-undef
+  124:3   error  'console' is not defined                 no-undef
+  125:3   error  'process' is not defined                 no-undef
+
+D:\brokerproject\tests\test-subetapa-5-frontend-cross-sync-ui.mjs
+    3:1  error  'console' is not defined  no-undef
+   79:3  error  'console' is not defined  no-undef
+   89:3  error  'console' is not defined  no-undef
+  101:3  error  'console' is not defined  no-undef
+  109:3  error  'console' is not defined  no-undef
+  116:3  error  'console' is not defined  no-undef
+  118:3  error  'console' is not defined  no-undef
+  119:3  error  'console' is not defined  no-undef
+  120:3  error  'console' is not defined  no-undef
+  121:3  error  'process' is not defined  no-undef
+  125:3  error  'console' is not defined  no-undef
+  126:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-5-kill-switch.mjs
+    3:1   error  'console' is not defined               no-undef
+   31:16  error  'performance' is not defined           no-undef
+   34:23  error  'performance' is not defined           no-undef
+   38:21  error  'performance' is not defined           no-undef
+   60:16  error  'performance' is not defined           no-undef
+   64:23  error  'performance' is not defined           no-undef
+   94:23  error  'performance' is not defined           no-undef
+  106:23  error  'performance' is not defined           no-undef
+  116:21  error  'performance' is not defined           no-undef
+  134:3   error  'console' is not defined               no-undef
+  145:5   error  'console' is not defined               no-undef
+  154:3   error  'console' is not defined               no-undef
+  164:5   error  'console' is not defined               no-undef
+  170:3   error  'console' is not defined               no-undef
+  173:3   error  'console' is not defined               no-undef
+  174:34  error  'setTimeout' is not defined            no-undef
+  182:3   error  'console' is not defined               no-undef
+  191:16  error  'direction' is defined but never used  @typescript-eslint/no-unused-vars
+  204:3   error  'console' is not defined               no-undef
+  206:3   error  'console' is not defined               no-undef
+  207:3   error  'console' is not defined               no-undef
+  208:3   error  'console' is not defined               no-undef
+  209:3   error  'process' is not defined               no-undef
+  213:3   error  'console' is not defined               no-undef
+  214:3   error  'process' is not defined               no-undef
+
+D:\brokerproject\tests\test-subetapa-5-reconnect-manager-ui.mjs
+   7:1  error  'console' is not defined  no-undef
+  19:3  error  'console' is not defined  no-undef
+  26:3  error  'console' is not defined  no-undef
+  58:3  error  'console' is not defined  no-undef
+  66:3  error  'console' is not defined  no-undef
+  80:3  error  'console' is not defined  no-undef
+  82:3  error  'console' is not defined  no-undef
+  83:3  error  'console' is not defined  no-undef
+  84:3  error  'console' is not defined  no-undef
+  85:3  error  'process' is not defined  no-undef
+  89:3  error  'console' is not defined  no-undef
+  90:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-5-resilience-chaos-circuit-breaker.mjs
+   11:1   error  'console' is not defined     no-undef
+   12:1   error  'console' is not defined     no-undef
+   13:1   error  'console' is not defined     no-undef
+   64:38  error  'setTimeout' is not defined  no-undef
+   76:32  error  'setTimeout' is not defined  no-undef
+   86:3   error  'console' is not defined     no-undef
+   92:3   error  'console' is not defined     no-undef
+   95:3   error  'console' is not defined     no-undef
+  107:3   error  'console' is not defined     no-undef
+  110:3   error  'console' is not defined     no-undef
+  125:3   error  'console' is not defined     no-undef
+  128:3   error  'console' is not defined     no-undef
+  129:26  error  'setTimeout' is not defined  no-undef
+  139:3   error  'console' is not defined     no-undef
+  142:3   error  'console' is not defined     no-undef
+  160:3   error  'console' is not defined     no-undef
+  162:3   error  'console' is not defined     no-undef
+  163:3   error  'console' is not defined     no-undef
+  164:3   error  'console' is not defined     no-undef
+  168:3   error  'console' is not defined     no-undef
+  169:3   error  'process' is not defined     no-undef
+
+D:\brokerproject\tests\test-subetapa-5-symbol-sharding.mjs
+   4:1  error  'console' is not defined  no-undef
+  22:3  error  'console' is not defined  no-undef
+  39:3  error  'console' is not defined  no-undef
+  48:3  error  'console' is not defined  no-undef
+  54:3  error  'console' is not defined  no-undef
+  56:3  error  'console' is not defined  no-undef
+  57:3  error  'console' is not defined  no-undef
+  58:3  error  'console' is not defined  no-undef
+  59:3  error  'process' is not defined  no-undef
+  63:3  error  'console' is not defined  no-undef
+  64:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-6-fanout-metrics.mjs
+   3:1   error  'console' is not defined      no-undef
+  11:21  error  'fetch' is not defined        no-undef
+  33:3   error  'console' is not defined      no-undef
+  36:26  error  'fetch' is not defined        no-undef
+  42:3   error  'console' is not defined      no-undef
+  45:23  error  'fetch' is not defined        no-undef
+  51:3   error  'console' is not defined      no-undef
+  54:26  error  'fetch' is not defined        no-undef
+  58:3   error  'console' is not defined      no-undef
+  61:14  error  'performance' is not defined  no-undef
+  65:23  error  'performance' is not defined  no-undef
+  67:3   error  'console' is not defined      no-undef
+  69:3   error  'console' is not defined      no-undef
+  70:3   error  'console' is not defined      no-undef
+  71:3   error  'console' is not defined      no-undef
+  72:3   error  'process' is not defined      no-undef
+  76:3   error  'console' is not defined      no-undef
+  77:3   error  'process' is not defined      no-undef
+
+D:\brokerproject\tests\test-subetapa-6-fe-memo-refs-stability.mjs
+   3:1  error  'console' is not defined  no-undef
+  13:3  error  'console' is not defined  no-undef
+  53:3  error  'console' is not defined  no-undef
+  75:3  error  'console' is not defined  no-undef
+  77:3  error  'console' is not defined  no-undef
+  78:3  error  'console' is not defined  no-undef
+  79:3  error  'console' is not defined  no-undef
+  80:3  error  'process' is not defined  no-undef
+  84:3  error  'console' is not defined  no-undef
+  85:3  error  'process' is not defined  no-undef
+
+D:\brokerproject\tests\test-subetapa-6-metrics.mjs
+    4:1   error  'console' is not defined      no-undef
+   75:21  error  'URL' is not defined          no-undef
+   77:18  error  'performance' is not defined  no-undef
+   79:23  error  'performance' is not defined  no-undef
+   93:3   error  'console' is not defined      no-undef
+   96:25  error  'fetch' is not defined        no-undef
+  114:3   error  'console' is not defined      no-undef
+  121:26  error  'fetch' is not defined        no-undef
+  132:3   error  'console' is not defined      no-undef
+  137:30  error  'fetch' is not defined        no-undef
+  144:3   error  'console' is not defined      no-undef
+  149:16  error  'performance' is not defined  no-undef
+  150:23  error  'fetch' is not defined        no-undef
+  152:22  error  'performance' is not defined  no-undef
+  156:3   error  'console' is not defined      no-undef
+  159:3   error  'console' is not defined      no-undef
+  160:3   error  'console' is not defined      no-undef
+  161:3   error  'console' is not defined      no-undef
+  162:3   error  'process' is not defined      no-undef
+  166:3   error  'console' is not defined      no-undef
+  167:3   error  'process' is not defined      no-undef
+
+D:\brokerproject\tests\test-subetapa-6-reconnect-metrics.mjs
+   3:1   error  'console' is not defined      no-undef
+  10:21  error  'fetch' is not defined        no-undef
+  32:3   error  'console' is not defined      no-undef
+  35:25  error  'fetch' is not defined        no-undef
+  44:3   error  'console' is not defined      no-undef
+  47:26  error  'fetch' is not defined        no-undef
+  54:3   error  'console' is not defined      no-undef
+  57:14  error  'performance' is not defined  no-undef
+  61:23  error  'performance' is not defined  no-undef
+  63:3   error  'console' is not defined      no-undef
+  65:3   error  'console' is not defined      no-undef
+  66:3   error  'console' is not defined      no-undef
+  67:3   error  'console' is not defined      no-undef
+  68:3   error  'process' is not defined      no-undef
+  72:3   error  'console' is not defined      no-undef
+  73:3   error  'process' is not defined      no-undef
+
+D:\brokerproject\tests\test-subetapa-6-sync-metrics.mjs
+    4:1   error  'console' is not defined      no-undef
+   98:25  error  'fetch' is not defined        no-undef
+  106:3   error  'console' is not defined      no-undef
+  111:25  error  'fetch' is not defined        no-undef
+  116:3   error  'console' is not defined      no-undef
+  121:28  error  'fetch' is not defined        no-undef
+  125:3   error  'console' is not defined      no-undef
+  130:16  error  'performance' is not defined  no-undef
+  131:23  error  'fetch' is not defined        no-undef
+  133:22  error  'performance' is not defined  no-undef
+  137:3   error  'console' is not defined      no-undef
+  141:3   error  'console' is not defined      no-undef
+  142:3   error  'console' is not defined      no-undef
+  143:3   error  'console' is not defined      no-undef
+  144:3   error  'process' is not defined      no-undef
+  148:3   error  'console' is not defined      no-undef
+  149:3   error  'process' is not defined      no-undef
+
+D:\brokerproject\tests\test-subetapa-7-caos-certificacao.mjs
+    2:8   error  'http' is defined but never used        @typescript-eslint/no-unused-vars
+    4:1   error  'console' is not defined                no-undef
+    9:1   error  'console' is not defined                no-undef
+   29:15  error  's' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   44:3   error  'console' is not defined                no-undef
+   50:1   error  'console' is not defined                no-undef
+   89:3   error  'console' is not defined                no-undef
+   95:1   error  'console' is not defined                no-undef
+  101:18  error  'performance' is not defined            no-undef
+  117:25  error  'performance' is not defined            no-undef
+  122:3   error  'console' is not defined                no-undef
+  123:3   error  'console' is not defined                no-undef
+  129:1   error  'console' is not defined                no-undef
+  145:3   error  'console' is not defined                no-undef
+  151:1   error  'console' is not defined                no-undef
+  171:5   error  'console' is not defined                no-undef
+  175:1   error  'console' is not defined                no-undef
+  176:1   error  'console' is not defined                no-undef
+  177:1   error  'console' is not defined                no-undef
+  178:1   error  'console' is not defined                no-undef
+  179:1   error  'process' is not defined                no-undef
+
+D:\brokerproject\tests\test-subetapa-7-cross-sync-caos.mjs
+    5:3   error  'MAX_INDIVIDUAL_TICK_AGE_MS' is defined but never used  @typescript-eslint/no-unused-vars
+   10:1   error  'console' is not defined                                no-undef
+   13:23  error  'performance' is not defined                            no-undef
+   18:3   error  'console' is not defined                                no-undef
+   49:5   error  'console' is not defined                                no-undef
+   50:5   error  'console' is not defined                                no-undef
+   56:3   error  'console' is not defined                                no-undef
+   96:5   error  'console' is not defined                                no-undef
+   97:5   error  'console' is not defined                                no-undef
+  103:3   error  'console' is not defined                                no-undef
+  134:5   error  'console' is not defined                                no-undef
+  135:5   error  'console' is not defined                                no-undef
+  141:3   error  'console' is not defined                                no-undef
+  155:20  error  'performance' is not defined                            no-undef
+  187:23  error  'performance' is not defined                            no-undef
+  196:5   error  'console' is not defined                                no-undef
+  197:5   error  'console' is not defined                                no-undef
+  203:3   error  'console' is not defined                                no-undef
+  222:7   error  'console' is not defined                                no-undef
+  229:3   error  'console' is not defined                                no-undef
+  231:29  error  'performance' is not defined                            no-undef
+  232:5   error  'console' is not defined                                no-undef
+  233:5   error  'console' is not defined                                no-undef
+  234:5   error  'console' is not defined                                no-undef
+  235:5   error  'console' is not defined                                no-undef
+  236:5   error  'console' is not defined                                no-undef
+  237:5   error  'console' is not defined                                no-undef
+  238:5   error  'console' is not defined                                no-undef
+  241:3   error  'console' is not defined                                no-undef
+  242:3   error  'console' is not defined                                no-undef
+  243:3   error  'console' is not defined                                no-undef
+  244:3   error  'console' is not defined                                no-undef
+  245:3   error  'process' is not defined                                no-undef
+  249:3   error  'console' is not defined                                no-undef
+  250:3   error  'process' is not defined                                no-undef
+
+D:\brokerproject\tests\test-subetapa-7-fanout-caos.mjs
+    6:1   error  'console' is not defined      no-undef
+    9:23  error  'performance' is not defined  no-undef
+   14:3   error  'console' is not defined      no-undef
+   41:16  error  'performance' is not defined  no-undef
+   45:21  error  'performance' is not defined  no-undef
+   51:5   error  'console' is not defined      no-undef
+   52:5   error  'console' is not defined      no-undef
+   58:3   error  'console' is not defined      no-undef
+   75:28  error  'setTimeout' is not defined   no-undef
+   88:28  error  'setTimeout' is not defined   no-undef
+   95:5   error  'console' is not defined      no-undef
+   96:5   error  'console' is not defined      no-undef
+  102:3   error  'console' is not defined      no-undef
+  149:5   error  'console' is not defined      no-undef
+  150:5   error  'console' is not defined      no-undef
+  156:3   error  'console' is not defined      no-undef
+  179:5   error  'console' is not defined      no-undef
+  180:5   error  'console' is not defined      no-undef
+  186:3   error  'console' is not defined      no-undef
+  205:7   error  'console' is not defined      no-undef
+  212:3   error  'console' is not defined      no-undef
+  214:29  error  'performance' is not defined  no-undef
+  215:5   error  'console' is not defined      no-undef
+  216:5   error  'console' is not defined      no-undef
+  217:5   error  'console' is not defined      no-undef
+  218:5   error  'console' is not defined      no-undef
+  219:5   error  'console' is not defined      no-undef
+  220:5   error  'console' is not defined      no-undef
+  221:5   error  'console' is not defined      no-undef
+  224:3   error  'console' is not defined      no-undef
+  225:3   error  'console' is not defined      no-undef
+  226:3   error  'console' is not defined      no-undef
+  227:3   error  'console' is not defined      no-undef
+  228:3   error  'process' is not defined      no-undef
+  232:3   error  'console' is not defined      no-undef
+  233:3   error  'process' is not defined      no-undef
+
+D:\brokerproject\tests\test-subetapa-7-fe-memory-caos.mjs
+    3:1   error  'console' is not defined                 no-undef
+   25:17  error  'id' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   26:10  error  'performance' is not defined             no-undef
+  100:23  error  'performance' is not defined             no-undef
+  105:3   error  'console' is not defined                 no-undef
+  150:5   error  'console' is not defined                 no-undef
+  151:5   error  'console' is not defined                 no-undef
+  157:3   error  'console' is not defined                 no-undef
+  189:5   error  'console' is not defined                 no-undef
+  190:5   error  'console' is not defined                 no-undef
+  196:3   error  'console' is not defined                 no-undef
+  206:5   error  'console' is not defined                 no-undef
+  207:5   error  'console' is not defined                 no-undef
+  213:3   error  'console' is not defined                 no-undef
+  240:5   error  'console' is not defined                 no-undef
+  241:5   error  'console' is not defined                 no-undef
+  247:3   error  'console' is not defined                 no-undef
+  266:7   error  'console' is not defined                 no-undef
+  273:3   error  'console' is not defined                 no-undef
+  275:29  error  'performance' is not defined             no-undef
+  276:5   error  'console' is not defined                 no-undef
+  277:5   error  'console' is not defined                 no-undef
+  278:5   error  'console' is not defined                 no-undef
+  279:5   error  'console' is not defined                 no-undef
+  280:5   error  'console' is not defined                 no-undef
+  281:5   error  'console' is not defined                 no-undef
+  282:5   error  'console' is not defined                 no-undef
+  283:5   error  'console' is not defined                 no-undef
+  286:3   error  'console' is not defined                 no-undef
+  287:3   error  'console' is not defined                 no-undef
+  288:3   error  'console' is not defined                 no-undef
+  289:3   error  'console' is not defined                 no-undef
+  290:3   error  'process' is not defined                 no-undef
+  294:3   error  'console' is not defined                 no-undef
+  295:3   error  'process' is not defined                 no-undef
+
+D:\brokerproject\tests\test-subetapa-7-reconnect-storm-caos.mjs
+    7:1   error  'console' is not defined      no-undef
+   10:23  error  'performance' is not defined  no-undef
+   15:3   error  'console' is not defined      no-undef
+   41:5   error  'console' is not defined      no-undef
+   42:5   error  'console' is not defined      no-undef
+   48:3   error  'console' is not defined      no-undef
+   71:5   error  'console' is not defined      no-undef
+   72:5   error  'console' is not defined      no-undef
+   78:3   error  'console' is not defined      no-undef
+  107:5   error  'console' is not defined      no-undef
+  108:5   error  'console' is not defined      no-undef
+  114:3   error  'console' is not defined      no-undef
+  134:5   error  'console' is not defined      no-undef
+  135:5   error  'console' is not defined      no-undef
+  141:3   error  'console' is not defined      no-undef
+  160:7   error  'console' is not defined      no-undef
+  167:3   error  'console' is not defined      no-undef
+  169:29  error  'performance' is not defined  no-undef
+  170:5   error  'console' is not defined      no-undef
+  171:5   error  'console' is not defined      no-undef
+  172:5   error  'console' is not defined      no-undef
+  173:5   error  'console' is not defined      no-undef
+  174:5   error  'console' is not defined      no-undef
+  175:5   error  'console' is not defined      no-undef
+  176:5   error  'console' is not defined      no-undef
+  179:3   error  'console' is not defined      no-undef
+  180:3   error  'console' is not defined      no-undef
+  181:3   error  'console' is not defined      no-undef
+  182:3   error  'console' is not defined      no-undef
+  183:3   error  'process' is not defined      no-undef
+  187:3   error  'console' is not defined      no-undef
+  188:3   error  'process' is not defined      no-undef
+
+D:\brokerproject\tests\test-timeframe-resample.mjs
+   11:1  error  'console' is not defined  no-undef
+   14:1  error  'console' is not defined  no-undef
+   26:1  error  'console' is not defined  no-undef
+   29:1  error  'console' is not defined  no-undef
+   52:1  error  'console' is not defined  no-undef
+   55:1  error  'console' is not defined  no-undef
+   88:1  error  'console' is not defined  no-undef
+   91:1  error  'console' is not defined  no-undef
+  122:1  error  'console' is not defined  no-undef
+  125:1  error  'console' is not defined  no-undef
+  132:1  error  'console' is not defined  no-undef
+  134:1  error  'console' is not defined  no-undef
+  135:1  error  'console' is not defined  no-undef
+  136:1  error  'console' is not defined  no-undef
+
+D:\brokerproject\tests\unit\bmr-authenticated-contract.test.ts
+  25:32  error  '_url' is defined but never used   @typescript-eslint/no-unused-vars
+  25:57  error  '_init' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\tests\unit\gateway-distributed-connection-limit.test.ts
+  27:13  error  'entry' is never reassigned. Use 'const' instead  prefer-const
+  37:13  error  'entry' is never reassigned. Use 'const' instead  prefer-const
+
+D:\brokerproject\tests\unit\test-currency-formatting.test.ts
+   3:52  error  'DisplayCurrencyCode' is defined but never used  @typescript-eslint/no-unused-vars
+  63:11  error  'converted' is assigned a value but never used   @typescript-eslint/no-unused-vars
+
+D:\brokerproject\tests\unit\test-frontend-i18n.test.ts
+  13:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\tests\unit\test-geoblock-flags.test.ts
+    1:24  error  'expect' is defined but never used        @typescript-eslint/no-unused-vars
+    8:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   19:29  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   41:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   48:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   55:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   64:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   65:34  error  'params' is defined but never used        @typescript-eslint/no-unused-vars
+   65:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   77:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  101:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  111:24  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\brokerproject\tests\unit\test-phase2-subetapa-1-schemas.test.ts
+  1:24  error  'expect' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 1582 problems (1582 errors, 0 warnings)
+  6 errors and 0 warnings potentially fixable with the `--fix` option.
+
+ ELIFECYCLE  Command failed with exit code 1.

@@ -1,4 +1,5 @@
 import React from 'react';
+import { isNewTraderoomEnabled } from '../lib/feature-flags';
 
 export interface StalenessOverlayProps {
   isStale: boolean;
@@ -18,7 +19,94 @@ export const StalenessOverlay: React.FC<StalenessOverlayProps> = ({
   if (!isStale && !circuitBreakerOpen) return null;
 
   const seconds = Math.max(4, Math.round(tickAgeMs / 1000));
+  const isBinmax = isNewTraderoomEnabled();
 
+  // Modo Turbo Prata Moderno (Pill discreto flutuante que não cobre as velas nem as ferramentas)
+  if (isBinmax) {
+    if (circuitBreakerOpen) {
+      return (
+        <div
+          data-testid="staleness-circuit-pill"
+          style={{
+            position: 'absolute',
+            top: '12px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 25,
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            style={{
+              background: 'rgba(21, 25, 34, 0.92)',
+              backdropFilter: 'blur(8px)',
+              border: '1px solid rgba(234, 88, 12, 0.55)',
+              borderRadius: '20px',
+              padding: '4px 14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)',
+            }}
+          >
+            <span style={{ fontSize: '12px' }}>⚡</span>
+            <span
+              style={{
+                color: '#fb923c',
+                fontSize: '11px',
+                fontWeight: 700,
+                fontFamily: "'Geist Mono', monospace",
+              }}
+            >
+              Reconexão em pausa ({circuitBreakerRemainingSeconds}s) · {symbol}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        data-testid="staleness-pill"
+        style={{
+          position: 'absolute',
+          top: '12px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 25,
+          pointerEvents: 'none',
+        }}
+      >
+        <div
+          style={{
+            background: 'rgba(21, 25, 34, 0.92)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(242, 84, 91, 0.45)',
+            borderRadius: '20px',
+            padding: '4px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)',
+          }}
+        >
+          <span style={{ fontSize: '12px' }}>⚠️</span>
+          <span
+            style={{
+              color: '#F2545B',
+              fontSize: '11px',
+              fontWeight: 700,
+              fontFamily: "'Geist Mono', monospace",
+            }}
+          >
+            Cotação em pausa ({symbol}) · {seconds}s
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Modo Legado Original (Preservado para NEW_TRADEROOM = false)
   if (circuitBreakerOpen) {
     return (
       <div

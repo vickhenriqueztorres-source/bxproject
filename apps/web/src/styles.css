@@ -208,3 +208,313 @@ html, body, #root {
   transform: scale(1.05);
   transition: transform 0.15s ease, color 0.15s ease;
 }
+
+/* ==========================================================================
+   BINMAX OPTION — TURBO PRATA THEME TOKENS (.theme-binmax)
+   "Prata é a marca. Verde é o dinheiro. Vermelho é o risco. Nada mais tem cor."
+   ========================================================================== */
+.theme-binmax {
+  --bm-noche: #0D0F14;
+  --bm-panel: #151922;
+  --bm-prata: #DCE1EA;
+  --bm-blanco: #F4F5F7;
+  --bm-aco: #8A92A1;
+  --bm-verde: #22C55E;
+  --bm-rojo: #E5484D;
+  --bm-linha: #1F2A3A;
+  --bm-raio-sm: 6px;
+  --bm-raio-md: 6px;
+  --bm-font-main: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+  --bm-font-mono: 'Geist Mono', 'SF Mono', 'Courier New', monospace;
+
+  font-family: var(--bm-font-main);
+  background-color: var(--bm-noche) !important;
+  color: var(--bm-blanco) !important;
+}
+
+.theme-binmax button:focus-visible,
+.theme-binmax input:focus-visible,
+.theme-binmax [tabindex]:focus-visible {
+  outline: 2px solid var(--bm-prata) !important;
+  outline-offset: 2px !important;
+}
+
+.theme-binmax .terminal-header {
+  height: 56px !important;
+  min-height: 56px !important;
+  max-height: 56px !important;
+  background: var(--bm-panel) !important;
+  border-bottom: 1px solid var(--bm-linha) !important;
+  padding: 0 16px !important;
+  box-sizing: border-box;
+}
+
+.theme-binmax .terminal-sidebar {
+  width: 72px !important;
+  min-width: 72px !important;
+  max-width: 72px !important;
+  background: var(--bm-panel) !important;
+  border-right: 1px solid var(--bm-linha) !important;
+  padding: 6px 0 !important;
+  box-sizing: border-box;
+}
+
+.theme-binmax .sidebar-dock-btn:hover {
+  background: rgba(244, 245, 247, 0.05) !important;
+  color: var(--bm-blanco) !important;
+}
+
+.theme-binmax .terminal-center {
+  background: var(--bm-noche) !important;
+  padding: 6px 8px !important;
+  box-sizing: border-box !important;
+  min-width: 0 !important;
+}
+
+.theme-binmax .terminal-center > * {
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(244, 245, 247, 0.06) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Supressão da marca d'água / logo TradingView (#tv-attr-logo) */
+#tv-attr-logo,
+.tv-attr-logo,
+a[href*="tradingview.com"],
+.tv-lightweight-charts a,
+.theme-binmax #tv-attr-logo,
+.theme-binmax .tv-attr-logo,
+.theme-binmax a[href*="tradingview.com"],
+.terminal-center #tv-attr-logo,
+.terminal-center .tv-attr-logo,
+.terminal-center a[href*="tradingview.com"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: absolute !important;
+  left: -9999px !important;
+  z-index: -1 !important;
+}
+
+.theme-binmax .terminal-order-dock,
+.theme-binmax .cell-order-ticket-container,
+.theme-binmax [data-testid^="cell-order-ticket-"] {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.theme-binmax .terminal-order-dock::-webkit-scrollbar,
+.theme-binmax .cell-order-ticket-container::-webkit-scrollbar,
+.theme-binmax [data-testid^="cell-order-ticket-"]::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.theme-binmax .terminal-order-dock {
+  width: 160px !important;
+  min-width: 160px !important;
+  max-width: 160px !important;
+  background: var(--bm-panel) !important;
+  border-left: 1px solid var(--bm-linha) !important;
+  padding: 8px 6px !important;
+  box-sizing: border-box;
+}
+
+.theme-binmax .terminal-drawer {
+  background: var(--bm-panel) !important;
+  border-top: 1px solid var(--bm-linha) !important;
+}
+
+.theme-binmax .terminal-drawer-bar {
+  height: 28px !important;
+  background: var(--bm-panel) !important;
+}
+
+.theme-binmax .terminal-footer {
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  flex-shrink: 0;
+  z-index: 25;
+  box-sizing: border-box;
+}
+
+/* Tipografia Mono para preços, saldos e relógios */
+.theme-binmax .font-mono,
+.theme-binmax [data-mono="true"],
+.theme-binmax .price-display,
+.theme-binmax .balance-display,
+.theme-binmax .countdown-timer {
+  font-family: var(--bm-font-mono) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Cores funcionais de dinheiro e risco */
+.theme-binmax .money-green {
+  color: var(--bm-verde) !important;
+}
+
+.theme-binmax .btn-sube {
+  background-color: var(--bm-verde) !important;
+  color: var(--bm-noche) !important;
+}
+
+.theme-binmax .btn-baja {
+  background-color: var(--bm-rojo) !important;
+  color: var(--bm-noche) !important;
+}
+
+.theme-binmax .btn-deposit {
+  background-color: var(--bm-verde) !important;
+  color: var(--bm-noche) !important;
+}
+
+/* Toasts de Notificação de Resultado IQ-fiel */
+.theme-binmax .toast {
+  background: var(--bm-panel) !important;
+  border: 1px solid var(--bm-prata) !important;
+  color: var(--bm-blanco) !important;
+  border-radius: var(--bm-raio-md) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7) !important;
+  font-family: var(--bm-font-main) !important;
+  font-size: 13px !important;
+  padding: 12px 18px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.theme-binmax .toast button {
+  color: var(--bm-aco) !important;
+  background: none !important;
+  border: none !important;
+  cursor: pointer !important;
+}
+
+.theme-binmax .toast button:hover {
+  color: var(--bm-blanco) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-binmax .toast {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ==========================================================================
+   RESPONSIVIDADE CELULAR (< 768px) E TABLET (768px - 1024px)
+   ========================================================================== */
+@media (max-width: 767px) {
+  .theme-binmax .terminal-header {
+    height: 56px !important;
+    min-height: 56px !important;
+    padding: 0 10px !important;
+  }
+
+  .theme-binmax .terminal-body {
+    flex-direction: column !important;
+  }
+
+  .theme-binmax .terminal-sidebar {
+    display: none !important;
+  }
+
+  .theme-binmax .terminal-center {
+    flex: 1 !important;
+    min-height: 280px !important;
+  }
+
+  .theme-binmax .terminal-order-dock {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: 40vh !important;
+    border-left: none !important;
+    border-top: 1px solid var(--bm-linha) !important;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 8px)) 12px !important;
+    overflow-y: auto !important;
+  }
+
+  .theme-binmax .binmax-order-dock {
+    display: grid !important;
+    grid-template-columns: repeat(6, 1fr) !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .theme-binmax [data-testid="ticket-block-monto"] {
+    grid-column: 1 / span 3 !important;
+    grid-row: 1 !important;
+  }
+
+  .theme-binmax [data-testid="ticket-block-expiracion"] {
+    grid-column: 4 / span 3 !important;
+    grid-row: 1 !important;
+  }
+
+  .theme-binmax [data-testid="ticket-block-ganancia"] {
+    grid-column: 1 / span 2 !important;
+    grid-row: 2 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    padding: 2px 4px !important;
+    background: rgba(255, 255, 255, 0.02) !important;
+    border-radius: 6px !important;
+  }
+
+  .theme-binmax [data-testid="ticket-block-ganancia"] [data-testid="ganancia-pct"] {
+    font-size: 24px !important;
+    line-height: 1 !important;
+  }
+
+  .theme-binmax [data-testid="ticket-block-ganancia"] [data-testid="ganancia-amount"] {
+    font-size: 13px !important;
+  }
+
+  .theme-binmax [data-testid="btn-sube"] {
+    grid-column: 3 / span 2 !important;
+    grid-row: 2 !important;
+    height: 54px !important;
+    min-height: 48px !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+  }
+
+  .theme-binmax [data-testid="btn-baja"] {
+    grid-column: 5 / span 2 !important;
+    grid-row: 2 !important;
+    height: 54px !important;
+    min-height: 48px !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+  }
+
+  .theme-binmax .terminal-footer {
+    display: none !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .theme-binmax .terminal-sidebar {
+    width: 46px !important;
+    min-width: 46px !important;
+    max-width: 46px !important;
+  }
+
+  .theme-binmax .terminal-order-dock {
+    width: 180px !important;
+    min-width: 180px !important;
+    max-width: 180px !important;
+  }
+}
+
+
+

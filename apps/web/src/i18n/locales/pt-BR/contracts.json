@@ -1,0 +1,19 @@
+{
+  "call": "SUBIR",
+  "put": "DESCER",
+  "stake": "Investimento",
+  "payout": "Retorno",
+  "profit": "Lucro Estimado",
+  "duration": "Tempo",
+  "seconds": "segundos",
+  "market_closed": "Mercado Fechado",
+  "trading_disabled": "Negociação Desativada",
+  "open_contract": "Abrir Contrato",
+  "strike_price": "Preço de Entrada",
+  "insufficient_balance": "Saldo insuficiente. Deposite e continue operando.",
+  "empty_portfolio": "Você ainda não tem operações abertas. Escolha SUBIR ou DESCER para começar.",
+  "empty_history": "Você ainda não tem operações encerradas.",
+  "win_toast": "Você ganhou!",
+  "loss_toast": "Não foi dessa vez",
+  "draw_toast": "Empate"
+}

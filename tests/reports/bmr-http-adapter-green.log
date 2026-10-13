@@ -1,0 +1,13 @@
+Command: pnpm exec vitest run tests/unit/bmr-authenticated-contract.test.ts tests/unit/bmr-http-adapter.test.ts
+Exit code: 0
+
+ RUN  v3.2.7 D:/brokerproject
+
+ ✓ tests/unit/bmr-authenticated-contract.test.ts (2 tests) 119ms
+ ✓ tests/unit/bmr-http-adapter.test.ts (15 tests) 117ms
+
+ Test Files  2 passed (2)
+      Tests  17 passed (17)
+   Start at  15:08:19
+   Duration  4.36s (transform 1.82s, setup 0ms, collect 4.50s, tests 237ms, environment 1ms, prepare 2.56s)
+

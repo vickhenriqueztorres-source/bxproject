@@ -1,0 +1,50 @@
+[
+  {
+    "Path": "D:\\brokerproject\\apps\\web\\src\\components\\layout\\SecondaryLayout.tsx",
+    "before": "03B76CEDFDA9963982F4B2556FA1AA0C7606EAC505BBB42A5B7BC02FB52A454E",
+    "after": "03B76CEDFDA9963982F4B2556FA1AA0C7606EAC505BBB42A5B7BC02FB52A454E",
+    "unchanged": true
+  },
+  {
+    "Path": "D:\\brokerproject\\apps\\web\\src\\pages\\LoginPage.tsx",
+    "before": "E1EC0B7422AAA83B9ADBC24A23A905DD00DBD63775AC24399CF1FAF5151B4318",
+    "after": "E1EC0B7422AAA83B9ADBC24A23A905DD00DBD63775AC24399CF1FAF5151B4318",
+    "unchanged": true
+  },
+  {
+    "Path": "D:\\brokerproject\\apps\\web\\src\\pages\\AnalysisPage.tsx",
+    "before": "4149589BB9979320580E0C10803A15E10CE957F41A9DDBFBF4FA0BC10AEB8903",
+    "after": "4149589BB9979320580E0C10803A15E10CE957F41A9DDBFBF4FA0BC10AEB8903",
+    "unchanged": true
+  },
+  {
+    "Path": "D:\\brokerproject\\apps\\web\\src\\wallet\\BinmaxWithdrawModal.tsx",
+    "before": "9CB79D7B218761D64CC02725112DC3A597D636FC5C938CA3497FA29C690EA6D8",
+    "after": "D7A6F25D59FB594A8E804BAC90A619D26EC98DA65C76E3B56C6E337A35AE8E49",
+    "unchanged": false
+  },
+  {
+    "Path": "D:\\brokerproject\\apps\\web\\src\\lib\\design-tokens.ts",
+    "before": "3883FE9EC423FD210BD959180B399874E8476BABF213FBD9F9FE7BE8C4F66C8A",
+    "after": "3883FE9EC423FD210BD959180B399874E8476BABF213FBD9F9FE7BE8C4F66C8A",
+    "unchanged": true
+  },
+  {
+    "Path": "D:\\brokerproject\\apps\\web\\src\\lib\\feature-flags.ts",
+    "before": "F0DBE036C930496DFE99566B8141C42608B51309848548F5E403A785D90FD406",
+    "after": "F0DBE036C930496DFE99566B8141C42608B51309848548F5E403A785D90FD406",
+    "unchanged": true
+  },
+  {
+    "Path": "D:\\brokerproject\\apps\\web\\src\\styles.css",
+    "before": "53D94A12915E06EF2BA20D9525F164EE6FDD226B540D4386435577236D415800",
+    "after": "53D94A12915E06EF2BA20D9525F164EE6FDD226B540D4386435577236D415800",
+    "unchanged": true
+  },
+  {
+    "Path": "D:\\brokerproject\\apps\\web\\src\\styles\\tokens-precision.css",
+    "before": "3A70AB06EB53E431BEB55150612B5EA3C1CF22381C4489B88F6EC07C13D517C5",
+    "after": "3A70AB06EB53E431BEB55150612B5EA3C1CF22381C4489B88F6EC07C13D517C5",
+    "unchanged": true
+  }
+]

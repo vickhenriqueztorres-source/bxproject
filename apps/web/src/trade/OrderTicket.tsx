@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { ApiError, getContract, openContract, type Receipt } from '../api/client';
-import { formatMinor, parseStakeInput } from '../lib/money';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ApiError, getContract, openContract, type Receipt, type Contract } from '../api/client';
+import { formatMinor, formatCurrencyBinmax, parseStakeInput } from '../lib/money';
+export { formatCurrencyBinmax } from '../lib/money';
 import { soundEngine } from '../lib/sound-engine';
 import { getAssetMeta } from '../catalog/assets';
 import { safeRandomUUID } from '../lib/uuid';
 import { ExpiryDropdown } from './ExpiryDropdown';
-import { calculateExecutionExpiry, type ExpirySlot, type ExpiryMode } from './expiry-calculator';
+import { calculateExecutionExpiry, calculateExpirySlots, formatSecondsToMmSs, type ExpirySlot, type ExpiryMode } from './expiry-calculator';
+import { isNewTraderoomEnabled } from '../lib/feature-flags';
 
 const messages: Record<string, string> = {
   INDEX_PAUSED: 'Índice pausado pela operação.',
@@ -26,6 +28,7 @@ export interface OrderTicketProps {
   availableMinor: number | null;
   soundEnabled?: boolean;
   onChanged: () => void;
+  isCompact?: boolean;
 }
 
 export function OrderTicket({
@@ -35,16 +38,34 @@ export function OrderTicket({
   availableMinor,
   soundEnabled = true,
   onChanged,
+  isCompact = false,
 }: OrderTicketProps) {
-  const [stake, setStake] = useState('10,00');
+  const isBinmax = isNewTraderoomEnabled();
+  const queryClient = useQueryClient();
+  const [stake, setStake] = useState(isBinmax ? '100' : '10,00');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [now, setNow] = useState(Date.now());
   const [selectedSlotId, setSelectedSlotId] = useState<string>('candle_1m');
   const [selectedSlot, setSelectedSlot] = useState<ExpirySlot | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const intent = useRef<{ key: string; direction: 'UP' | 'DOWN'; stakeMinor: number } | null>(null);
   const notified = useRef<string | null>(null);
+  const executingRef = useRef(false);
+  const slots = calculateExpirySlots(new Date(), -3);
+  const activeSlot = slots.find((s) => s.id === selectedSlotId) ?? slots[0];
+
+  const navigateSlot = (direction: 1 | -1) => {
+    soundEngine.playClick();
+    const currentIndex = slots.findIndex((s) => s.id === selectedSlotId);
+    const nextIndex = Math.max(0, Math.min(slots.length - 1, currentIndex + direction));
+    const target = slots[nextIndex];
+    if (target) {
+      setSelectedSlotId(target.id);
+      setSelectedSlot(target);
+    }
+  };
 
   const contract = useQuery({
     queryKey: ['contract', receipt?.id],
@@ -73,6 +94,12 @@ export function OrderTicket({
       else if (value.result === 'LOSS') soundEngine.playLoss();
       else if (value.result === 'DRAW') soundEngine.playDraw();
       onChanged();
+
+      // Auto-reset: mostra resultado por 3s, depois libera para nova operação
+      const timer = setTimeout(() => {
+        setReceipt(null);
+      }, 3000);
+      return () => clearTimeout(timer);
     }
   }, [contract.data, onChanged]);
 
@@ -103,7 +130,11 @@ export function OrderTicket({
     soundEngine.playClick();
     const current = stakeMinor !== null ? stakeMinor : 1000;
     const next = Math.max(100, Math.min(10000, current + delta));
-    setStake((next / 100).toFixed(2).replace('.', ','));
+    if (next % 100 === 0) {
+      setStake(String(next / 100));
+    } else {
+      setStake((next / 100).toFixed(2).replace('.', ','));
+    }
   };
 
   const setPreset = (valueUsd: number) => {
@@ -112,7 +143,8 @@ export function OrderTicket({
   };
 
   async function handleExecute(direction: 'UP' | 'DOWN') {
-    if (blocked || busy || stakeMinor === null) return;
+    if (executingRef.current || blocked || busy || stakeMinor === null) return;
+    executingRef.current = true;
     setBusy(true);
     setError('');
     soundEngine.playOrderOpen();
@@ -137,6 +169,26 @@ export function OrderTicket({
       );
       setReceipt(opened);
       intent.current = null;
+
+      // Injeção otimista imediata no cache de contratos abertos (< 16ms)
+      queryClient.setQueryData<Contract[]>(['contracts'], (old = []) => {
+        if (old.some((c) => c.id === opened.id)) return old;
+        const optimisticContract: Contract = {
+          id: opened.id,
+          symbol,
+          direction: current.direction,
+          stake_minor: current.stakeMinor,
+          status: 'OPEN',
+          result: null,
+          payout_minor: null,
+          expires_at: opened.expires_at,
+          created_at: new Date().toISOString(),
+          entry_price: opened.strike_price ?? opened.entry_price ?? undefined,
+          strike_price: opened.strike_price ?? opened.entry_price ?? undefined,
+        };
+        return [optimisticContract, ...old];
+      });
+
       onChanged();
     } catch (cause) {
       if (cause instanceof ApiError) {
@@ -147,6 +199,7 @@ export function OrderTicket({
         setError(cause instanceof Error ? cause.message : 'Falha ao processar ordem. Tente novamente.');
       }
     } finally {
+      executingRef.current = false;
       setBusy(false);
     }
   }
@@ -168,6 +221,635 @@ export function OrderTicket({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [blocked, busy, stakeMinor]);
+
+  if (isBinmax) {
+    const formattedExpiryDisplay = activeSlot
+      ? formatSecondsToMmSs(activeSlot.remainingSeconds)
+      : '00:21';
+
+    const ticketGap = isCompact ? 'clamp(2px, 0.4vh, 4px)' : '8px';
+    const fieldHeight = isCompact ? 'clamp(28px, 3.8vh, 32px)' : '42px';
+    const stepperBtnWidth = isCompact ? '26px' : '36px';
+    const btnHeight = isCompact ? 'clamp(32px, 4.6vh, 38px)' : '48px';
+
+    return (
+      <div
+        className="order-dock-container binmax-order-dock"
+        data-testid="binmax-order-ticket"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: isCompact ? 'space-between' : 'flex-start',
+          gap: ticketGap,
+          width: '100%',
+          height: isCompact ? '100%' : 'auto',
+          maxHeight: '100%',
+          color: 'var(--text-strong)',
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+        }}
+      >
+        {/* D1: MONTO */}
+        <div className="binmax-ticket-block" data-testid="ticket-block-monto">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: isCompact ? '3px' : '6px',
+            }}
+          >
+            <span style={{ fontSize: isCompact ? '11px' : '12px', color: 'var(--text-muted)', fontWeight: 500, fontFamily: "'Inter', sans-serif" }}>
+              Monto
+            </span>
+            <span
+              aria-label="Ayuda monto"
+              style={{
+                fontSize: '9px',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                width: '14px',
+                height: '14px',
+                borderRadius: '50%',
+                border: '1px solid rgba(138, 146, 161, 0.4)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                lineHeight: 1,
+              }}
+            >
+              ?
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: '#151922',
+              border: '1px solid rgba(244, 245, 247, 0.08)',
+              borderRadius: '8px',
+              height: fieldHeight,
+              boxSizing: 'border-box',
+              overflow: 'hidden',
+            }}
+          >
+            <button
+              type="button"
+              aria-label="Disminuir monto"
+              onClick={() => adjustStake(-100)}
+              style={{
+                width: stepperBtnWidth,
+                height: '100%',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: 'none',
+                borderRight: '1px solid rgba(244, 245, 247, 0.06)',
+                color: 'var(--text-muted)',
+                fontSize: isCompact ? '14px' : '16px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+                lineHeight: 1,
+                transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
+              }}
+            >
+              −
+            </button>
+
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minWidth: 0,
+                padding: '0 4px',
+                gap: '3px',
+              }}
+            >
+              <span style={{ color: 'var(--text-quiet)', fontSize: '13px', fontWeight: 600 }}>
+                $
+              </span>
+              <input
+                id="binmax-stake-input"
+                aria-label="Monto de la inversión"
+                inputMode="decimal"
+                value={stake}
+                onChange={(e) => setStake(e.target.value)}
+                style={{
+                  width: '50px',
+                  background: 'none',
+                  border: 'none',
+                  outline: 'none',
+                  color: 'var(--text-strong)',
+                  fontSize: '16px',
+                  fontWeight: 700,
+                  fontFamily: "'Geist Mono', monospace",
+                  fontVariantNumeric: 'tabular-nums',
+                  textAlign: 'center',
+                }}
+              />
+            </div>
+
+            <button
+              type="button"
+              aria-label="Aumentar monto"
+              onClick={() => adjustStake(100)}
+              style={{
+                width: stepperBtnWidth,
+                height: '100%',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: 'none',
+                borderLeft: '1px solid rgba(244, 245, 247, 0.06)',
+                color: 'var(--text-muted)',
+                fontSize: isCompact ? '14px' : '16px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+                lineHeight: 1,
+                transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
+              }}
+            >
+              +
+            </button>
+          </div>
+
+          {/* Preset Buttons Row */}
+          <div
+            data-testid="stake-presets"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: isCompact ? '3px' : '6px',
+              marginTop: isCompact ? '3px' : '8px',
+            }}
+          >
+            {[10, 50, 100, 500].map((preset) => {
+              const presetMinor = preset * 100;
+              const isActive = stakeMinor === presetMinor;
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  data-testid={`preset-${preset}`}
+                  onClick={() => {
+                    soundEngine.playClick();
+                    setStake(String(preset));
+                  }}
+                  style={{
+                    height: isCompact ? '20px' : '30px',
+                    borderRadius: '6px',
+                    background: isActive ? 'var(--profit)' : '#1A1F2B',
+                    border: isActive ? '1px solid var(--profit)' : '1px solid rgba(255, 255, 255, 0.08)',
+                    color: isActive ? '#FFFFFF' : 'var(--text-muted)',
+                    fontSize: isCompact ? '10.5px' : '12px',
+                    fontWeight: 700,
+                    fontFamily: "'Geist Mono', monospace",
+                    cursor: 'pointer',
+                    transition: 'all 100ms cubic-bezier(0.16, 1, 0.3, 1)',
+                    padding: 0,
+                  }}
+                >
+                  {preset}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* D2: EXPIRACIÓN */}
+        <div className="binmax-ticket-block" data-testid="ticket-block-expiracion" style={{ position: 'relative' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: isCompact ? '3px' : '6px',
+            }}
+          >
+            <span style={{ fontSize: isCompact ? '11px' : '12px', color: 'var(--text-muted)', fontWeight: 500, fontFamily: "'Inter', sans-serif" }}>
+              Expiración
+            </span>
+            <span
+              aria-label="Ayuda expiración"
+              style={{
+                fontSize: '9px',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                width: '14px',
+                height: '14px',
+                borderRadius: '50%',
+                border: '1px solid rgba(138, 146, 161, 0.4)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                lineHeight: 1,
+              }}
+            >
+              ?
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: '#151922',
+              border: '1px solid rgba(244, 245, 247, 0.08)',
+              borderRadius: '8px',
+              height: fieldHeight,
+              boxSizing: 'border-box',
+              overflow: 'hidden',
+            }}
+          >
+            <button
+              type="button"
+              aria-label="Anterior expiración"
+              onClick={() => navigateSlot(-1)}
+              style={{
+                width: stepperBtnWidth,
+                height: '100%',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: 'none',
+                borderRight: '1px solid rgba(244, 245, 247, 0.06)',
+                color: 'var(--text-muted)',
+                fontSize: isCompact ? '14px' : '16px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+                lineHeight: 1,
+                transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
+              }}
+            >
+              −
+            </button>
+
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                gap: '6px',
+                minWidth: 0,
+              }}
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--text-quiet)"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <span
+                style={{
+                  color: 'var(--text-strong)',
+                  fontSize: isCompact ? '14px' : '16px',
+                  fontWeight: 700,
+                  fontFamily: "'Geist Mono', monospace",
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {formattedExpiryDisplay}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              aria-label="Siguiente expiración"
+              onClick={() => navigateSlot(1)}
+              style={{
+                width: stepperBtnWidth,
+                height: '100%',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: 'none',
+                borderLeft: '1px solid rgba(244, 245, 247, 0.06)',
+                color: 'var(--text-muted)',
+                fontSize: isCompact ? '14px' : '16px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+                lineHeight: 1,
+                transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
+              }}
+            >
+              +
+            </button>
+          </div>
+
+          {dropdownOpen && (
+            <div
+              data-testid="expiry-dropdown-menu"
+              style={{
+                position: 'absolute',
+                top: '56px',
+                right: 0,
+                width: '180px',
+                background: '#151922',
+                border: '1px solid rgba(244, 245, 247, 0.15)',
+                borderRadius: '8px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+                zIndex: 100,
+                padding: '6px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+              }}
+            >
+              {slots.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedSlotId(s.id);
+                    setSelectedSlot(s);
+                    setDropdownOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: s.id === selectedSlotId ? 'rgba(34, 196, 122, 0.15)' : 'transparent',
+                    border: s.id === selectedSlotId ? '1px solid var(--profit)' : 'none',
+                    borderRadius: '6px',
+                    padding: '6px 8px',
+                    color: s.id === selectedSlotId ? 'var(--profit)' : 'var(--text-strong)',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span>{s.label}</span>
+                  <span style={{ fontFamily: "'Geist Mono', monospace", fontWeight: 700 }}>
+                    {s.targetTimeFormatted}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* D3: GANANCIA */}
+        <div
+          className="binmax-ticket-block"
+          data-testid="ticket-block-ganancia"
+          style={{ textAlign: 'center', padding: isCompact ? '0' : '2px 0' }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: isCompact ? '1px' : '2px',
+            }}
+          >
+            <span style={{ fontSize: isCompact ? '10px' : '12px', color: 'var(--text-muted)', fontWeight: 500, fontFamily: "'Inter', sans-serif" }}>
+              Ganancia
+            </span>
+            <span
+              aria-label="Ayuda ganancia"
+              style={{
+                fontSize: '9px',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                width: '13px',
+                height: '13px',
+                borderRadius: '50%',
+                border: '1px solid rgba(138, 146, 161, 0.4)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                lineHeight: 1,
+              }}
+            >
+              ?
+            </span>
+          </div>
+
+          <div
+            data-testid="ganancia-pct"
+            style={{
+              fontSize: isCompact ? '18px' : '22px',
+              fontWeight: 800,
+              lineHeight: '1.05',
+              color: 'var(--profit)',
+              fontFamily: "'Geist Mono', monospace",
+              letterSpacing: '-0.3px',
+            }}
+          >
+            {`+${payoutPct}%`}
+          </div>
+
+          <div
+            data-testid="ganancia-amount"
+            style={{
+              fontSize: isCompact ? '11.5px' : '13px',
+              fontWeight: 700,
+              color: 'var(--profit)',
+              fontFamily: "'Geist Mono', monospace",
+              marginTop: isCompact ? '0' : '1px',
+            }}
+          >
+            {isBinmax ? `+${formatCurrencyBinmax(payoutProfitMinor)}` : `+${formatMinor(payoutProfitMinor)}`}
+          </div>
+        </div>
+
+        {/* D4: SUBE */}
+        <button
+          type="button"
+          data-testid="btn-sube"
+          aria-label="Operación Sube"
+          disabled={blocked || busy}
+          onClick={() => handleExecute('UP')}
+          style={{
+            width: '100%',
+            height: btnHeight,
+            borderRadius: '6px',
+            background: 'var(--profit)',
+            border: 'none',
+            color: '#FFFFFF',
+            cursor: blocked || busy ? 'not-allowed' : 'pointer',
+            opacity: blocked || busy ? 0.45 : 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: isCompact ? '2px' : '3px',
+            padding: '4px',
+            boxSizing: 'border-box',
+            boxShadow: blocked || busy ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.25)',
+            transition: 'transform 0.12s ease, opacity 0.12s ease, background 0.12s ease',
+          }}
+        >
+          <svg
+            width={isCompact ? '18' : '20'}
+            height={isCompact ? '18' : '20'}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#FFFFFF"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            data-testid="icon-sube"
+          >
+            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+            <polyline points="16 7 22 7 22 13" />
+          </svg>
+          <span style={{ fontSize: isCompact ? '12px' : '13px', fontWeight: 800, letterSpacing: '0.6px', color: '#FFFFFF' }}>
+            SUBE
+          </span>
+        </button>
+
+        {/* D5: BAJA */}
+        <button
+          type="button"
+          data-testid="btn-baja"
+          aria-label="Operación Baja"
+          disabled={blocked || busy}
+          onClick={() => handleExecute('DOWN')}
+          style={{
+            width: '100%',
+            height: btnHeight,
+            borderRadius: '6px',
+            background: 'var(--loss)',
+            border: 'none',
+            color: '#FFFFFF',
+            cursor: blocked || busy ? 'not-allowed' : 'pointer',
+            opacity: blocked || busy ? 0.45 : 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: isCompact ? '2px' : '3px',
+            padding: '4px',
+            boxSizing: 'border-box',
+            boxShadow: blocked || busy ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.25)',
+            transition: 'transform 0.12s ease, opacity 0.12s ease, background 0.12s ease',
+          }}
+        >
+          <svg
+            width={isCompact ? '18' : '20'}
+            height={isCompact ? '18' : '20'}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#FFFFFF"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            data-testid="icon-baja"
+          >
+            <polyline points="22 17 13.5 8.5 8.5 13.5 2 7" />
+            <polyline points="16 17 22 17 22 11" />
+          </svg>
+          <span style={{ fontSize: isCompact ? '12px' : '13px', fontWeight: 800, letterSpacing: '0.6px', color: '#FFFFFF' }}>
+            BAJA
+          </span>
+        </button>
+
+        {/* Mensagens de Alerta ou Trava Compactas */}
+        {paused && (
+          <div
+            data-testid="badge-paused"
+            style={{
+              background: '#3b2222',
+              border: '1px solid #783535',
+              borderRadius: '6px',
+              padding: '6px',
+              fontSize: '10px',
+              color: 'var(--loss)',
+              textAlign: 'center',
+            }}
+          >
+            Pausado
+          </div>
+        )}
+        {stale && !paused && (
+          <div
+            data-testid="badge-stale"
+            style={{
+              background: '#3b2f22',
+              border: '1px solid #785a35',
+              borderRadius: '6px',
+              padding: '6px',
+              fontSize: '10px',
+              color: 'var(--pending)',
+              textAlign: 'center',
+            }}
+          >
+            Atrasado
+          </div>
+        )}
+        {error && (
+          <div
+            role="alert"
+            data-testid="ticket-error"
+            style={{
+              background: '#3b2222',
+              border: '1px solid #783535',
+              borderRadius: '6px',
+              padding: '6px',
+              fontSize: '10px',
+              color: 'var(--loss)',
+              textAlign: 'center',
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {/* Resumo Discreto de Última Operação (Elimina Cartão Volumoso Duplicado) */}
+        {receipt && contract.data?.status === 'SETTLED' && (
+          <div
+            style={{
+              textAlign: 'center',
+              fontSize: '11px',
+              color: 'var(--text-muted)',
+              marginTop: '6px',
+            }}
+            aria-live="polite"
+          >
+            Última operación:{' '}
+            <span
+              style={{
+                color: contract.data.result === 'WIN' ? 'var(--profit)' : contract.data.result === 'DRAW' ? 'var(--pending)' : 'var(--loss)',
+                fontWeight: 700,
+                fontFamily: "'Geist Mono', monospace",
+              }}
+            >
+              {contract.data.result === 'WIN'
+                ? `+${isBinmax ? formatCurrencyBinmax(contract.data.payout_minor ?? 0) : formatMinor(contract.data.payout_minor ?? 0)}`
+                : contract.data.result === 'DRAW'
+                ? (isBinmax ? formatCurrencyBinmax(contract.data.payout_minor ?? 0) : formatMinor(contract.data.payout_minor ?? 0))
+                : `−${isBinmax ? formatCurrencyBinmax(stakeMinor ?? 1000) : formatMinor(stakeMinor ?? 1000)}`}
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -497,14 +1179,14 @@ export function OrderTicket({
               contract.data.result === 'WIN' ? (
                 <span style={{ color: '#00e676' }}>🎉 Vitória! Ganhou {formatMinor(contract.data.payout_minor ?? 0)}</span>
               ) : contract.data.result === 'DRAW' ? (
-                <span style={{ color: '#ffab00' }}>🤝 Empate! Estorno {formatMinor(contract.data.payout_minor ?? 0)}</span>
+                <span style={{ color: 'var(--pending)' }}>🤝 Empate! Estorno {formatMinor(contract.data.payout_minor ?? 0)}</span>
               ) : (
                 <span style={{ color: '#ff3d71' }}>✕ Não atingiu o alvo</span>
               )
             ) : remainingReceipt > 0 ? (
               <span style={{ color: '#65d5ff' }}>⏳ Expira em {remainingReceipt} segundos…</span>
             ) : (
-              <span style={{ color: '#ffab00' }}>Processando liquidação oficial…</span>
+              <span style={{ color: 'var(--pending)' }}>Processando liquidação oficial…</span>
             )}
           </div>
         </div>

@@ -1,0 +1,296 @@
+ M AGENTS.md
+ D apps/admin/dist/assets/index-w4rqs85A.js
+ M apps/admin/dist/index.html
+ M apps/admin/src/App.tsx
+ D apps/web/dist/assets/index-C15lMWV5.js
+ D apps/web/dist/assets/index-Dx6ZeyrP.css
+ M apps/web/dist/index.html
+ M apps/web/index.html
+ M apps/web/src/App.tsx
+ M apps/web/src/api/client.ts
+ M apps/web/src/auth/oidc.ts
+ M apps/web/src/catalog/assets.ts
+ M apps/web/src/chart/MultiChartGrid.tsx
+ M apps/web/src/chart/PriceChart.tsx
+ M apps/web/src/chart/StalenessOverlay.tsx
+ M apps/web/src/chart/TimeLinesOverlay.tsx
+ M apps/web/src/chart/TradersMoodBar.tsx
+ M apps/web/src/chart/indicator-stress.unit.test.ts
+ M apps/web/src/chart/raf-updater.ts
+ M apps/web/src/components/drawer/PortfolioDrawer.tsx
+ M apps/web/src/components/header/TerminalHeader.tsx
+ M apps/web/src/components/layout/TerminalLayout.tsx
+ M apps/web/src/components/sidebar/SidebarDock.tsx
+ M apps/web/src/feed/TradingFeedManager.ts
+ M apps/web/src/lib/money.ts
+ M apps/web/src/main.tsx
+ M apps/web/src/styles.css
+ M apps/web/src/trade/OrderTicket.tsx
+ M apps/web/vite.config.ts
+ M packages/shared/dist/index.d.ts
+ M packages/shared/dist/index.js
+ M packages/shared/dist/types.d.ts
+ M packages/shared/dist/types.js
+ M packages/shared/package.json
+ M packages/shared/src/index.ts
+ M packages/shared/src/types.ts
+ M scripts/deploy-to-vps.mjs
+ M scripts/dev-live-feed.mjs
+ M services/api/dist/index.js
+ M services/api/dist/plugins/auth.js
+ M services/api/dist/plugins/db.js
+ M services/api/dist/plugins/redis.js
+ M services/api/dist/routes/chart.js
+ M services/api/dist/routes/contracts.js
+ M services/api/dist/routes/health.js
+ M services/api/dist/routes/wallet.js
+ M services/api/dist/services/backoff.js
+ M services/api/dist/services/backpressure.js
+ M services/api/dist/services/circuit-breaker.js
+ M services/api/dist/services/clock-sync-monitor.js
+ M services/api/dist/services/coalescer.js
+ M services/api/dist/services/contract-service.js
+ M services/api/dist/services/cross-asset-validator.js
+ M services/api/dist/services/risk-manager.js
+ M services/api/dist/services/sharding.js
+ M services/api/dist/services/staggered-startup.js
+ M services/api/dist/services/token-bucket.js
+ M services/api/dist/services/trading-calendar.js
+ M services/api/dist/services/watermark-engine.js
+ M services/api/package.json
+ M services/api/src/index.ts
+ M services/api/src/plugins/auth.ts
+ M services/api/src/routes/contracts.ts
+ M services/api/src/routes/health.ts
+ M services/api/test/contracts.unit.test.ts
+ M services/tick-engine/dist/engine/ou-generator.js
+ M services/tick-engine/src/engine/ou-generator.ts
+ M services/websocket-gateway/dist/handlers/catchup-handler.js
+ M services/websocket-gateway/dist/index.js
+ M services/websocket-gateway/package.json
+ M services/websocket-gateway/src/index.ts
+ M tests/unit/client-no-simulated-quotes.test.ts
+ M tests/unit/gateway-distributed-connection-limit.test.ts
+ M web-dist.zip
+?? .agents/agents/
+?? .agents/skills/12-tokens-binmax/
+?? .agents/skills/13-textos-es/
+?? .agents/skills/14-teste-de-sobreposicao/
+?? .agents/skills/15-chave-sala-nova/
+?? .agents/skills/16-mapear-projeto/
+?? .agents/skills/17-mudanca-cirurgica/
+?? .agents/skills/18-zonas-sensiveis/
+?? .agents/skills/19-testes-de-regressao-visual/
+?? .agents/skills/20-conduzir-etapa/
+?? .codex/agents/binmax-brand-agent.toml
+?? .codex/agents/chart-trading-engineer.toml
+?? .codex/agents/codebase-mapper-agent.toml
+?? .codex/agents/compliance-risk-reviewer.toml
+?? .codex/agents/iq-fidelity-reviewer.toml
+?? .codex/agents/post-implementation-verifier.toml
+?? .codex/agents/regression-guardian-agent.toml
+?? .codex/agents/surgical-frontend-agent.toml
+?? .orchestrator/
+?? apps/admin/dist/assets/index-DAWwvIQQ.js
+?? apps/admin/src/pages/
+?? apps/web/dist/assets/index-B4_WPEii.css
+?? apps/web/dist/assets/index-BvFK1Tng.js
+?? apps/web/dist/brand/
+?? apps/web/dist/favicon.svg
+?? apps/web/public/
+?? apps/web/src/api/client-cache-invalidation.unit.test.ts
+?? apps/web/src/catalog/subetapa-02-asset-catalog-base-prices.unit.test.ts
+?? apps/web/src/chart/ChartErrorBoundary.tsx
+?? apps/web/src/chart/ChartSandbox.tsx
+?? apps/web/src/chart/GridLayoutPopover.tsx
+?? apps/web/src/chart/IsolatedChartHost.tsx
+?? apps/web/src/chart/bar-sanitizer.ts
+?? apps/web/src/chart/chart-chaos-isolation.unit.test.tsx
+?? apps/web/src/chart/chart-error-boundary.unit.test.tsx
+?? apps/web/src/chart/chart-isolation-stress-chaos-security.unit.test.ts
+?? apps/web/src/chart/chart-phase2-hardening.unit.test.tsx
+?? apps/web/src/chart/chart-sandbox.unit.test.tsx
+?? apps/web/src/chart/chart-sanitizer.ts
+?? apps/web/src/chart/chart-sanitizer.unit.test.ts
+?? apps/web/src/chart/chart-scale-normalizer.ts
+?? apps/web/src/chart/chart-scale-normalizer.unit.test.ts
+?? apps/web/src/chart/drawing-sanitizer.ts
+?? apps/web/src/chart/drawing-sanitizer.unit.test.ts
+?? apps/web/src/chart/grid-layout-popover.unit.test.tsx
+?? apps/web/src/chart/industrial-hardening.unit.test.ts
+?? apps/web/src/chart/isolated-chart-host.unit.test.ts
+?? apps/web/src/chart/multichart-chaos-stress.unit.test.tsx
+?? apps/web/src/chart/multichart-selection.unit.test.tsx
+?? apps/web/src/chart/pricechart-decoupling.unit.test.tsx
+?? apps/web/src/chart/pricechart-scale-overlays.unit.test.tsx
+?? apps/web/src/chart/raf-multisymbol.unit.test.ts
+?? apps/web/src/chart/raf-tick-lifecycle.unit.test.ts
+?? apps/web/src/chart/subetapa-01-parity-and-scale-hardening.unit.test.ts
+?? apps/web/src/chart/subetapa-01-price-lines-leak.unit.test.ts
+?? apps/web/src/chart/subetapa-02-tabs-grid-sync.unit.test.tsx
+?? apps/web/src/chart/subetapa-03-timelines-overlay-anchoring.unit.test.ts
+?? apps/web/src/chart/subetapa-04-integrated-chaos-stress.unit.test.ts
+?? apps/web/src/components/KYCTierBadge.tsx
+?? apps/web/src/components/RegulatoryBlockedScreen.tsx
+?? apps/web/src/components/brand/
+?? apps/web/src/components/footer/
+?? apps/web/src/components/geoblock/
+?? apps/web/src/components/header/AccountSelectorDropdown.tsx
+?? apps/web/src/components/header/AssetFlagBadge.tsx
+?? apps/web/src/components/layout/MobileTraderoomLayout.tsx
+?? apps/web/src/components/modals/
+?? apps/web/src/components/navigation/
+?? apps/web/src/components/sidebar/SidebarIcons.tsx
+?? apps/web/src/i18n/
+?? apps/web/src/lib/feature-flags.ts
+?? apps/web/src/services/
+?? apps/web/src/trade/a11y-perf.unit.test.ts
+?? apps/web/src/trade/asset-catalog-modal.unit.test.tsx
+?? apps/web/src/trade/asset-chart-certification.unit.test.tsx
+?? apps/web/src/trade/billetera.unit.test.tsx
+?? apps/web/src/trade/chart-drawing-tools.unit.test.tsx
+?? apps/web/src/trade/chart.unit.test.ts
+?? apps/web/src/trade/feed-resilience.unit.test.ts
+?? apps/web/src/trade/final-certification.unit.test.tsx
+?? apps/web/src/trade/header.unit.test.tsx
+?? apps/web/src/trade/history-expansion.unit.test.ts
+?? apps/web/src/trade/i18n-es.unit.test.ts
+?? apps/web/src/trade/in-chart-asset-selector.unit.test.tsx
+?? apps/web/src/trade/layout-spacing-overlays.unit.test.tsx
+?? apps/web/src/trade/logo.unit.test.ts
+?? apps/web/src/trade/portfolio.unit.test.ts
+?? apps/web/src/trade/responsive-perfection.unit.test.tsx
+?? apps/web/src/trade/responsive.unit.test.ts
+?? apps/web/src/trade/sidebar.unit.test.tsx
+?? apps/web/src/trade/smoke.unit.test.ts
+?? apps/web/src/trade/stochastic-candles.unit.test.ts
+?? apps/web/src/trade/structure.unit.test.ts
+?? apps/web/src/trade/subetapa-01-shell-layout.unit.test.tsx
+?? apps/web/src/trade/subetapa-02-header-fidelity.unit.test.tsx
+?? apps/web/src/trade/subetapa-03-sidebar-fidelity.unit.test.tsx
+?? apps/web/src/trade/subetapa-04-chart-overlays.unit.test.tsx
+?? apps/web/src/trade/subetapa-05-order-ticket-fidelity.unit.test.tsx
+?? apps/web/src/trade/subetapa-06-footer-fidelity.unit.test.tsx
+?? apps/web/src/trade/ticket-ergonomic.unit.test.tsx
+?? apps/web/src/trade/ticket.unit.test.ts
+?? apps/web/src/trade/tokens.unit.test.ts
+?? apps/web/src/wallet/
+?? db/migrations/0020_phase2_countries_flags_kyc_payments.down.sql
+?? db/migrations/0020_phase2_countries_flags_kyc_payments.up.sql
+?? db/migrations/0030_regulatory_zones_mirrors_kyc_tiers.down.sql
+?? db/migrations/0030_regulatory_zones_mirrors_kyc_tiers.up.sql
+?? docs/dashboard-ux.md
+?? "docs/docs id visual/"
+?? docs/fase-2/
+?? docs/features/PLANO_ISOLAMENTO_E_BLINDAGEM_GRAFICO.md
+?? docs/features/PLANO_MESTRE_BINMAX_IDENTIDADE_VISUAL.md
+?? docs/features/PLANO_SUBETAPAS_TELA_CHEIA_BINMAX.md
+?? docs/features/asset-chart-resolution/
+?? docs/features/graficos-blindagem-definitiva/
+?? docs/features/layout-and-history-expansion/
+?? docs/features/regulatory-compliance-geo-routing/
+?? docs/features/traderoom-perfection/
+?? docs/features/tradingview-isolated-chart-engine/
+?? docs/identidade-visual.md
+?? docs/plan-multichart-scale-fix.md
+?? docs/plano-graficos-multiplos-e-normalizacao.md
+?? docs/plano-revisado-multichart-e-escalas.md
+?? docs/prompts/
+?? docs/referencias/
+?? docs/relatorios/
+?? docs/subetapa-01-normalizacao-escala-e-velas.md
+?? docs/subetapa-01-passo-a-passo-normalizacao.md
+?? docs/subetapa-02-grade-multi-graficos-header.md
+?? docs/subetapa-02-passo-a-passo-multichart-abas.md
+?? docs/subetapa-03-passo-a-passo-caos-deploy.md
+?? docs/subetapa-03-validacao-estresse-caos.md
+?? docs/zonas-sensiveis.md
+?? docs/zonas-sensiveis.txt
+?? infra/prometheus/
+?? packages/shared/dist/currency.d.ts
+?? packages/shared/dist/currency.js
+?? packages/shared/src/currency.ts
+?? scratch/change_api_port.py
+?? scratch/chrome-profile/
+?? scratch/fix_readyz.py
+?? scratch/init_index_state.sql
+?? scratch/patch_gateway.py
+?? scratch/patch_server.py
+?? scratch/patch_server_mjs.py
+?? scratch/patch_ws_port.py
+?? scratch/restart_containers.py
+?? scratch/test_ws.mjs
+?? scratch/update_compose.py
+?? services/api/dist/plugins/geoblock.js
+?? services/api/dist/plugins/regulatory-routing.js
+?? services/api/dist/routes/currencies.js
+?? services/api/dist/routes/geo.js
+?? services/api/dist/routes/kyc.js
+?? services/api/dist/routes/mirrors.js
+?? services/api/dist/services/compliance-kyc.js
+?? services/api/dist/services/exchange-rates.js
+?? services/api/dist/services/feature-flags.js
+?? services/api/dist/services/geoblock.js
+?? services/api/dist/services/metrics.js
+?? services/api/dist/services/mirror-domains.js
+?? services/api/dist/services/regulatory-zones.js
+?? services/api/src/plugins/geoblock.ts
+?? services/api/src/plugins/regulatory-routing.ts
+?? services/api/src/routes/currencies.ts
+?? services/api/src/routes/geo.ts
+?? services/api/src/routes/kyc.ts
+?? services/api/src/routes/mirrors.ts
+?? services/api/src/services/compliance-kyc.ts
+?? services/api/src/services/exchange-rates.ts
+?? services/api/src/services/feature-flags.ts
+?? services/api/src/services/geoblock.ts
+?? services/api/src/services/metrics.ts
+?? services/api/src/services/mirror-domains.ts
+?? services/api/src/services/regulatory-zones.ts
+?? services/tick-engine/dist/engine/real-feed-adapter.js
+?? services/tick-engine/src/engine/real-feed-adapter.ts
+?? services/websocket-gateway/dist/backpressure.js
+?? services/websocket-gateway/dist/coalescer.js
+?? services/websocket-gateway/dist/sharding.js
+?? services/websocket-gateway/dist/token-bucket.js
+?? skills/12-tokens-binmax/
+?? skills/13-textos-es/
+?? skills/14-teste-de-sobreposicao/
+?? skills/15-chave-sala-nova/
+?? skills/16-mapear-projeto/
+?? skills/17-mudanca-cirurgica/
+?? skills/18-zonas-sensiveis/
+?? skills/19-testes-de-regressao-visual/
+?? skills/20-conduzir-etapa/
+?? tests/chaos/phase2-chaos-scenarios.test.ts
+?? tests/integration/test-exchange-rates-api.test.ts
+?? tests/integration/test-geoblock-api.test.ts
+?? tests/integration/test-phase2-e2e.test.ts
+?? tests/integration/test-real-feed-pipeline.test.ts
+?? tests/load/phase2-multicountry-ramp.k6.js
+?? tests/test-phase2-final-certification.mjs
+?? tests/test-phase2-subetapa-1-db-seed.mjs
+?? tests/test-phase2-subetapa-2-geoblock-flags.mjs
+?? tests/test-phase2-subetapa-3-display-currencies.mjs
+?? tests/test-phase2-subetapa-4-real-feed-adapter.mjs
+?? tests/test-phase2-subetapa-5-admin-panel.mjs
+?? tests/test-phase2-subetapa-6-frontend-localization.mjs
+?? tests/test-phase2-subetapa-7-monitoring.mjs
+?? tests/test-reg-brasil-100-percent-free.mjs
+?? tests/test-reg-final-certification.mjs
+?? tests/test-reg-subetapa-1-db-seed.mjs
+?? tests/test-reg-subetapa-2-edge-georoute.mjs
+?? tests/test-reg-subetapa-3-mirror-rotation.mjs
+?? tests/test-reg-subetapa-4-tiered-kyc.mjs
+?? tests/test-reg-subetapa-5-frontend-admin.mjs
+?? tests/unit/chart-boot-gap.test.ts
+?? tests/unit/chart-history-source.test.ts
+?? tests/unit/chart-tail-hydration.test.ts
+?? tests/unit/feed-connection-lifecycle.test.ts
+?? tests/unit/test-currency-formatting.test.ts
+?? tests/unit/test-frontend-i18n.test.ts
+?? tests/unit/test-geoblock-flags.test.ts
+?? tests/unit/test-phase2-subetapa-1-schemas.test.ts
+?? tests/unit/test-prometheus-metrics-phase2.test.ts
+?? tests/unit/test-real-feed-adapter.test.ts
+?? vitest.config.ts

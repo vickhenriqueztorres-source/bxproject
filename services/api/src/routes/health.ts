@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import pg from "pg";
-import Redis from "ioredis";
+import { Redis } from "ioredis";
 
 export async function healthRoutes(fastify: FastifyInstance) {
   const pool = new pg.Pool({
@@ -38,15 +38,17 @@ export async function healthRoutes(fastify: FastifyInstance) {
 
   // 3. GET /metrics (Prometheus / OpenMetrics - Subetapa 6)
   fastify.get("/metrics", async (_request, reply) => {
+    const lines: string[] = [];
+
+    // 1. Métricas de banco (index_state) isoladas
     try {
-      const res = await pool.query(`
+      const activePool = (fastify as any).pg || pool;
+      const res = await activePool.query(`
         SELECT symbol, updated_at, last_sequence 
         FROM index_state;
       `);
 
       const now = Date.now();
-      const lines: string[] = [];
-
       lines.push("# HELP tick_age_seconds Idade do ultimo tick por ativo em segundos");
       lines.push("# TYPE tick_age_seconds gauge");
       for (const row of res.rows) {
@@ -60,13 +62,24 @@ export async function healthRoutes(fastify: FastifyInstance) {
         const ageSec = (now - new Date(row.updated_at).getTime()) / 1000;
         lines.push(`staleness_alert{symbol="${row.symbol}"} ${ageSec > 4 ? 1 : 0}`);
       }
-
-      reply.header("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
-      return lines.join("\n") + "\n";
     } catch {
-      reply.header("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
-      return "# Erro ao consultar index_state\n";
+      lines.push("# AVISO: index_state temporariamente inacessivel via pool");
     }
+
+    // 2. Métricas Industriais, Motor, Contratos e Regionais (sempre exportadas)
+    try {
+      const { RegionalMetricsService } = await import("../services/metrics.js");
+      const appMetrics = RegionalMetricsService.getInstance().renderOpenMetrics();
+      if (appMetrics) {
+        if (lines.length > 0) lines.push("");
+        lines.push(appMetrics);
+      }
+    } catch (err: unknown) {
+      lines.push("# Erro ao renderizar metricas de aplicacao");
+    }
+
+    reply.header("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+    return lines.join("\n") + "\n";
   });
 }
 

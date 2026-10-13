@@ -1,0 +1,12 @@
+[
+  {
+    "url": "http://172.30.155.16:3005/healthz",
+    "status": 401,
+    "error": "HttpResponseException"
+  },
+  {
+    "url": "http://172.30.155.16:8080/realms/broker-demo/.well-known/openid-configuration",
+    "status": null,
+    "error": "HttpRequestException"
+  }
+]

@@ -25,7 +25,10 @@ export const walletRoutes: FastifyPluginAsync = async (server) => {
             currency: "USD",
             ...balance
           };
-        } catch {
+        } catch (err) {
+          if (!(err instanceof Error) || !err.message.startsWith("BLNK_HTTP_ERROR_404")) {
+            throw err;
+          }
           // Onboarding do usuário: cria contas e injeta US$ 10.000 demo
           await blnkClient.onboardUser(user.id);
           const balance = await blnkClient.getBalance(user.id);
@@ -37,13 +40,7 @@ export const walletRoutes: FastifyPluginAsync = async (server) => {
         }
       } catch (err: any) {
         server.log.error(err, "Failed to retrieve wallet balance");
-        // Em caso de fallback se Blnk estiver offline em ambiente de teste local
-        return reply.status(200).send({
-          user_id: user.id,
-          currency: "USD",
-          available_minor: 1000000, // US$ 10.000,00 demo default
-          reserved_minor: 0
-        });
+        return reply.status(503).send({ error: "WALLET_UNAVAILABLE" });
       }
     }
   );

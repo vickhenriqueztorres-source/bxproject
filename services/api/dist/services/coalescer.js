@@ -1,10 +1,7 @@
-"use strict";
 /**
  * Motor de Coalescing de Ticks (Padrão de Resiliência contra Sobrecarga de Fan-Out)
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.TickCoalescer = void 0;
-class TickCoalescer {
+export class TickCoalescer {
     windowMs;
     pendingTicks = new Map();
     timers = new Map();
@@ -62,4 +59,3 @@ class TickCoalescer {
         this.pendingTicks.clear();
     }
 }
-exports.TickCoalescer = TickCoalescer;

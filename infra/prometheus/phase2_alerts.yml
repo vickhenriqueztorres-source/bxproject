@@ -1,0 +1,33 @@
+# Regras de Alerta do Prometheus e Alertmanager para a Fase 2 (América Latina)
+groups:
+  - name: phase2_regional_monitoring
+    rules:
+      - alert: HighGeoblockRejectionRate
+        expr: rate(broker_geoblock_rejections_total[1m]) > 10
+        for: 1m
+        labels:
+          severity: warning
+          tier: edge_security
+        annotations:
+          summary: "Pico de conexões bloqueadas por Geoblocking (País: {{ $labels.country }})"
+          description: "Foram detectadas mais de 10 tentativas/minuto de acesso a partir de região não autorizada na Fase 2."
+
+      - alert: OtcFeedCircuitBreakerOpen
+        expr: broker_otc_real_feed_status == 1
+        for: 30s
+        labels:
+          severity: critical
+          tier: market_data
+        annotations:
+          summary: "Feed de mercado real em fallback estocástico para {{ $labels.symbol }}"
+          description: "O conector de mercado real falhou e o mercado está sendo sustentado pelo gerador Ornstein-Uhlenbeck."
+
+      - alert: CountryFeatureFlagDisabled
+        expr: broker_feature_flags_status{flag="trading_enabled"} == 0
+        for: 2m
+        labels:
+          severity: info
+          tier: business_ops
+        annotations:
+          summary: "Trading desativado no país {{ $labels.country }}"
+          description: "O trading foi administrativamente suspenso ou colocado em manutenção no país selecionado."

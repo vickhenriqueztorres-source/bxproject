@@ -1,0 +1,55 @@
+
+ RUN  v3.2.7 D:/brokerproject
+
+ ❯ tests/unit/bmr-authenticated-contract.test.ts (2 tests | 2 failed) 1658ms
+   × [AC-BMR-03] authenticated payload unit contract; no real integration > [S-05] real openContract emits only the fields accepted by the real strict schema 1645ms
+     → [{"code":"unrecognized_keys","keys":["duration_seconds","expires_at","expiry_mode"],"path":[],"message":"Unrecognized key(s) in object: 'duration_seconds', 'expires_at', 'expiry_mode'"}]: expected false to be true // Object.is equality
+   × [AC-BMR-03] authenticated payload unit contract; no real integration > [I-03][S-05] preserves integer stake/key and receipt while omitting client expiry 10ms
+     → expected { symbol: 'SYNTH_VOL_50', …(5) } to not have property "expires_at"
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/unit/bmr-authenticated-contract.test.ts > [AC-BMR-03] authenticated payload unit contract; no real integration > [S-05] real openContract emits only the fields accepted by the real strict schema
+AssertionError: [{"code":"unrecognized_keys","keys":["duration_seconds","expires_at","expiry_mode"],"path":[],"message":"Unrecognized key(s) in object: 'duration_seconds', 'expires_at', 'expiry_mode'"}]: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/unit/bmr-authenticated-contract.test.ts:57:94
+     55|     const { body } = await captureRequest(101);
+     56|     const parsed = OpenContractSchema.safeParse(body);
+     57|     expect(parsed.success, parsed.success ? undefined : JSON.stringify…
+       |                                                                                              ^
+     58|     expect(Object.keys(body).sort()).toEqual(['direction', 'stake_mino…
+     59|     expect(body).toEqual({ symbol: 'SYNTH_VOL_50', direction: 'UP', st…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/unit/bmr-authenticated-contract.test.ts > [AC-BMR-03] authenticated payload unit contract; no real integration > [I-03][S-05] preserves integer stake/key and receipt while omitting client expiry
+AssertionError: expected { symbol: 'SYNTH_VOL_50', …(5) } to not have property "expires_at"
+
+- Expected: 
+undefined
+
++ Received: 
+"2026-10-09T18:00:00.000Z"
+
+ ❯ tests/unit/bmr-authenticated-contract.test.ts:69:22
+     67|     expect(receipt).toEqual(bareReceipt);
+     68|     expect(receipt.expires_at).not.toBe(clientExpiry);
+     69|     expect(body).not.toHaveProperty('expires_at');
+       |                      ^
+     70|     expect(body).not.toHaveProperty('duration_seconds');
+     71|     expect(body).not.toHaveProperty('expiry_mode');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  14:42:09
+   Duration  11.61s (transform 3.72s, setup 0ms, collect 4.01s, tests 1.66s, environment 0ms, prepare 2.62s)
+

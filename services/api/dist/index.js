@@ -1,42 +1,53 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const fastify_1 = __importDefault(require("fastify"));
-const cors_1 = __importDefault(require("@fastify/cors"));
-const helmet_1 = __importDefault(require("@fastify/helmet"));
-const rate_limit_1 = __importDefault(require("@fastify/rate-limit"));
-const auth_js_1 = require("./plugins/auth.js");
-const db_js_1 = require("./plugins/db.js");
-const redis_js_1 = require("./plugins/redis.js");
-const health_js_1 = require("./routes/health.js");
-const chart_js_1 = require("./routes/chart.js");
-const contracts_js_1 = require("./routes/contracts.js");
-const wallet_js_1 = require("./routes/wallet.js");
-const server = (0, fastify_1.default)({
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import rateLimit from "@fastify/rate-limit";
+import { authPlugin } from "./plugins/auth.js";
+import { dbPlugin } from "./plugins/db.js";
+import { redisPlugin } from "./plugins/redis.js";
+import { geoblockPlugin } from "./plugins/geoblock.js";
+import { regulatoryRoutingPlugin } from "./plugins/regulatory-routing.js";
+import { healthRoutes } from "./routes/health.js";
+import { chartRoutes } from "./routes/chart.js";
+import { contractRoutes } from "./routes/contracts.js";
+import { walletRoutes } from "./routes/wallet.js";
+import { geoRoutes } from "./routes/geo.js";
+import { currencyRoutes } from "./routes/currencies.js";
+import { mirrorRoutes } from "./routes/mirrors.js";
+import { kycRoutes } from "./routes/kyc.js";
+import { authRoutes } from "./routes/auth.js";
+import { adminRoutes } from "./routes/admin.js";
+const server = Fastify({
     logger: {
         level: process.env.LOG_LEVEL || "info",
         redact: ["req.headers.authorization"] // B-12: Nunca logar tokens ou segredos
     }
 });
 async function main() {
-    await server.register(helmet_1.default, { contentSecurityPolicy: false });
-    await server.register(cors_1.default, {
+    await server.register(helmet, { contentSecurityPolicy: false });
+    await server.register(cors, {
         origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",") : true,
         credentials: true
     });
-    await server.register(rate_limit_1.default, {
+    await server.register(rateLimit, {
         max: 120, // 120 req/min
         timeWindow: "1 minute"
     });
-    await server.register(db_js_1.dbPlugin);
-    await server.register(redis_js_1.redisPlugin);
-    await server.register(auth_js_1.authPlugin);
-    await server.register(health_js_1.healthRoutes);
-    await server.register(chart_js_1.chartRoutes);
-    await server.register(contracts_js_1.contractRoutes);
-    await server.register(wallet_js_1.walletRoutes);
+    await server.register(dbPlugin);
+    await server.register(redisPlugin);
+    await server.register(authPlugin);
+    await server.register(regulatoryRoutingPlugin);
+    await server.register(geoblockPlugin);
+    await server.register(healthRoutes);
+    await server.register(chartRoutes);
+    await server.register(contractRoutes);
+    await server.register(walletRoutes);
+    await server.register(geoRoutes);
+    await server.register(currencyRoutes);
+    await server.register(mirrorRoutes);
+    await server.register(kycRoutes);
+    await server.register(authRoutes);
+    await server.register(adminRoutes, { prefix: "/api/v1/admin" });
     const port = parseInt(process.env.PORT || "3000", 10);
     const host = process.env.HOST || "0.0.0.0";
     try {

@@ -1,0 +1,8 @@
+
+  VITE v6.4.4  ready in 731 ms
+
+  ➜  Local:   http://127.0.0.1:5173/
+  ➜  press h + enter to show help
+13:14:11 [vite] (client) hmr update /src/chart/IsolatedChartHost.tsx
+13:15:35 [vite] vite.config.ts changed, restarting server...
+13:15:35 [vite] server restarted.

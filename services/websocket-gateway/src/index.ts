@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import { Redis } from "ioredis";
 import { jwtVerify, createRemoteJWKSet } from "jose";
+import { RED_ZONE_COUNTRIES } from "@broker/shared";
 import { CatchupHandler } from "./handlers/catchup-handler.js";
 
 const PORT = parseInt(process.env.WS_PORT || "3001", 10);
@@ -78,6 +79,24 @@ async function main() {
   });
 
   app.get("/ws", { websocket: true }, (socket, req) => {
+    // Interceptação de Geoblocking e Risco Regulatório no Handshake WSS
+    const rawCountry = req.headers["cf-ipcountry"] || req.headers["x-country-code"] || req.headers["x-test-country"];
+    const code = (rawCountry && typeof rawCountry === "string") ? rawCountry.trim().toUpperCase() : "BR";
+
+    // Brasil é 100% livre: aceita conexão incondicionalmente
+    if (code === "BR") {
+      // Conexão permitida sem bloqueio
+    } else if ((RED_ZONE_COUNTRIES as readonly string[]).includes(code)) {
+      socket.close(4403, "Red zone regulatory block: retail trading prohibited");
+      return;
+    } else {
+      const allowedCountries = ["BR", "MX", "CO", "AR", "CL", "PE"];
+      if (/^[A-Z]{2}$/.test(code) && !allowedCountries.includes(code)) {
+        socket.close(4403, "Geo-blocked: region not supported");
+        return;
+      }
+    }
+
     let isAuthenticated = false;
     let currentUserId: string | null = null;
     const clientSubscriptions = new Set<string>();

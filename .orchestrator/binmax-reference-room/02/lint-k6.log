@@ -1,0 +1,13 @@
+
+D:\brokerproject\tests\load\contracts-multi.k6.js
+  1:11  error  'open' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\tests\load\max-pairs-ramp.k6.js
+   1:11  error  'open' is defined but never used                     @typescript-eslint/no-unused-vars
+  12:7   error  'tickIntervalMs' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\brokerproject\tests\load\ws-fanout.k6.js
+  1:11  error  'open' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 4 problems (4 errors, 0 warnings)
+

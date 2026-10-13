@@ -1,0 +1,188 @@
+[
+  {
+    "Names": "fase1-test-websocket-gateway-1",
+    "Image": "fase1-test-websocket-gateway",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": "0.0.0.0:3006->3000/tcp, [::]:3006->3000/tcp"
+  },
+  {
+    "Names": "fase1-test-api-1",
+    "Image": "fase1-test-api",
+    "Status": "Up 15 seconds (healthy)",
+    "Ports": "0.0.0.0:3005->3000/tcp, [::]:3005->3000/tcp"
+  },
+  {
+    "Names": "fase1-test-blnk-1",
+    "Image": "cae90ac9449e",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": "8080/tcp"
+  },
+  {
+    "Names": "fase1-test-keycloak-1",
+    "Image": "09a381c715ab",
+    "Status": "Exited (137) 24 hours ago",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-blnk-postgres-1",
+    "Image": "1a6ab3f5345e",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": "5432/tcp"
+  },
+  {
+    "Names": "fase1-test-keycloak-postgres-1",
+    "Image": "1a6ab3f5345e",
+    "Status": "Exited (137) 24 hours ago",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-tick-engine-1",
+    "Image": "fase1-test-tick-engine",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-postgres-1",
+    "Image": "1a6ab3f5345e",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": "5432/tcp"
+  },
+  {
+    "Names": "fase1-test-frontend-1",
+    "Image": "fase1-test-frontend",
+    "Status": "Created",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-admin-panel-1",
+    "Image": "fase1-test-admin-panel",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": "127.0.0.1:5174->3000/tcp"
+  },
+  {
+    "Names": "fase1-test-alloy-1",
+    "Image": "2aa2099af76c",
+    "Status": "Exited (2) 24 hours ago",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-grafana-1",
+    "Image": "b28bae15e219",
+    "Status": "Exited (2) 24 hours ago",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-wallet-adapter-1",
+    "Image": "fase1-test-wallet-adapter",
+    "Status": "Up 15 seconds (healthy)",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-reconciler-1",
+    "Image": "fase1-test-reconciler",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-settlement-worker-1",
+    "Image": "fase1-test-settlement-worker",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-loki-probe-1",
+    "Image": "0a7108bf6c7b",
+    "Status": "Exited (137) 24 hours ago",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-blnk-probe-1",
+    "Image": "0a7108bf6c7b",
+    "Status": "Exited (137) 24 hours ago",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-toxiproxy-1",
+    "Image": "9378ed52a28b",
+    "Status": "Exited (0) 24 hours ago",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-loki-1",
+    "Image": "1107dd5274e0",
+    "Status": "Exited (137) 24 hours ago",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-chart-api-1",
+    "Image": "0a7108bf6c7b",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-candle-worker-1",
+    "Image": "fase1-test-candle-worker",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-outbox-relay-1",
+    "Image": "fase1-test-outbox-relay",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-expiry-relay-1",
+    "Image": "fase1-test-expiry-relay",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-expiry-scheduler-1",
+    "Image": "fase1-test-expiry-scheduler",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-prometheus-1",
+    "Image": "efd719c99d83",
+    "Status": "Exited (0) 24 hours ago",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-private-relay-1",
+    "Image": "fase1-test-private-relay",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-wallet-relay-1",
+    "Image": "fase1-test-wallet-relay",
+    "Status": "Up 15 seconds (healthy)",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-observability-1",
+    "Image": "fase1-test-observability",
+    "Status": "Exited (137) 24 hours ago",
+    "Ports": ""
+  },
+  {
+    "Names": "fase1-test-blnk-redis-1",
+    "Image": "c6eabf748fc7",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": "6379/tcp"
+  },
+  {
+    "Names": "fase1-test-redis-1",
+    "Image": "c6eabf748fc7",
+    "Status": "Up 14 seconds (healthy)",
+    "Ports": "6379/tcp"
+  },
+  {
+    "Names": "fase1-test-mailpit-1",
+    "Image": "b68349e3a014",
+    "Status": "Exited (0) 24 hours ago",
+    "Ports": ""
+  }
+]

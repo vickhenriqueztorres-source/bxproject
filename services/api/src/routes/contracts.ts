@@ -6,10 +6,15 @@ export const contractRoutes: FastifyPluginAsync = async (server) => {
   const contractService = new ContractService(server.pg, server.redis);
 
   // POST /api/v1/contracts (Abertura de contrato UP/DOWN)
+  const preHandlers = [(server as any).authenticate];
+  if (typeof (server as any).enforceTradingEnabled === 'function') {
+    preHandlers.push((server as any).enforceTradingEnabled);
+  }
+
   server.post(
     "/api/v1/contracts",
     {
-      preHandler: [(server as any).authenticate]
+      preHandler: preHandlers
     },
     async (request, reply) => {
       const user = request.user;

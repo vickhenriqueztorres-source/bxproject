@@ -1,0 +1,19 @@
+{
+  "call": "SUBE",
+  "put": "BAJA",
+  "stake": "Monto",
+  "payout": "Retorno",
+  "profit": "Ganancia",
+  "duration": "Expiración",
+  "seconds": "segundos",
+  "market_closed": "Mercado cerrado",
+  "trading_disabled": "Operaciones pausadas",
+  "open_contract": "Abrir operación",
+  "strike_price": "Precio de entrada",
+  "insufficient_balance": "Saldo insuficiente. Deposita y sigue operando.",
+  "empty_portfolio": "Aún no tienes operaciones abiertas. Elige SUBE o BAJA para empezar.",
+  "empty_history": "Aún no tienes operaciones cerradas.",
+  "win_toast": "¡Ganaste!",
+  "loss_toast": "No esta vez",
+  "draw_toast": "Empate"
+}

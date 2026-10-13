@@ -108,8 +108,10 @@ export class ContractService {
     const entryPrice = stateRes.rows[0].last_price.toString();
     const baseTime = lastTs;
 
-    // Expiração em 60 segundos (D-10)
-    const expiresAt = new Date(baseTime.getTime() + 60000);
+    // Expiração com piso inviolável de 30s (D-10 / Modelo Lucrativo IQ Option)
+    const requestedDuration = dto.duration_seconds ?? 60;
+    const safeDurationSeconds = Math.max(30, Math.min(300, requestedDuration));
+    const expiresAt = new Date(baseTime.getTime() + safeDurationSeconds * 1000);
 
     // 3. Validação do teto de risco de 3% no Redis
     const riskCheck = await this.riskManager.checkAndReserveRisk({

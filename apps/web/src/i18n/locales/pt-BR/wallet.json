@@ -1,0 +1,21 @@
+{
+  "demo_badge": "CONTA DEMO",
+  "live_badge": "CONTA REAL",
+  "deposit": "Depositar",
+  "reload_demo": "Recarregar Demo",
+  "reload_success": "Saldo demo restaurado para $ 10.000,00",
+  "balance": "Saldo",
+  "withdraw_demo": {
+    "notice": "Conta demo · Simulação de saque. Não serão enviados fundos reais.",
+    "unavailable": "Não disponível nesta demonstração",
+    "action": "Simular solicitação",
+    "processing": "Simulando solicitação...",
+    "complete": "Simulação concluída",
+    "complete_message": "Esta demonstração não envia fundos nem confirma uma transferência bancária.",
+    "kyc": "Primeiro saque requer verificação de identidade. Esta simulação não verifica nem aprova sua identidade.",
+    "last_withdraw": "Último saque",
+    "failure": "Não foi possível concluir a simulação. Você pode tentar novamente.",
+    "amount": "Valor simulado",
+    "fee": "Não se aplica na simulação"
+  }
+}

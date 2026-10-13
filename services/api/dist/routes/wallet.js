@@ -1,9 +1,6 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.walletRoutes = void 0;
-const wallet_adapter_1 = require("@broker/wallet-adapter");
-const walletRoutes = async (server) => {
-    const blnkClient = new wallet_adapter_1.BlnkClient(process.env.BLNK_URL || "http://localhost:5001");
+import { BlnkClient } from "@broker/wallet-adapter";
+export const walletRoutes = async (server) => {
+    const blnkClient = new BlnkClient(process.env.BLNK_URL || "http://localhost:5001");
     // GET /api/v1/wallet (Saldo da carteira demo no Blnk)
     server.get("/api/v1/wallet", {
         preHandler: [server.authenticate]
@@ -45,4 +42,3 @@ const walletRoutes = async (server) => {
         }
     });
 };
-exports.walletRoutes = walletRoutes;

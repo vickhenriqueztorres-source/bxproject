@@ -1,0 +1,22 @@
+[
+  {
+    "url": "http://127.0.0.1:5173/",
+    "status": 200,
+    "error": null
+  },
+  {
+    "url": "http://127.0.0.1:3005/healthz",
+    "status": null,
+    "error": "HttpRequestException"
+  },
+  {
+    "url": "http://127.0.0.1:3005/readyz",
+    "status": null,
+    "error": "HttpRequestException"
+  },
+  {
+    "url": "http://127.0.0.1:8080/realms/demo/.well-known/openid-configuration",
+    "status": null,
+    "error": "HttpRequestException"
+  }
+]

@@ -35,6 +35,7 @@ import { PasswordRecoveryPage } from './pages/PasswordRecoveryPage';
 import { DepositPage } from './pages/DepositPage';
 import { WithdrawPage } from './pages/WithdrawPage';
 import { VerificationPage } from './pages/VerificationPage';
+import { EmailVerificationPage } from './pages/EmailVerificationPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { TournamentsPage } from './pages/TournamentsPage';
@@ -54,6 +55,7 @@ const symbol = candidate && /^[A-Z0-9_]{3,32}$/.test(candidate)
   ? normalizeSymbol(candidate) : 'VOL_50';
 
 function Dashboard({ user, symbol }: { user: User; symbol: string }) {
+  const { navigate } = useRouter();
   const queryClient = useQueryClient();
   const [announcement, setAnnouncement] = useState('');
   const [settledToast, setSettledToast] = useState<{
@@ -209,6 +211,14 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
     setAnnouncement('Conta prática recarregada: US$ 10.000,00 adicionados com sucesso.');
   };
 
+  const handleSignOut = useCallback(async () => {
+    try {
+      await signOut('/');
+    } finally {
+      navigate('/');
+    }
+  }, [navigate]);
+
   // Lista de símbolos dinamicamente monitorados em tempo real (abas abertas + contratos ativos)
   const trackedSymbols = useMemo(() => {
     const set = new Set<string>(openTabs);
@@ -250,7 +260,7 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
           isLive={feed.connected && !feed.stale}
           latencyMs={feed.connected ? 16 : 88}
           onResetDemo={handleResetDemo}
-          onSignOut={() => void signOut()}
+          onSignOut={handleSignOut}
           currentLayout={gridLayout}
           onSelectLayout={setGridLayout}
           contracts={contracts.data ?? []}
@@ -370,40 +380,10 @@ export function TraderoomShell() {
     let active = true;
     const start = async () => {
       try {
-        if (isGuestMode()) {
-          const session = AuthService.getSession();
-          if (session?.user) {
-            if (active) {
-              setUser({
-                profile: {
-                  sub: session.user.id,
-                  email: session.user.email,
-                  name: session.user.name,
-                },
-                access_token: session.token,
-                expires_at: Math.floor(Date.now() / 1000) + 86400,
-              } as unknown as User);
-            }
-          } else {
-            if (active) setUser(guestUser);
-          }
-          return;
-        }
-        const loaded = window.location.pathname === '/callback'
-          ? await finishSignin() : await userManager.getUser();
-        if (loaded && typeof loaded.state === 'object' && loaded.state !== null &&
-            'symbol' in loaded.state && typeof loaded.state.symbol === 'string' &&
-            /^[A-Z0-9_]{3,32}$/.test(loaded.state.symbol)) {
-          setSelectedSymbol(loaded.state.symbol);
-        }
-        if (window.location.pathname === '/callback') window.history.replaceState(null, '', '/');
-        if (loaded) {
-          if (active) setUser(loaded);
-        } else {
-          // Inicializa automaticamente no modo convidado demo para exibição imediata do traderoom
-          setGuestMode(true);
-          const session = AuthService.getSession();
-          if (session?.user && active) {
+        const session = AuthService.getSession();
+        if (session?.user && session?.token) {
+          setGuestMode(false);
+          if (active) {
             setUser({
               profile: {
                 sub: session.user.id,
@@ -413,27 +393,28 @@ export function TraderoomShell() {
               access_token: session.token,
               expires_at: Math.floor(Date.now() / 1000) + 86400,
             } as unknown as User);
-          } else if (active) {
-            setUser(guestUser);
           }
+          return;
+        }
+
+        const loaded = window.location.pathname === '/callback'
+          ? await finishSignin() : await userManager.getUser();
+        if (loaded && typeof loaded.state === 'object' && loaded.state !== null &&
+            'symbol' in loaded.state && typeof loaded.state.symbol === 'string' &&
+            /^[A-Z0-9_]{3,32}$/.test(loaded.state.symbol)) {
+          setSelectedSymbol(loaded.state.symbol);
+        }
+        if (window.location.pathname === '/callback') window.history.replaceState(null, '', '/');
+        if (loaded) {
+          setGuestMode(false);
+          if (active) setUser(loaded);
+        } else {
+          setGuestMode(true);
+          if (active) setUser(guestUser);
         }
       } catch {
-        // Fallback resiliente para convidado demo
         setGuestMode(true);
-        const session = AuthService.getSession();
-        if (session?.user && active) {
-          setUser({
-            profile: {
-              sub: session.user.id,
-              email: session.user.email,
-              name: session.user.name,
-            },
-            access_token: session.token,
-            expires_at: Math.floor(Date.now() / 1000) + 86400,
-          } as unknown as User);
-        } else if (active) {
-          setUser(guestUser);
-        }
+        if (active) setUser(guestUser);
       } finally { if (active) setLoading(false); }
     };
     void start();
@@ -477,6 +458,9 @@ function MainRouter() {
   }
   if (currentPath === '/recuperar') {
     return <PasswordRecoveryPage />;
+  }
+  if (currentPath === '/verificar' || currentPath === '/verificar-email') {
+    return <EmailVerificationPage />;
   }
 
   // Rotas Financeiras (Billetera / Cajero)

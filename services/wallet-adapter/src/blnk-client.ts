@@ -84,7 +84,7 @@ export class BlnkClient {
         if (!response.ok) {
           const body = await response.text();
           // Se for erro de idempotência ou conflito conhecido, não retenta
-          if (response.status === 409 || response.status === 422) {
+          if (response.status === 400 || response.status === 401 || response.status === 403 || response.status === 409 || response.status === 422) {
             throw new Error(`BLNK_CLIENT_ERROR_${response.status}: ${body}`);
           }
           throw new Error(`BLNK_HTTP_ERROR_${response.status}: ${body}`);
@@ -96,7 +96,7 @@ export class BlnkClient {
       } catch (err: any) {
         clearTimeout(timer);
         if (attempt >= maxAttempts || err.message?.startsWith("BLNK_CLIENT_ERROR")) {
-          this.recordFailure();
+          if (!err.message?.startsWith("BLNK_CLIENT_ERROR")) this.recordFailure();
           throw err;
         }
         // Exponential backoff com jitter: 50ms * 2^attempt + jitter
@@ -117,8 +117,8 @@ export class BlnkClient {
         method: "POST",
         body: JSON.stringify({ name: "Broker Demo Ledger", id: this.LEDGER_ID })
       });
-    } catch {
-      // Ignora se o ledger já existe
+    } catch (err: any) {
+      if (!err.message?.startsWith("BLNK_CLIENT_ERROR_409")) throw err;
     }
 
     const accounts = [
@@ -133,8 +133,8 @@ export class BlnkClient {
           method: "POST",
           body: JSON.stringify(acc)
         });
-      } catch {
-        // Ignora se conta já existe
+      } catch (err: any) {
+        if (!err.message?.startsWith("BLNK_CLIENT_ERROR_409")) throw err;
       }
     }
   }
@@ -157,8 +157,8 @@ export class BlnkClient {
           currency: "USD"
         })
       });
-    } catch {
-      // Já criada
+    } catch (err: any) {
+      if (!err.message?.startsWith("BLNK_CLIENT_ERROR_409")) throw err;
     }
 
     // 2. Cria conta de garantia
@@ -172,8 +172,8 @@ export class BlnkClient {
           currency: "USD"
         })
       });
-    } catch {
-      // Já criada
+    } catch (err: any) {
+      if (!err.message?.startsWith("BLNK_CLIENT_ERROR_409")) throw err;
     }
 
     // 3. Credita saldo inicial demo de US$ 10.000,00 com referência idempotente

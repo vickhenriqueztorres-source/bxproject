@@ -1,29 +1,25 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.MAX_INDIVIDUAL_TICK_AGE_MS = exports.MAX_CROSS_ASSET_SKEW_MS = void 0;
-exports.validateCrossAssetSync = validateCrossAssetSync;
-exports.MAX_CROSS_ASSET_SKEW_MS = 2000;
-exports.MAX_INDIVIDUAL_TICK_AGE_MS = 5000;
-function validateCrossAssetSync(tickA, tickB, maxSkewMs = exports.MAX_CROSS_ASSET_SKEW_MS, now = Date.now()) {
+export const MAX_CROSS_ASSET_SKEW_MS = 2000;
+export const MAX_INDIVIDUAL_TICK_AGE_MS = 5000;
+export function validateCrossAssetSync(tickA, tickB, maxSkewMs = MAX_CROSS_ASSET_SKEW_MS, now = Date.now()) {
     const ageA = Math.max(0, now - tickA.event_time);
     const ageB = Math.max(0, now - tickB.event_time);
     // 1. Validação de frescor individual (nenhum dos dois pode ser stale > 5s)
-    if (ageA > exports.MAX_INDIVIDUAL_TICK_AGE_MS) {
+    if (ageA > MAX_INDIVIDUAL_TICK_AGE_MS) {
         return {
             synchronized: false,
             skewMs: Math.abs(tickA.event_time - tickB.event_time),
             symbolA: tickA.symbol,
             symbolB: tickB.symbol,
-            error: `TICK_STALE_${tickA.symbol}: Cotação com atraso de ${ageA}ms (> ${exports.MAX_INDIVIDUAL_TICK_AGE_MS}ms)`,
+            error: `TICK_STALE_${tickA.symbol}: Cotação com atraso de ${ageA}ms (> ${MAX_INDIVIDUAL_TICK_AGE_MS}ms)`,
         };
     }
-    if (ageB > exports.MAX_INDIVIDUAL_TICK_AGE_MS) {
+    if (ageB > MAX_INDIVIDUAL_TICK_AGE_MS) {
         return {
             synchronized: false,
             skewMs: Math.abs(tickA.event_time - tickB.event_time),
             symbolA: tickA.symbol,
             symbolB: tickB.symbol,
-            error: `TICK_STALE_${tickB.symbol}: Cotação com atraso de ${ageB}ms (> ${exports.MAX_INDIVIDUAL_TICK_AGE_MS}ms)`,
+            error: `TICK_STALE_${tickB.symbol}: Cotação com atraso de ${ageB}ms (> ${MAX_INDIVIDUAL_TICK_AGE_MS}ms)`,
         };
     }
     // 2. Validação de descompasso mútuo (skew) entre ambos os ativos

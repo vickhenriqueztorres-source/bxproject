@@ -1,0 +1,38 @@
+[
+  {
+    "rect": {
+      "height": 654,
+      "width": 72,
+      "x": 0,
+      "y": 56
+    },
+    "selector": "[aria-label=\"Navegação do Terminal\"]"
+  },
+  {
+    "rect": {
+      "height": 654,
+      "width": 1099,
+      "x": 72,
+      "y": 56
+    },
+    "selector": "[aria-label=\"Gráfico de Trading\"]"
+  },
+  {
+    "rect": {
+      "height": 654,
+      "width": 195,
+      "x": 1171,
+      "y": 56
+    },
+    "selector": "[aria-label=\"Painel de Ordens\"]"
+  },
+  {
+    "rect": {
+      "height": 17,
+      "width": 42,
+      "x": 1253.4375,
+      "y": 92.5
+    },
+    "selector": "#binmax-stake-input"
+  }
+]
