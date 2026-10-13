@@ -80,3 +80,23 @@ export function getMotionTransition(type: keyof typeof PRECISION_MOTION = 'tBase
   const duration = typeof PRECISION_MOTION[type] === 'number' ? `${PRECISION_MOTION[type]}ms` : '180ms';
   return `${properties} ${duration} ${PRECISION_MOTION.ease}`;
 }
+
+/**
+ * BM_COLOR — fonte única de cor para o código TS da sala (TRADEROOM_POLISH).
+ * Valores do manual (docs/identidade-visual.md) e iguais a styles/tokens-precision.css.
+ */
+export const BM_COLOR = Object.freeze({
+  profit: PRECISION_COLORS.profit,
+  profitHover: PRECISION_COLORS.profitHover,
+  loss: PRECISION_COLORS.loss,
+  lossHover: PRECISION_COLORS.lossHover,
+  prata: PRECISION_TEXT.main,
+  blanco: PRECISION_TEXT.strong,
+  aco: PRECISION_TEXT.muted,
+  quiet: PRECISION_TEXT.quiet,
+  bg0: PRECISION_SURFACES.bg0,
+  bg1: PRECISION_SURFACES.bg1,
+  bg2: PRECISION_SURFACES.bg2,
+  bg3: PRECISION_SURFACES.bg3,
+  line: PRECISION_SURFACES.line,
+} as const);
