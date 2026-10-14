@@ -31,6 +31,16 @@ import { ChartDrawingToolbar } from './ChartDrawingToolbar';
 import { ChartDrawingOverlay } from './ChartDrawingOverlay';
 import { isNewTraderoomEnabled } from '../lib/feature-flags';
 import { isTraderoomPolishEnabled } from '../lib/traderoom-polish';
+
+// Rótulos da telemetria com TRADEROOM_POLISH: legíveis (11px), na fonte de interface.
+const POLISH_TELEMETRY_LABEL = {
+  fontSize: '11px',
+  color: 'var(--text-muted)',
+  fontWeight: 500,
+  letterSpacing: '0.02em',
+  textTransform: 'uppercase',
+  fontFamily: 'var(--font-ui)',
+} as const;
 import { ASSET_CATALOG, type AssetCategory, isSameAsset, getAssetDisplayName, getAxisPrecision, POLISH_CHART_LOCALE } from '../catalog/assets';
 import { AssetFlagBadge } from '../components/header/AssetFlagBadge';
 import {
@@ -932,13 +942,16 @@ export function PriceChart({
         .map((c) => c.id)
     );
 
-    // Remover linhas de contratos liquidados, removidos ou que mudaram de série (candles <-> line)
+    // Remover linhas de contratos liquidados, removidos ou que mudaram de série (candles <-> line).
+    // Com TRADEROOM_POLISH o OrderFlagsOverlay desenha uma linha por strike; as nativas saem.
     for (const [id, entry] of strikeLinesMap.current.entries()) {
-      if (!currentOpenIds.has(id) || entry.series !== activeSeries) {
+      if (polish || !currentOpenIds.has(id) || entry.series !== activeSeries) {
         safeRemoveStrikeLine(entry);
         strikeLinesMap.current.delete(id);
       }
     }
+
+    if (polish) return;
 
     // Criar linhas de strike para contratos abertos
     for (const contract of effectiveContracts) {
@@ -969,7 +982,7 @@ export function PriceChart({
         strikeLinesMap.current.set(contract.id, { line, series: activeSeries });
       } catch { /* ignore if series is disposed */ }
     }
-  }, [effectiveContracts, chartType, tick?.price, isBinmax, isChartReady, symbol, safeRemoveStrikeLine]);
+  }, [effectiveContracts, chartType, tick?.price, isBinmax, polish, isChartReady, symbol, safeRemoveStrikeLine]);
 
   const handleToggleIndicator = (id: string) => {
     setIndicators((prev) =>
@@ -1318,7 +1331,7 @@ export function PriceChart({
                     <span style={{ fontSize: '13px' }}>⏱</span>
                     <span>{timeFormatted}</span>
                   </div>
-                  <span style={{ fontSize: '9px', color: 'var(--text-quiet)', fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                  <span style={polish ? POLISH_TELEMETRY_LABEL : { fontSize: '9px', color: 'var(--text-quiet)', fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
                     HORA DE COMPRA
                   </span>
                 </div>
@@ -1330,7 +1343,7 @@ export function PriceChart({
                   <span style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600, fontFamily: "'Geist Mono', monospace", fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.2px' }}>
                     {`$${(totalStakeMinor / 100).toFixed(2)}`}
                   </span>
-                  <span style={{ fontSize: '9px', color: 'var(--text-quiet)', fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                  <span style={polish ? POLISH_TELEMETRY_LABEL : { fontSize: '9px', color: 'var(--text-quiet)', fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
                     INVERSIÓN TOTAL
                   </span>
                 </div>
@@ -1342,7 +1355,7 @@ export function PriceChart({
                   <span style={{ color: isTradeWinning ? 'var(--profit)' : 'var(--loss)', fontSize: '20px', fontWeight: 700, fontFamily: "'Geist Mono', monospace", fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.2px' }}>
                     {isTradeWinning ? `+$${(netPnlMinor / 100).toFixed(2)}` : `-$${(Math.abs(netPnlMinor) / 100).toFixed(2)}`}
                   </span>
-                  <span style={{ fontSize: '9px', color: 'var(--text-quiet)', fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                  <span style={polish ? POLISH_TELEMETRY_LABEL : { fontSize: '9px', color: 'var(--text-quiet)', fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
                     GANANCIA ESPERADA
                   </span>
                 </div>

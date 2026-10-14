@@ -4,6 +4,10 @@ import { renderToString } from 'react-dom/server';
 import { OrderFlagsOverlay } from './OrderFlagsOverlay';
 import { isSameAsset, getAssetMeta, normalizeSymbol } from '../catalog/assets';
 import type { Contract } from '../api/client';
+import { setTraderoomPolishEnabled } from '../lib/traderoom-polish';
+
+// Este arquivo cobre o overlay anterior (uma etiqueta por contrato). Ver chart/subetapa-polish-04-positions.
+setTraderoomPolishEnabled(false);
 
 describe('SUBETAPA 7.4 — Bateria Integrada de Testes: Precisão de Taxa, Linhas de Strike & Invariantes', () => {
   const mockSeries = {

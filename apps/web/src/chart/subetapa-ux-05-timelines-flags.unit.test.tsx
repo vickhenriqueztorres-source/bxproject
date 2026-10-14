@@ -5,6 +5,10 @@ import { TimeLinesOverlay } from './TimeLinesOverlay';
 import { OrderFlagsOverlay } from './OrderFlagsOverlay';
 import { setFeatureFlagForTesting } from '../lib/feature-flags';
 import type { Contract } from '../api/client';
+import { setTraderoomPolishEnabled } from '../lib/traderoom-polish';
+
+// Este arquivo cobre o overlay anterior (uma etiqueta por contrato). Ver chart/subetapa-polish-04-positions.
+setTraderoomPolishEnabled(false);
 
 describe('SUBETAPA UX 05: Sofisticação de Hora de Compra, Expiração e Flags de Ordens', () => {
   const mockContracts: Contract[] = [

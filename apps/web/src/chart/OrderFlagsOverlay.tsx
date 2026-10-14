@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import type { Contract } from '../api/client';
 import { formatMinor } from '../lib/money';
 import { isNewTraderoomEnabled } from '../lib/feature-flags';
 import { ExpirationResultPin } from './ExpirationResultPin';
 import { getAssetMeta } from '../catalog/assets';
+import { isTraderoomPolishEnabled } from '../lib/traderoom-polish';
 
 export interface OrderFlagsOverlayProps {
   contracts: Contract[];
@@ -13,6 +14,87 @@ export interface OrderFlagsOverlayProps {
   containerHeight: number;
   activeSeries: ISeriesApi<'Candlestick'> | ISeriesApi<'Area'> | null;
   chartInstance?: IChartApi | null;
+}
+
+/** Posições abertas com a mesma direção e o mesmo strike, desenhadas como uma linha só. */
+export interface FlagGroup {
+  key: string;
+  direction: 'UP' | 'DOWN';
+  strike: number;
+  strikeFormatted: string;
+  count: number;
+  /** Stake de cada contrato quando todos são iguais; null quando variam. */
+  stakeMinor: number | null;
+  totalStakeMinor: number;
+  isWinning: boolean;
+  /** Segundos até a expiração mais próxima do grupo. */
+  secondsLeft: number;
+}
+
+/** Máximo de etiquetas visíveis com TRADEROOM_POLISH; o resto vira "+N". */
+const MAX_POLISH_FLAGS = 3;
+const FLAG_MIN_GAP_PX = 18;
+
+export function groupOpenContracts(contracts: Contract[], currentPrice: number | null, nowMs: number): FlagGroup[] {
+  const price = currentPrice !== null && Number.isFinite(currentPrice) ? currentPrice : null;
+  const groups = new Map<string, FlagGroup>();
+
+  for (const c of contracts) {
+    if (c.status !== 'OPEN') continue;
+    const strike = Number(c.strike_price ?? c.entry_price);
+    const precision = getAssetMeta(c.symbol || '').precision;
+    const strikeFormatted = Number.isFinite(strike) ? strike.toFixed(precision) : '—';
+    const direction: 'UP' | 'DOWN' = c.direction === 'DOWN' ? 'DOWN' : 'UP';
+    const key = `${direction}:${strikeFormatted}`;
+    const rawStake = Number(c.stake_minor);
+    const stakeMinor = Number.isFinite(rawStake) && rawStake > 0 ? rawStake : 0;
+    const expMs = Date.parse(c.expires_at);
+    const secondsLeft = Number.isFinite(expMs) ? Math.max(0, Math.ceil((expMs - nowMs) / 1000)) : 0;
+    const isWinning = price !== null && Number.isFinite(strike) && (direction === 'UP' ? price > strike : price < strike);
+
+    const existing = groups.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.totalStakeMinor += stakeMinor;
+      if (existing.stakeMinor !== stakeMinor) existing.stakeMinor = null;
+      existing.secondsLeft = Math.min(existing.secondsLeft, secondsLeft);
+    } else {
+      groups.set(key, { key, direction, strike, strikeFormatted, count: 1, stakeMinor, totalStakeMinor: stakeMinor, isWinning, secondsLeft });
+    }
+  }
+
+  return [...groups.values()];
+}
+
+/**
+ * Posições verticais das etiquetas sem sobreposição: mantém a ordem, separa por minGap
+ * e respeita [minY, maxY]. Devolve na mesma ordem da entrada.
+ */
+export function layoutFlagRows(ys: number[], minGap: number, minY: number, maxY: number): number[] {
+  const order = ys
+    .map((y, i) => ({ y: Number.isFinite(y) ? y : minY, i }))
+    .sort((a, b) => a.y - b.y);
+  const rows = order.map((o) => Math.min(maxY, Math.max(minY, o.y)));
+
+  for (let k = 1; k < rows.length; k++) rows[k] = Math.max(rows[k], rows[k - 1] + minGap);
+  if (rows.length > 0 && rows[rows.length - 1] > maxY) {
+    rows[rows.length - 1] = maxY;
+    for (let k = rows.length - 2; k >= 0; k--) rows[k] = Math.min(rows[k], rows[k + 1] - minGap);
+  }
+  if (rows.length > 0 && rows[0] < minY) {
+    rows[0] = minY;
+    for (let k = 1; k < rows.length; k++) rows[k] = Math.max(rows[k], rows[k - 1] + minGap);
+  }
+
+  const result: number[] = new Array(ys.length);
+  order.forEach((o, k) => { result[o.i] = rows[k]; });
+  return result;
+}
+
+function formatGroupStake(g: FlagGroup): string {
+  const dollars = (minor: number) => (minor % 100 === 0 ? `$${minor / 100}` : `$${(minor / 100).toFixed(2)}`);
+  if (g.stakeMinor === null) return `${g.count} · ${dollars(g.totalStakeMinor)}`;
+  return g.count > 1 ? `${g.count} × ${dollars(g.stakeMinor)}` : dollars(g.stakeMinor);
 }
 
 export function OrderFlagsOverlay({
@@ -27,6 +109,8 @@ export function OrderFlagsOverlay({
   const [, setRedrawKey] = useState(0);
   const [dismissedPinIds, setDismissedPinIds] = useState<Set<string>>(new Set());
   const isBinmax = isNewTraderoomEnabled();
+  // Acabamento profissional (TRADEROOM_POLISH). Desligada = overlay idêntico ao anterior.
+  const polish = isBinmax && isTraderoomPolishEnabled();
 
   // Atualizar contagem regressiva em tempo real a cada 250ms (G-09)
   useEffect(() => {
@@ -70,6 +154,145 @@ export function OrderFlagsOverlay({
   const rightScaleWidth = 68;
   const lineEndX = Math.max(100, containerWidth - rightScaleWidth);
 
+  // TRADEROOM_POLISH: uma linha fina por strike, no máximo 3 etiquetas sem sobreposição e "+N".
+  let polishLayer: React.ReactNode = null;
+  if (polish && openContracts.length > 0) {
+    const groups = groupOpenContracts(openContracts, currentPrice, now);
+    const lineYs = groups.map((g, i) => {
+      let y: number | null = null;
+      if (activeSeries && Number.isFinite(g.strike)) {
+        try {
+          const coord = activeSeries.priceToCoordinate(g.strike);
+          if (typeof coord === 'number' && Number.isFinite(coord)) y = coord;
+        } catch {
+          y = null;
+        }
+      }
+      return y !== null ? Math.max(20, Math.min(containerHeight - 20, y)) : 80 + i * 42;
+    });
+    const tagYs = layoutFlagRows(lineYs, FLAG_MIN_GAP_PX, 12, containerHeight - 12);
+    // Etiquetas visíveis: as que expiram primeiro
+    const visible = groups
+      .map((g, i) => ({ g, y: lineYs[i] }))
+      .sort((a, b) => a.g.secondsLeft - b.g.secondsLeft)
+      .slice(0, MAX_POLISH_FLAGS);
+    const flagYs = layoutFlagRows(visible.map((v) => v.y), FLAG_MIN_GAP_PX, 24, containerHeight - 48);
+    const hiddenCount = groups.length - visible.length;
+    const stateColor = (g: FlagGroup) => (g.isWinning ? 'var(--profit)' : 'var(--loss)');
+
+    polishLayer = (
+      <>
+        <svg
+          className="order-strike-lines-svg"
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+        >
+          {groups.map((g, i) => (
+            <line
+              key={`strike-line-${g.key}`}
+              x1={0}
+              y1={lineYs[i]}
+              x2={lineEndX}
+              y2={lineYs[i]}
+              stroke={stateColor(g)}
+              strokeOpacity={0.7}
+              strokeWidth={1}
+              strokeDasharray="4 4"
+            />
+          ))}
+        </svg>
+
+        {groups.map((g, i) => (
+          <div
+            key={`strike-tag-${g.key}`}
+            className="axis-strike-tag"
+            data-testid={`axis-strike-group-${g.key}`}
+            style={{
+              position: 'absolute',
+              top: `${tagYs[i]}px`,
+              right: '4px',
+              transform: 'translateY(-50%)',
+              background: stateColor(g),
+              color: 'var(--bg-0)',
+              fontSize: '11px',
+              fontWeight: 600,
+              fontFamily: 'var(--font-mono)',
+              fontVariantNumeric: 'tabular-nums',
+              padding: '2px 5px',
+              borderRadius: '4px',
+              pointerEvents: 'none',
+            }}
+          >
+            {g.strikeFormatted}
+          </div>
+        ))}
+
+        {visible.map(({ g }, k) => {
+          const mins = Math.floor(g.secondsLeft / 60).toString().padStart(2, '0');
+          const secs = (g.secondsLeft % 60).toString().padStart(2, '0');
+          return (
+            <div
+              key={`flag-group-${g.key}`}
+              className="order-strike-flag"
+              data-testid={`order-flag-group-${g.key}`}
+              style={{
+                position: 'absolute',
+                top: `${flagYs[k]}px`,
+                right: '76px',
+                transform: 'translateY(-50%)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                background: 'var(--bg-2)',
+                border: `1px solid ${stateColor(g)}`,
+                color: 'var(--text-strong)',
+                fontSize: '11px',
+                fontWeight: 600,
+                fontFamily: 'var(--font-mono)',
+                fontVariantNumeric: 'tabular-nums',
+                whiteSpace: 'nowrap',
+                pointerEvents: 'none',
+                transition: 'top var(--t-base) var(--ease)',
+              }}
+            >
+              <span aria-hidden="true" style={{ color: g.direction === 'UP' ? 'var(--profit)' : 'var(--loss)' }}>
+                {g.direction === 'UP' ? '▲' : '▼'}
+              </span>
+              <span>{formatGroupStake(g)}</span>
+              <span style={{ color: 'var(--text-muted)' }}>@{g.strikeFormatted}</span>
+              <span style={{ color: 'var(--text-muted)' }}>{`${mins}:${secs}`}</span>
+            </div>
+          );
+        })}
+
+        {hiddenCount > 0 && (
+          <div
+            data-testid="order-flags-more"
+            title="Ver todas en Portafolio"
+            style={{
+              position: 'absolute',
+              top: `${Math.min(containerHeight - 24, (flagYs.length ? Math.max(...flagYs) : 24) + 24)}px`,
+              right: '76px',
+              transform: 'translateY(-50%)',
+              padding: '2px 8px',
+              borderRadius: '6px',
+              background: 'var(--bg-2)',
+              border: '1px solid var(--line)',
+              color: 'var(--text-muted)',
+              fontSize: '11px',
+              fontWeight: 600,
+              fontFamily: 'var(--font-mono)',
+              pointerEvents: 'none',
+            }}
+          >
+            {`+${hiddenCount}`}
+          </div>
+        )}
+      </>
+    );
+  }
+
   return (
     <div
       className="order-flags-overlay"
@@ -85,7 +308,7 @@ export function OrderFlagsOverlay({
       }}
     >
       {/* Camada SVG de Alta Fidelidade: Linhas Horizontais de Strike e Glow (Subetapa 7.2) */}
-      {openContracts.length > 0 && (
+      {!polish && openContracts.length > 0 && (
         <svg
           className="order-strike-lines-svg"
           style={{
@@ -138,7 +361,7 @@ export function OrderFlagsOverlay({
       )}
 
       {/* Badges de Operação Flutuantes & Marcadores de Taxa */}
-      {openContracts.map((contract, index) => {
+      {!polish && openContracts.map((contract, index) => {
         const rawPrice = contract.strike_price ?? contract.entry_price ?? currentPrice ?? 0;
         const strikePrice = Number(rawPrice);
         const isUp = contract.direction === 'UP';
@@ -337,6 +560,8 @@ export function OrderFlagsOverlay({
           </div>
         );
       })}
+
+      {polishLayer}
 
       {/* Pins de Resultado In-Chart (Fidelidade IQ Option) */}
       {settledContracts.map((contract) => {

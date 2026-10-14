@@ -4,6 +4,10 @@ import { renderToString } from 'react-dom/server';
 import { TradersMoodBar } from '../chart/TradersMoodBar';
 import { TimeLinesOverlay } from '../chart/TimeLinesOverlay';
 import { setFeatureFlagForTesting } from '../lib/feature-flags';
+import { setTraderoomPolishEnabled } from '../lib/traderoom-polish';
+
+// Este arquivo cobre o overlay anterior (uma etiqueta por contrato). Ver chart/subetapa-polish-04-positions.
+setTraderoomPolishEnabled(false);
 
 describe('SUBETAPA 04: Gráfico Central & Camadas de Overlays em Tempo Real', () => {
   beforeEach(() => {
