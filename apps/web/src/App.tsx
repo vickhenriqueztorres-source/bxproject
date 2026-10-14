@@ -39,6 +39,7 @@ import { EmailVerificationPage } from './pages/EmailVerificationPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { TournamentsPage } from './pages/TournamentsPage';
+import { ArenaPage } from './pages/ArenaPage';
 import { AnalysisPage } from './pages/AnalysisPage';
 import { TutorialsPage } from './pages/TutorialsPage';
 import { PromotionsPage } from './pages/PromotionsPage';
@@ -159,11 +160,26 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
       if (isBinmax) {
         const isWin = event.result === 'WIN';
         const isDraw = event.result === 'DRAW';
+        const matchedContract = contracts.data?.find((c) => c.id === event.contract_id);
+        const fallbackStake = matchedContract
+          ? (typeof matchedContract.stake_minor === 'string' ? parseInt(matchedContract.stake_minor, 10) : (matchedContract.stake_minor || 0))
+          : 0;
+        const resolvedStakeMinor = event.stake_minor ?? fallbackStake;
+        const payoutMinor = event.payout_minor ?? 0;
+        const netWinProfitMinor =
+          resolvedStakeMinor > 0 && payoutMinor > resolvedStakeMinor
+            ? payoutMinor - resolvedStakeMinor
+            : payoutMinor;
         const formatted = isWin
-          ? `+$${((event.payout_minor ?? 0) / 100).toFixed(2)}`
+          ? `+$${(netWinProfitMinor / 100).toFixed(2)}`
           : isDraw
           ? `$0.00`
-          : `-$${((event.payout_minor ?? 0) / 100).toFixed(2)}`;
+          : `-$${(resolvedStakeMinor / 100).toFixed(2)}`;
+
+        const resolvedSymbol = event.symbol || matchedContract?.symbol || activeSymbol;
+        const rawDirection = event.direction || matchedContract?.direction || 'UP';
+        const resolvedDirection: 'SUBE' | 'BAJA' =
+          rawDirection === 'DOWN' || rawDirection === 'BAJA' ? 'BAJA' : 'SUBE';
 
         // Áudio dopaminérgico / feedback acústico de precisão
         if (soundEnabled) {
@@ -179,8 +195,8 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
         setSettledToast({
           result: isWin ? 'WIN' : isDraw ? 'DRAW' : 'LOSS',
           amountFormatted: formatted,
-          symbol: activeSymbol,
-          direction: 'SUBE',
+          symbol: resolvedSymbol,
+          direction: resolvedDirection,
         });
         setAnnouncement(isWin ? `¡Ganaste! ${formatted}` : `Perdiste ${formatted}`);
       } else {
@@ -191,7 +207,7 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
       void queryClient.invalidateQueries({ queryKey: ['contract', event.contract_id] });
       void queryClient.invalidateQueries({ queryKey: ['wallet'] });
     }
-  }, [queryClient, soundEnabled, activeSymbol]);
+  }, [queryClient, soundEnabled, activeSymbol, contracts.data]);
 
   useEffect(() => {
     if (isGuestMode()) {
@@ -384,6 +400,7 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
             amountFormatted={settledToast.amountFormatted}
             assetSymbol={settledToast.symbol}
             direction={settledToast.direction}
+            drawerOpen={sidebarTab !== null && sidebarTab !== 'operar'}
             onClose={() => setSettledToast(null)}
           />
         ) : announcement ? (
@@ -477,9 +494,12 @@ function MainRouter() {
     return <GeoblockedPage />;
   }
 
-  // Rotas da sala de trading (já contém banner demo no rodapé operacional sem alterar geometria da sala)
+  // Rotas da sala de trading e Arena Blitz (já contêm rodapé operacional com aviso demo/risco sem alterar geometria 100vh)
   if (currentPath === '/operar' || currentPath === '/traderoom') {
     return <TraderoomShell />;
+  }
+  if (currentPath === '/arena' || currentPath === '/sala/arena') {
+    return <ArenaPage />;
   }
 
   let pageContent: JSX.Element;

@@ -12,6 +12,10 @@ import { TimeLinesOverlay } from '../chart/TimeLinesOverlay';
 import { setFeatureFlagForTesting } from '../lib/feature-flags';
 import { formatCurrencyBinmax } from '../lib/money';
 import type { Contract } from '../api/client';
+import { setTraderoomPolishEnabled } from '../lib/traderoom-polish';
+
+// Este arquivo certifica a sala anterior à chave TRADEROOM_POLISH. Ver trade/subetapa-polish-*.
+setTraderoomPolishEnabled(false);
 
 // Mock dos hooks react-query usados no OrderTicket
 vi.mock('@tanstack/react-query', () => ({

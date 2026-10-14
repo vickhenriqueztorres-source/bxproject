@@ -63,11 +63,18 @@ describe("Guardrail Permanente: Fase 2 Completa (Seções 1 a 16)", () => {
       assert(COUNTRY_STAKE_LIMITS[c].max_stake_minor > COUNTRY_STAKE_LIMITS[c].min_stake_minor);
     }
 
-    assert.strictEqual(BlnkClient.getUserDemoAccount("u1", "available", "MXN"), "user:u1:demo:MXN:available");
-    assert.strictEqual(BlnkClient.getUserDemoAccount("u1", "reserved", "COP"), "user:u1:demo:COP:reserved");
-    assert.strictEqual(BlnkClient.getPlatformDemoAccount("liability", "ARS"), "platform:demo:ARS:liability");
-    assert.strictEqual(BlnkClient.getPlatformDemoAccount("revenue", "CLP"), "platform:demo:CLP:revenue");
-    assert.strictEqual(BlnkClient.getPlatformDemoAccount("payout", "PEN"), "platform:demo:PEN:payout");
+    assert.strictEqual(BlnkClient.getUserDemoAccount("u1", "available", "USD"), "user:u1:demo:USD:available");
+    assert.strictEqual(BlnkClient.getUserDemoAccount("u1", "reserved", "USD"), "user:u1:demo:USD:reserved");
+    assert.strictEqual(BlnkClient.getPlatformDemoAccount("liability", "USD"), "platform:demo:USD:liability");
+    assert.strictEqual(BlnkClient.getPlatformDemoAccount("revenue", "USD"), "platform:demo:USD:revenue");
+    assert.strictEqual(BlnkClient.getPlatformDemoAccount("payout", "USD"), "platform:demo:USD:payout");
+
+    for (const displayCurr of ["BRL", "MXN", "COP", "ARS", "CLP", "PEN"]) {
+      assert.throws(
+        () => BlnkClient.getUserDemoAccount("u1", "available", displayCurr),
+        /SILENT_CONVERSION_FORBIDDEN/
+      );
+    }
   });
 
   it("Seção 8.1: Schemas de payment_methods, kyc_profiles (NOT_STARTED) e payment_intents validam", () => {

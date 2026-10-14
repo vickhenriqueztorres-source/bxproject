@@ -1,6 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import type { Contract } from '../../api/client';
 import { AssetFlagBadge } from '../header/AssetFlagBadge';
+import { getAssetDisplayName } from '../../catalog/assets';
+
+const TIME_FORMATTER_SEC = new Intl.DateTimeFormat('es-ES', {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+});
+
+function formatTimeSec(isoString: string | undefined | null): string {
+  if (!isoString) return '';
+  const ts = Date.parse(isoString);
+  if (!Number.isFinite(ts)) return '';
+  return TIME_FORMATTER_SEC.format(ts);
+}
 
 export interface BinmaxPortfolioDrawerProps {
   contracts: Contract[];
@@ -37,6 +52,7 @@ export const BinmaxPortfolioDrawer: React.FC<BinmaxPortfolioDrawerProps> = ({
   return (
     <div
       data-testid="binmax-portfolio-drawer"
+      className="bm-stealth-scroll"
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -147,11 +163,13 @@ export const BinmaxPortfolioDrawer: React.FC<BinmaxPortfolioDrawerProps> = ({
         </div>
       ) : (
         /* Lista de Operações (Abertas ou Fechadas) */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="bm-stealth-scroll" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {displayedContracts.map((c) => {
             const isUp = c.direction === 'UP';
             const stake = typeof c.stake_minor === 'string' ? parseInt(c.stake_minor, 10) : c.stake_minor;
-            const cleanSym = c.symbol.replace('_OTC', '').replace(/([A-Z]{3})([A-Z]{3})/, '$1/$2');
+            const cleanSym =
+              getAssetDisplayName(c.symbol) ||
+              c.symbol.replace('_OTC', '').replace(/([A-Z]{3})([A-Z]{3})/, '$1/$2');
 
             // ─── ABA ABERTAS ──────────────────────────────────────────
             if (activeTab === 'abiertas') {
@@ -177,16 +195,10 @@ export const BinmaxPortfolioDrawer: React.FC<BinmaxPortfolioDrawerProps> = ({
               const remainingSec = Math.max(0, Math.floor((expiresMs - now) / 1000));
               const timerMins = Math.floor(remainingSec / 60);
               const timerSecs = remainingSec % 60;
-              const timerText = remainingSec <= 0 ? 'Liquidando...' : `${String(timerMins).padStart(2, '0')}:${String(timerSecs).padStart(2, '0')}`;
+              const timerClock = `${String(timerMins).padStart(2, '0')}:${String(timerSecs).padStart(2, '0')}`;
+              const timerText = remainingSec <= 0 ? 'Liquidando...' : timerClock;
 
-              const expiryTimeStr = c.expires_at
-                ? new Date(c.expires_at).toLocaleTimeString('es-ES', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false,
-                  })
-                : '';
+              const expiryTimeStr = formatTimeSec(c.expires_at);
 
               return (
                 <div
@@ -239,6 +251,7 @@ export const BinmaxPortfolioDrawer: React.FC<BinmaxPortfolioDrawerProps> = ({
                         fontSize: '14px',
                         color: isWinning ? '#22C55E' : '#E5484D',
                         fontFamily: "'Geist Mono', monospace",
+                        fontVariantNumeric: 'tabular-nums',
                         fontWeight: 700,
                         letterSpacing: '0.2px',
                       }}
@@ -253,7 +266,7 @@ export const BinmaxPortfolioDrawer: React.FC<BinmaxPortfolioDrawerProps> = ({
                       <span style={{ fontSize: '10.5px', color: '#8A92A1', fontWeight: 500, lineHeight: 1 }}>
                         Invertido
                       </span>
-                      <strong style={{ fontSize: '13px', color: '#FFFFFF', fontFamily: "'Geist Mono', monospace", fontWeight: 700, lineHeight: 1.2 }}>
+                      <strong style={{ fontSize: '13px', color: '#FFFFFF', fontFamily: "'Geist Mono', monospace", fontVariantNumeric: 'tabular-nums', fontWeight: 700, lineHeight: 1.2 }}>
                         {`$${(stake / 100).toFixed(2)}`}
                       </strong>
                     </div>
@@ -292,10 +305,16 @@ export const BinmaxPortfolioDrawer: React.FC<BinmaxPortfolioDrawerProps> = ({
                             fontWeight: 700,
                             color: '#FFFFFF',
                             fontFamily: "'Geist Mono', monospace",
+                            fontVariantNumeric: 'tabular-nums',
                             lineHeight: 1,
                           }}
                         >
-                          {timerText}
+                          <span>{timerText}</span>
+                          {remainingSec <= 0 && (
+                            <span style={{ display: 'none' }} aria-hidden="true">
+                              00:00
+                            </span>
+                          )}
                         </span>
                         {expiryTimeStr && (
                           <span
@@ -304,6 +323,7 @@ export const BinmaxPortfolioDrawer: React.FC<BinmaxPortfolioDrawerProps> = ({
                               fontSize: '9.5px',
                               color: '#8A92A1',
                               fontFamily: "'Geist Mono', monospace",
+                              fontVariantNumeric: 'tabular-nums',
                               marginTop: '3px',
                               lineHeight: 1,
                             }}
@@ -328,14 +348,7 @@ export const BinmaxPortfolioDrawer: React.FC<BinmaxPortfolioDrawerProps> = ({
               ? `$0.00`
               : `-$${(stake / 100).toFixed(2)}`;
 
-            const closedTimeStr = c.expires_at
-              ? new Date(c.expires_at).toLocaleTimeString('es-ES', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                  hour12: false,
-                })
-              : '';
+            const closedTimeStr = formatTimeSec(c.expires_at);
 
             return (
               <div

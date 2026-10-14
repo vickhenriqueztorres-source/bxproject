@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { ArrowRight, Gem } from 'lucide-react';
 import { SecondaryLayout } from '../components/layout/SecondaryLayout';
+import { useRouter } from '../router/RouterContext';
+import { useUiLanguage } from '../i18n';
 import {
   PRECISION_SURFACES,
   PRECISION_TEXT,
@@ -8,6 +11,10 @@ import {
   PRECISION_MOTION,
 } from '../lib/design-tokens';
 import { getTournaments, joinTournament, TournamentItem } from '../api/client';
+import {
+  getJoinedTournamentIds,
+  joinTournamentLocal,
+} from '../components/tournaments/tournament-enrollment';
 
 export type Tournament = TournamentItem;
 
@@ -119,10 +126,15 @@ const TOURNAMENTS_DATA: Tournament[] = [
 ];
 
 export function TournamentsPage() {
+  const { navigate } = useRouter();
+  const uiLang = useUiLanguage('es');
+  const isPt = uiLang === 'pt';
   const [filter, setFilter] = useState<'ALL' | 'EN_VIVO' | 'PROXIMO' | 'FINALIZADO'>('ALL');
   const [tournaments, setTournaments] = useState<Tournament[]>(TOURNAMENTS_DATA);
   const [selectedTournamentId, setSelectedTournamentId] = useState<string>('copa-binmax');
-  const [joinedTournaments, setJoinedTournaments] = useState<Set<string>>(new Set());
+  const [joinedTournaments, setJoinedTournaments] = useState<Set<string>>(
+    () => new Set(getJoinedTournamentIds())
+  );
   const [joiningId, setJoiningId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -131,7 +143,7 @@ export function TournamentsPage() {
       .then((data) => {
         if (!isMounted || !Array.isArray(data) || data.length === 0) return;
         setTournaments(data);
-        const joined = new Set<string>();
+        const joined = new Set<string>(getJoinedTournamentIds());
         data.forEach((t) => {
           if (t.userJoined) joined.add(t.id);
         });
@@ -157,18 +169,31 @@ export function TournamentsPage() {
   const handleToggleJoin = async (id: string) => {
     if (joiningId) return;
     setJoiningId(id);
+    const localEnrollment = joinTournamentLocal(id);
     try {
       const res = await joinTournament(id);
-      if (res && res.joined) {
-        setJoinedTournaments((prev) => new Set(prev).add(id));
-        setTournaments((prev) =>
-          prev.map((t) =>
-            t.id === id ? { ...t, participants: Number(t.participants) + 1, userJoined: true } : t
-          )
-        );
+      if ((res && res.joined) || localEnrollment.success) {
+        setJoinedTournaments(new Set(localEnrollment.joinedIds));
+        if (!localEnrollment.alreadyJoined) {
+          setTournaments((prev) =>
+            prev.map((t) =>
+              t.id === id ? { ...t, participants: Number(t.participants) + 1, userJoined: true } : t
+            )
+          );
+        }
       }
     } catch (err) {
       console.warn('[Tournament Join Error]', err);
+      if (localEnrollment.success) {
+        setJoinedTournaments(new Set(localEnrollment.joinedIds));
+        if (!localEnrollment.alreadyJoined) {
+          setTournaments((prev) =>
+            prev.map((t) =>
+              t.id === id ? { ...t, participants: Number(t.participants) + 1, userJoined: true } : t
+            )
+          );
+        }
+      }
     } finally {
       setJoiningId(null);
     }
@@ -186,47 +211,100 @@ export function TournamentsPage() {
         }}
       >
         {/* ─── CABEÇALHO TÉCNICO ───────────────────────────────────────── */}
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span
+        <div
+          style={{
+            marginBottom: '24px',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'flex-end',
+            justifyContent: 'space-between',
+            gap: '16px',
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: PRECISION_COLORS.metal,
+                }}
+              >
+                {isPt ? 'Competição Institucional' : 'Competición Institucional'}
+              </span>
+              <span style={{ fontSize: '11px', color: PRECISION_TEXT.quiet }}>·</span>
+              <span style={{ fontSize: '11px', color: PRECISION_TEXT.muted, fontFamily: PRECISION_FONTS.mono }}>
+                {isPt ? 'Arena de Traders' : 'Arena de Traders'}
+              </span>
+            </div>
+            <h1
               style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                color: PRECISION_COLORS.metal,
+                fontSize: '24px',
+                fontWeight: 800,
+                color: PRECISION_TEXT.strong,
+                margin: 0,
+                letterSpacing: '-0.01em',
               }}
             >
-              Competición Institucional
-            </span>
-            <span style={{ fontSize: '11px', color: PRECISION_TEXT.quiet }}>·</span>
-            <span style={{ fontSize: '11px', color: PRECISION_TEXT.muted, fontFamily: PRECISION_FONTS.mono }}>
-              Arena de Traders
-            </span>
+              {isPt ? 'Torneios de Trading Quantitativo' : 'Torneos de Trading Cuantitativo'}
+            </h1>
+            <p style={{ fontSize: '13px', color: PRECISION_TEXT.muted, margin: '6px 0 0', maxWidth: '700px' }}>
+              {isPt
+                ? 'Demonstre disciplina e consistência em rankings auditados ao vivo sob igualdade de condições na conta de prática.'
+                : 'Demuestra disciplina y consistencia en rankings auditados en vivo bajo igualdad de condiciones sobre la cuenta de práctica.'}
+            </p>
           </div>
-          <h1
+
+          <button
+            type="button"
+            data-testid="tournaments-arena-blitz-cta"
+            onClick={() => navigate('/arena')}
+            className="diamond-glow flex items-center gap-3 rounded-xl bg-arena-surface px-4 py-3 outline-none hover:brightness-125 focus-visible:ring-2 focus-visible:ring-arena"
             style={{
-              fontSize: '24px',
-              fontWeight: 800,
-              color: PRECISION_TEXT.strong,
-              margin: 0,
-              letterSpacing: '-0.01em',
+              backgroundColor: 'var(--tournament-purple-surface, #1a0b2e)',
+              border: '1px solid var(--tournament-purple-border, #5a189a)',
+              borderRadius: '12px',
+              padding: '12px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              color: '#f2f4f7',
+              textAlign: 'left',
+              cursor: 'pointer',
             }}
           >
-            Torneos de Trading Cuantitativo
-          </h1>
-          <p style={{ fontSize: '13px', color: PRECISION_TEXT.muted, margin: '6px 0 0', maxWidth: '700px' }}>
-            Demuestra disciplina y consistencia en rankings auditados en vivo bajo igualdad de condiciones sobre la cuenta de práctica.
-          </p>
+            <Gem
+              className="size-5 text-arena"
+              strokeWidth={1.6}
+              aria-hidden="true"
+              style={{ color: 'var(--tournament-purple-glow, #9d4edd)', width: 20, height: 20, flexShrink: 0 }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: '14px', fontWeight: 600 }}>Arena Blitz · 15 min</span>
+              <span style={{ fontSize: '12px', color: '#8b95a3' }}>
+                {isPt
+                  ? 'Entrada a partir de US$ 5,00. Top 3 levam o pote.'
+                  : 'Entrada desde US$ 5,00. Top 3 se llevan el bote.'}
+              </span>
+            </div>
+            <ArrowRight
+              className="size-4 text-arena"
+              strokeWidth={2}
+              aria-hidden="true"
+              style={{ color: 'var(--tournament-purple-glow, #9d4edd)', width: 16, height: 16, flexShrink: 0 }}
+            />
+          </button>
         </div>
 
         {/* ─── FILTROS DE STATUS ──────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: '6px', marginBottom: '24px', flexWrap: 'wrap' }}>
           {[
-            { id: 'ALL', label: 'Todos los torneos' },
-            { id: 'EN_VIVO', label: 'En vivo' },
+            { id: 'ALL', label: isPt ? 'Todos os torneios' : 'Todos los torneos' },
+            { id: 'EN_VIVO', label: isPt ? 'Ao vivo' : 'En vivo' },
             { id: 'PROXIMO', label: 'Próximos' },
-            { id: 'FINALIZADO', label: 'Finalizados' },
+            { id: 'FINALIZADO', label: isPt ? 'Encerrados' : 'Finalizados' },
           ].map((f) => {
             const isSelected = filter === f.id;
             return (
@@ -308,7 +386,11 @@ export function TournamentsPage() {
                         border: `1px solid ${PRECISION_SURFACES.line}`,
                       }}
                     >
-                      {t.status === 'EN_VIVO' ? 'EN VIVO' : t.status === 'PROXIMO' ? 'PRÓXIMO' : 'FINALIZADO'}
+                      {t.status === 'EN_VIVO'
+                        ? isPt ? 'AO VIVO' : 'EN VIVO'
+                        : t.status === 'PROXIMO'
+                        ? isPt ? 'EM BREVE' : 'PRÓXIMO'
+                        : isPt ? 'ENCERRADO' : 'FINALIZADO'}
                     </span>
                     <span style={{ fontSize: '11px', color: PRECISION_TEXT.quiet, fontFamily: PRECISION_FONTS.mono }} className="bm-tabular-nums">
                       {t.timeRemaining}
@@ -321,7 +403,9 @@ export function TournamentsPage() {
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
                     <div>
-                      <span style={{ fontSize: '10.5px', color: PRECISION_TEXT.quiet, textTransform: 'uppercase', display: 'block' }}>Fondo de premios</span>
+                      <span style={{ fontSize: '10.5px', color: PRECISION_TEXT.quiet, textTransform: 'uppercase', display: 'block' }}>
+                        {isPt ? 'Fundo de prêmios' : 'Fondo de premios'}
+                      </span>
                       <strong style={{ fontSize: '20px', color: PRECISION_TEXT.strong, fontFamily: PRECISION_FONTS.mono, fontWeight: 800 }} className="bm-tabular-nums">
                         {t.prizeFormatted}
                       </strong>
@@ -356,7 +440,11 @@ export function TournamentsPage() {
                     transition: `all ${PRECISION_MOTION.tMicro}ms ${PRECISION_MOTION.ease}`,
                   }}
                 >
-                  {isTournamentJoined ? 'Inscrito' : t.status === 'FINALIZADO' ? 'Ver ranking final' : 'Participar →'}
+                  {isTournamentJoined
+                    ? 'Inscrito'
+                    : t.status === 'FINALIZADO'
+                    ? 'Ver ranking final'
+                    : 'Participar →'}
                 </button>
               </div>
             );
@@ -375,7 +463,7 @@ export function TournamentsPage() {
         >
           <div style={{ borderBottom: `1px solid ${PRECISION_SURFACES.line}`, paddingBottom: '14px', marginBottom: '22px' }}>
             <div style={{ fontSize: '11px', color: PRECISION_COLORS.metal, fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>
-              Mesa Oficial de Posiciones
+              {isPt ? 'Mesa Oficial de Posições' : 'Mesa Oficial de Posiciones'}
             </div>
             <h2 style={{ fontSize: '18px', fontWeight: 800, color: PRECISION_TEXT.strong, margin: 0 }}>
               {selectedTournament.name}
@@ -392,27 +480,27 @@ export function TournamentsPage() {
             {/* Regras Técnicas */}
             <div>
               <h4 style={{ fontSize: '12px', fontWeight: 700, color: PRECISION_TEXT.muted, textTransform: 'uppercase', margin: '0 0 14px', letterSpacing: '0.05em' }}>
-                Reglas del Torneo
+                {isPt ? 'Regras do Torneio' : 'Reglas del Torneo'}
               </h4>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '12.5px' }}>
                 <li style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${PRECISION_SURFACES.line}`, paddingBottom: '8px' }}>
-                  <span style={{ color: PRECISION_TEXT.muted }}>Duración total:</span>
+                  <span style={{ color: PRECISION_TEXT.muted }}>{isPt ? 'Duração total:' : 'Duración total:'}</span>
                   <strong style={{ color: PRECISION_TEXT.strong, fontFamily: PRECISION_FONTS.mono }}>{selectedTournament.rules.period}</strong>
                 </li>
                 <li style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${PRECISION_SURFACES.line}`, paddingBottom: '8px' }}>
                   <span style={{ color: PRECISION_TEXT.muted }}>Entrada:</span>
-                  <strong style={{ color: PRECISION_COLORS.profit }}>Sin cargo (Demo)</strong>
+                  <strong style={{ color: PRECISION_COLORS.profit }}>{isPt ? 'Gratuito (Demo)' : 'Sin cargo (Demo)'}</strong>
                 </li>
                 <li style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${PRECISION_SURFACES.line}`, paddingBottom: '8px' }}>
-                  <span style={{ color: PRECISION_TEXT.muted }}>Tipo de contrato:</span>
+                  <span style={{ color: PRECISION_TEXT.muted }}>{isPt ? 'Tipo de contrato:' : 'Tipo de contrato:'}</span>
                   <strong style={{ color: PRECISION_TEXT.strong }}>{selectedTournament.rules.operationType}</strong>
                 </li>
                 <li style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${PRECISION_SURFACES.line}`, paddingBottom: '8px' }}>
-                  <span style={{ color: PRECISION_TEXT.muted }}>Criterio de orden:</span>
+                  <span style={{ color: PRECISION_TEXT.muted }}>{isPt ? 'Critério de ordem:' : 'Criterio de orden:'}</span>
                   <strong style={{ color: PRECISION_TEXT.strong }}>{selectedTournament.rules.criteria}</strong>
                 </li>
                 <li style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: PRECISION_TEXT.muted }}>Mínimo requerido:</span>
+                  <span style={{ color: PRECISION_TEXT.muted }}>{isPt ? 'Mínimo exigido:' : 'Mínimo requerido:'}</span>
                   <strong style={{ color: PRECISION_TEXT.strong, fontFamily: PRECISION_FONTS.mono }}>{`${selectedTournament.rules.minOperations} ops`}</strong>
                 </li>
               </ul>
@@ -421,7 +509,7 @@ export function TournamentsPage() {
             {/* Ranking em Tempo Real */}
             <div>
               <h4 style={{ fontSize: '12px', fontWeight: 700, color: PRECISION_TEXT.muted, textTransform: 'uppercase', margin: '0 0 14px', letterSpacing: '0.05em' }}>
-                Ranking en Vivo
+                {isPt ? 'Ranking ao Vivo' : 'Ranking en Vivo'}
               </h4>
 
               {/* Posição do Usuário no Topo */}
@@ -455,7 +543,9 @@ export function TournamentsPage() {
                     1
                   </span>
                   <div>
-                    <strong style={{ fontSize: '13px', color: PRECISION_TEXT.strong }}>Tú (TraderPro)</strong>
+                    <strong style={{ fontSize: '13px', color: PRECISION_TEXT.strong }}>
+                      {isPt ? 'Você (TraderPro)' : 'Tú (TraderPro)'}
+                    </strong>
                     <span style={{ fontSize: '11px', color: PRECISION_TEXT.quiet, display: 'block', fontFamily: PRECISION_FONTS.mono }}>42 contratos</span>
                   </div>
                 </div>
@@ -502,7 +592,7 @@ export function TournamentsPage() {
             {/* Escala de Prêmios */}
             <div>
               <h4 style={{ fontSize: '12px', fontWeight: 700, color: PRECISION_TEXT.muted, textTransform: 'uppercase', margin: '0 0 14px', letterSpacing: '0.05em' }}>
-                Premios Oficiales
+                {isPt ? 'Prêmios Oficiais' : 'Premios Oficiales'}
               </h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {selectedTournament.prizes.map((p, idx) => (

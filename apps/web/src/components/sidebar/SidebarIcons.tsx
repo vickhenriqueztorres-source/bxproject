@@ -88,6 +88,27 @@ export const IconTorneos: React.FC<SidebarIconProps> = ({ size = 20, color = 'cu
   </svg>
 );
 
+// 4b. Arena (Diamond / Blitz competition)
+export const IconArena: React.FC<SidebarIconProps> = ({ size = 20, color = 'currentColor', className }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={color}
+    strokeWidth="1.75"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M12 2 22 8.5 12 22 2 8.5Z" />
+    <path d="M2 8.5h20" />
+    <path d="M12 2 8 8.5h8L12 2Z" />
+    <path d="M12 22V8.5" />
+  </svg>
+);
+
 // 5. Análisis (Market analysis / trends)
 export const IconAnalisis: React.FC<SidebarIconProps> = ({ size = 20, color = 'currentColor', className }) => (
   <svg

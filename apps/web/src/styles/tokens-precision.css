@@ -222,8 +222,20 @@
   transition: opacity var(--t-base) var(--ease), filter var(--t-base) var(--ease);
 }
 
+/* Única pulsação permitida na sala: últimos 5s antes da trava de compra (TRADEROOM_POLISH) */
+.bm-countdown-pulse {
+  animation: bmCountdownPulse 1s var(--ease) infinite;
+}
+
+@keyframes bmCountdownPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 /* Respeito rigoroso à acessibilidade de movimento reduzido */
 @media (prefers-reduced-motion: reduce) {
+  .bm-countdown-pulse { animation: none !important; }
+
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
@@ -468,6 +480,16 @@
   }
 }
 
+/* Barra de progresso de auto-fechamento do toast de precisão */
+@keyframes bmToastProgress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
 /* Anchor dot do pin: pulso único 1x (WIN only, sem infinite) */
 @keyframes bmAnchorPulse {
   0% {
@@ -488,28 +510,232 @@
   }
 }
 
-.bm-stealth-scroll {
+.bm-stealth-scroll,
+.sidebar-drawer-scroll,
+.theme-binmax * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(138, 146, 161, 0.25) transparent;
+  scrollbar-color: rgba(138, 146, 161, 0.22) transparent;
 }
 
-.bm-stealth-scroll::-webkit-scrollbar {
+.bm-stealth-scroll::-webkit-scrollbar,
+.sidebar-drawer-scroll::-webkit-scrollbar,
+.theme-binmax *::-webkit-scrollbar {
   width: 4px;
   height: 4px;
 }
 
-.bm-stealth-scroll::-webkit-scrollbar-track {
+.bm-stealth-scroll::-webkit-scrollbar-button,
+.sidebar-drawer-scroll::-webkit-scrollbar-button,
+.theme-binmax *::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.bm-stealth-scroll::-webkit-scrollbar-track,
+.sidebar-drawer-scroll::-webkit-scrollbar-track,
+.theme-binmax *::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.bm-stealth-scroll::-webkit-scrollbar-thumb {
-  background: rgba(138, 146, 161, 0.25);
-  border-radius: 4px;
+.bm-stealth-scroll::-webkit-scrollbar-corner,
+.sidebar-drawer-scroll::-webkit-scrollbar-corner,
+.theme-binmax *::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
-.bm-stealth-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(138, 146, 161, 0.45);
+.bm-stealth-scroll::-webkit-scrollbar-thumb,
+.sidebar-drawer-scroll::-webkit-scrollbar-thumb,
+.theme-binmax *::-webkit-scrollbar-thumb {
+  background: rgba(138, 146, 161, 0.22);
+  border-radius: 9999px;
 }
+
+.bm-stealth-scroll::-webkit-scrollbar-thumb:hover,
+.sidebar-drawer-scroll::-webkit-scrollbar-thumb:hover,
+.theme-binmax *::-webkit-scrollbar-thumb:hover {
+  background: rgba(138, 146, 161, 0.42);
+}
+
+.bm-no-scrollbar {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.bm-no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* ==========================================================================
+   10. ARENA BLITZ TOKENS & UTILITY CLASSES (FASE 03 + FASE 05)
+   ========================================================================== */
+:root {
+  --background: #07090c;
+  --surface: #0f1318;
+  --border: #1c232c;
+  --foreground: #f2f4f7;
+  --muted-foreground: #8b95a3;
+  --primary: #22c55e;
+  --primary-foreground: #07090c;
+  --destructive: #e5484d;
+  --raised: #161b22;
+  --warning: #f5a524;
+
+  --tournament-purple-glow: #9d4edd;
+  --tournament-purple-surface: #1a0b2e;
+  --tournament-purple-border: #5a189a;
+  --tournament-gold-bonus: #ffb703;
+  --timer-alert: #ff0054;
+
+  --color-arena: var(--tournament-purple-glow);
+  --color-arena-surface: var(--tournament-purple-surface);
+  --color-arena-border: var(--tournament-purple-border);
+  --color-bonus: var(--tournament-gold-bonus);
+  --color-alert: var(--timer-alert);
+}
+
+.diamond-glow {
+  box-shadow:
+    inset 0 0 0 1px var(--tournament-purple-border),
+    0 0 24px -6px color-mix(in srgb, var(--tournament-purple-glow) 55%, transparent);
+}
+
+.timer-alert {
+  animation: timer-alert 1s steps(2, jump-none) infinite;
+}
+
+.rank-move {
+  animation: rank-move 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.trade-flash-up {
+  animation: flash-up 700ms ease-out;
+}
+
+.trade-flash-down {
+  animation: flash-down 700ms ease-out;
+}
+
+.platform-rise {
+  animation: auth-rise 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+@keyframes auth-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes flash-up {
+  from {
+    box-shadow: 0 0 0 0 rgb(34 197 94 / 0.55);
+  }
+  to {
+    box-shadow: 0 0 0 14px rgb(34 197 94 / 0);
+  }
+}
+
+@keyframes flash-down {
+  from {
+    box-shadow: 0 0 0 0 rgb(229 72 77 / 0.55);
+  }
+  to {
+    box-shadow: 0 0 0 14px rgb(229 72 77 / 0);
+  }
+}
+
+@keyframes timer-alert {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.55;
+  }
+}
+
+@keyframes rank-move {
+  from {
+    background-color: color-mix(in srgb, var(--tournament-purple-glow) 22%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+/* Classes utilitárias semânticas da Arena */
+.bg-arena { background-color: var(--tournament-purple-glow); }
+.bg-arena-surface { background-color: var(--tournament-purple-surface); }
+.bg-arena\/20 { background-color: rgba(157, 78, 221, 0.2); }
+.bg-arena\/25 { background-color: rgba(157, 78, 221, 0.25); }
+.border-arena { border-color: var(--tournament-purple-glow); }
+.border-arena-border { border-color: var(--tournament-purple-border); }
+.text-arena { color: var(--tournament-purple-glow); }
+.ring-arena { --tw-ring-color: var(--tournament-purple-glow); }
+.ring-arena-border { box-shadow: inset 0 0 0 1px var(--tournament-purple-border); }
+
+.text-bonus { color: var(--tournament-gold-bonus); }
+.text-bonus\/60 { color: rgba(255, 183, 3, 0.6); }
+.bg-bonus { background-color: var(--tournament-gold-bonus); }
+.bg-bonus\/5 { background-color: rgba(255, 183, 3, 0.05); }
+.bg-bonus\/10 { background-color: rgba(255, 183, 3, 0.10); }
+.bg-bonus\/15 { background-color: rgba(255, 183, 3, 0.15); }
+.border-bonus\/25 { border-color: rgba(255, 183, 3, 0.25); }
+.border-bonus\/30 { border-color: rgba(255, 183, 3, 0.30); }
+.border-bonus\/40 { border-color: rgba(255, 183, 3, 0.40); }
+.ring-bonus\/30 { box-shadow: inset 0 0 0 1px rgba(255, 183, 3, 0.30); }
+
+.text-alert { color: var(--timer-alert); }
+.bg-alert\/10 { background-color: rgba(255, 0, 84, 0.10); }
+.border-alert\/40 { border-color: rgba(255, 0, 84, 0.40); }
+.ring-alert\/40 { box-shadow: inset 0 0 0 1px rgba(255, 0, 84, 0.40); }
+
+.bg-background { background-color: var(--background); }
+.bg-background\/50 { background-color: rgba(7, 9, 12, 0.5); }
+.bg-background\/60 { background-color: rgba(7, 9, 12, 0.6); }
+.bg-background\/70 { background-color: rgba(7, 9, 12, 0.7); }
+.bg-background\/75 { background-color: rgba(7, 9, 12, 0.75); }
+.bg-surface { background-color: var(--surface); }
+.bg-raised { background-color: var(--raised); }
+.bg-primary { background-color: var(--primary); }
+.bg-primary\/5 { background-color: rgba(34, 197, 94, 0.05); }
+.bg-primary\/10 { background-color: rgba(34, 197, 94, 0.10); }
+.bg-primary\/15 { background-color: rgba(34, 197, 94, 0.15); }
+.bg-destructive { background-color: var(--destructive); }
+.bg-destructive\/10 { background-color: rgba(229, 72, 77, 0.10); }
+
+.text-foreground { color: var(--foreground); }
+.text-muted-foreground { color: var(--muted-foreground); }
+.text-primary { color: var(--primary); }
+.text-primary-foreground { color: var(--primary-foreground); }
+.text-destructive { color: var(--destructive); }
+
+.border-border { border-color: var(--border); }
+.border-primary\/30 { border-color: rgba(34, 197, 94, 0.30); }
+.border-primary\/40 { border-color: rgba(34, 197, 94, 0.40); }
+.border-destructive\/40 { border-color: rgba(229, 72, 77, 0.40); }
+
+@media (prefers-reduced-motion: reduce) {
+  .timer-alert,
+  .rank-move,
+  .platform-rise,
+  .trade-flash-up,
+  .trade-flash-down {
+    animation: none !important;
+  }
+}
+
 
 
 

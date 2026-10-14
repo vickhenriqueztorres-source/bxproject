@@ -13,6 +13,7 @@ import { LanguageSelectorDropdown } from './LanguageSelectorDropdown';
 import type { Contract } from '../../api/client';
 import { tradingFeedManager } from '../../feed/TradingFeedManager';
 import { AuthService } from '../../auth/auth-service';
+import { useUiLanguage } from '../../i18n';
 
 export type SymbolOption = AssetOption;
 const AVAILABLE_SYMBOLS = ASSET_CATALOG;
@@ -83,6 +84,8 @@ export function TerminalHeader({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'Todos' | AssetCategory>('Todos');
   const isBinmax = isNewTraderoomEnabled();
+  const uiLang = useUiLanguage('es');
+  const isPt = uiLang === 'pt';
 
   const filteredSymbols = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -109,7 +112,7 @@ export function TerminalHeader({
               <button
                 type="button"
                 data-testid="header-grid-layout-btn"
-                title="Distribución de cuadrícula"
+                title={isPt ? 'Distribuição de grade' : 'Distribución de cuadrícula'}
                 onClick={() => setShowGridPopover((prev) => !prev)}
                 style={{
                   width: '28px',
@@ -305,7 +308,7 @@ export function TerminalHeader({
                         transition: 'color 0.14s ease',
                         zIndex: 2,
                       }}
-                      title="Cerrar pestaña"
+                      title={isPt ? 'Fechar aba' : 'Cerrar pestaña'}
                     >
                       ×
                     </button>
@@ -877,9 +880,9 @@ export function TerminalHeader({
               borderRadius: '6px',
               transition: 'color 0.15s ease',
             }}
-            title={`Cerrar sesión (${accountEmail})`}
+            title={isPt ? `Sair (${accountEmail})` : `Cerrar sesión (${accountEmail})`}
           >
-            Salir
+            {isPt ? 'Sair' : 'Salir'}
           </button>
         </div>
       ) : (

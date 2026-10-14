@@ -1,6 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TimeframeAggregator = exports.TIMEFRAMES = void 0;
+exports.TimeframeAggregator = exports.TIMEFRAMES = exports.aggregateCandleGapTolerant = exports.shouldCloseCandle = exports.isMarketOpen = void 0;
+const trading_calendar_js_1 = require("./trading-calendar.js");
+Object.defineProperty(exports, "isMarketOpen", { enumerable: true, get: function () { return trading_calendar_js_1.isMarketOpen; } });
+Object.defineProperty(exports, "shouldCloseCandle", { enumerable: true, get: function () { return trading_calendar_js_1.shouldCloseCandle; } });
+Object.defineProperty(exports, "aggregateCandleGapTolerant", { enumerable: true, get: function () { return trading_calendar_js_1.aggregateCandleGapTolerant; } });
 exports.TIMEFRAMES = {
     "1s": 1000,
     "1m": 60 * 1000,
@@ -58,12 +62,17 @@ class TimeframeAggregator {
     }
     /**
      * Processa um tick para um determinado intervalo.
+     * Valida sessão de trading por símbolo (Perigo 7 — Técnica 3) antes de agregar/fechar candle.
      * Se o tick cruzar para um novo bucket, retorna o bucket_start do anterior que foi fechado.
      */
     async processTickForInterval(tick, interval) {
         const intervalMs = exports.TIMEFRAMES[interval];
         if (!intervalMs)
             throw new Error(`Intervalo desconhecido: ${interval}`);
+        // Perigo 7 (Técnica 3): Se o mercado estiver fechado para o símbolo neste timestamp UTC, ignora o tick sem criar candle espúrio
+        if (!(0, trading_calendar_js_1.shouldCloseCandle)(tick, tick.symbol)) {
+            return { activeCandle: null, closedBucketStart: null };
+        }
         const bucketStart = TimeframeAggregator.calculateBucketStart(tick.ts, intervalMs);
         const bucketStartMs = bucketStart.getTime();
         const mapKey = `${tick.symbol}:${interval}`;

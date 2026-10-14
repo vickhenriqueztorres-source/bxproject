@@ -76,6 +76,13 @@ export class BackpressureGuard {
   }
 
   /**
+   * Remove o socket do mapa de saturação quando a conexão é encerrada.
+   */
+  public clearSocket(socket: SocketLike): void {
+    this.handleDrain(socket);
+  }
+
+  /**
    * Varre e expulsa clientes saturados que excederam o deadline de 5s.
    */
   public checkAndPurgeSlowClients(): number {

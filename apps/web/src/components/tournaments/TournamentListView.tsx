@@ -1,18 +1,26 @@
 import React from 'react';
 import { TournamentItem } from './TournamentTypes';
 import { TournamentCard } from './TournamentCard';
+import { useUiLanguage } from '../../i18n';
 
 export interface TournamentListViewProps {
   tournaments: TournamentItem[];
   onSelectTournament: (id: string) => void;
   onClose: () => void;
+  joinedIds?: string[];
+  onOpenArena?: () => void;
 }
 
 export function TournamentListView({
   tournaments,
   onSelectTournament,
   onClose,
+  joinedIds = [],
+  onOpenArena,
 }: TournamentListViewProps) {
+  const uiLang = useUiLanguage('pt');
+  const isEs = uiLang === 'es';
+
   return (
     <div
       data-testid="tournament-list-view"
@@ -21,7 +29,7 @@ export function TournamentListView({
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        gap: '24px',
+        gap: '20px',
         width: '100%',
       }}
     >
@@ -46,7 +54,7 @@ export function TournamentListView({
               letterSpacing: '-0.02em',
             }}
           >
-            Torneios
+            {isEs ? 'Torneos' : 'Torneios'}
           </h1>
           <p
             data-testid="tournament-list-subtitle"
@@ -58,9 +66,19 @@ export function TournamentListView({
               maxWidth: '560px',
             }}
           >
-            Compita com outros traders, mostre sua estratégia e dispute prêmios em dinheiro.
-            <br />
-            Participação gratuita.
+            {isEs ? (
+              <>
+                Compite con otros traders, demuestra tu estrategia y disputa premios en efectivo.
+                <br />
+                Participación gratuita.
+              </>
+            ) : (
+              <>
+                Compita com outros traders, mostre sua estratégia e dispute prêmios em dinheiro.
+                <br />
+                Participação gratuita.
+              </>
+            )}
           </p>
         </div>
 
@@ -98,7 +116,7 @@ export function TournamentListView({
                   fontWeight: 700,
                 }}
               >
-                Torneios semanais
+                {isEs ? 'Torneos semanales' : 'Torneios semanais'}
               </strong>
               <span
                 style={{
@@ -107,7 +125,7 @@ export function TournamentListView({
                   color: '#8A92A1',
                 }}
               >
-                Novos torneios toda segunda-feira.
+                {isEs ? 'Nuevos torneos todos los lunes.' : 'Novos torneios toda segunda-feira.'}
               </span>
             </div>
           </div>
@@ -129,12 +147,70 @@ export function TournamentListView({
             }}
             onMouseEnter={(e) => (e.currentTarget.style.color = '#FFFFFF')}
             onMouseLeave={(e) => (e.currentTarget.style.color = '#8A92A1')}
-            title="Fechar (ESC)"
-            aria-label="Fechar modal de torneios"
+            title={isEs ? 'Cerrar (ESC)' : 'Fechar (ESC)'}
+            aria-label={isEs ? 'Cerrar modal de torneos' : 'Fechar modal de torneios'}
           >
             ✕
           </button>
         </div>
+      </div>
+
+      {/* ─── BANNER DE ACESSO DIRETO: ARENA BLITZ · 15 MIN ────────────────── */}
+      <div
+        data-testid="modal-open-arena-blitz"
+        onClick={() => onOpenArena?.()}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onOpenArena?.();
+          }
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px',
+          padding: '12px 18px',
+          borderRadius: '10px',
+          backgroundColor: '#0E131D',
+          border: '1px solid rgba(157, 78, 221, 0.35)',
+          cursor: 'pointer',
+          transition: 'border-color 100ms cubic-bezier(0.16, 1, 0.3, 1), background-color 180ms cubic-bezier(0.16, 1, 0.3, 1)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              fontFamily: "'Geist Mono', monospace",
+              color: '#C77DFF',
+              backgroundColor: 'rgba(157, 78, 221, 0.14)',
+              border: '1px solid rgba(157, 78, 221, 0.32)',
+              borderRadius: '4px',
+              padding: '3px 8px',
+            }}
+          >
+            ⚡ ARENA BLITZ · 15 MIN
+          </span>
+          <span style={{ fontSize: '13px', color: '#DCE1EA', fontWeight: 600 }}>
+            {isEs
+              ? 'Sprints Sit & Go de 15 minutos con T$ 1.000 iniciales — Top 3 se llevan el bote.'
+              : 'Sprints Sit & Go de 15 minutos com T$ 1.000 iniciais — Top 3 levam o pote.'}
+          </span>
+        </div>
+        <span
+          style={{
+            fontSize: '12.5px',
+            fontWeight: 700,
+            color: '#C77DFF',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {isEs ? 'Abrir Arena Blitz →' : 'Abrir Arena Blitz →'}
+        </span>
       </div>
 
       {/* ─── GRADE DOS 5 CARDS DE TORNEIOS (IMAGEM 1) ─────────────────────── */}
@@ -152,9 +228,11 @@ export function TournamentListView({
             key={t.id}
             tournament={t}
             onSelect={onSelectTournament}
+            isJoined={joinedIds.includes(t.id)}
           />
         ))}
       </div>
     </div>
   );
 }
+

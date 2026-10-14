@@ -17,6 +17,7 @@ import { mirrorRoutes } from "./routes/mirrors.js";
 import { kycRoutes } from "./routes/kyc.js";
 import { authRoutes } from "./routes/auth.js";
 import { adminRoutes } from "./routes/admin.js";
+import { arenaRoutes } from "./routes/arena.js";
 const server = Fastify({
     logger: {
         level: process.env.LOG_LEVEL || "info",
@@ -42,6 +43,7 @@ async function main() {
     await server.register(chartRoutes);
     await server.register(contractRoutes);
     await server.register(walletRoutes);
+    await server.register(arenaRoutes);
     await server.register(geoRoutes);
     await server.register(currencyRoutes);
     await server.register(mirrorRoutes);

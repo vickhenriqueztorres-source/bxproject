@@ -5,6 +5,7 @@ import { App } from './App';
 import { I18nProvider } from './i18n';
 import './styles.css';
 import './styles/tokens-precision.css';
+import './arena/arena.css';
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: 1,
   staleTime: 2000, refetchOnWindowFocus: true } } });

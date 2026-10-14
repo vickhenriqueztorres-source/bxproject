@@ -1,6 +1,20 @@
 import React, { useState } from 'react';
 import type { Contract } from '../../api/client';
 import { AssetFlagBadge } from '../header/AssetFlagBadge';
+import { getAssetDisplayName } from '../../catalog/assets';
+
+const TIME_FORMATTER_MIN = new Intl.DateTimeFormat('es-ES', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+function formatTimeMin(isoString: string | undefined | null): string {
+  if (!isoString) return '';
+  const ts = Date.parse(isoString);
+  if (!Number.isFinite(ts)) return '';
+  return TIME_FORMATTER_MIN.format(ts);
+}
 
 export interface BinmaxHistoryDrawerProps {
   contracts: Contract[];
@@ -23,6 +37,7 @@ export const BinmaxHistoryDrawer: React.FC<BinmaxHistoryDrawerProps> = ({
   return (
     <div
       data-testid="binmax-history-drawer"
+      className="bm-stealth-scroll"
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -83,7 +98,7 @@ export const BinmaxHistoryDrawer: React.FC<BinmaxHistoryDrawerProps> = ({
           No hay operaciones en este filtro.
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div className="bm-stealth-scroll" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {filtered.map((c) => {
             const isWin = c.result === 'WIN';
             const isUp = c.direction === 'UP';
@@ -94,13 +109,11 @@ export const BinmaxHistoryDrawer: React.FC<BinmaxHistoryDrawerProps> = ({
             const profitDollars = isWin ? ((payout - stake) / 100).toFixed(2) : stakeDollars.toFixed(2);
             const formattedResult = isWin ? `+$${profitDollars}` : `-$${profitDollars}`;
 
-            const timeStr = new Date(c.created_at).toLocaleTimeString('es-ES', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            });
+            const timeStr = formatTimeMin(c.created_at);
 
-            const cleanSym = c.symbol.replace('_OTC', '').replace(/([A-Z]{3})([A-Z]{3})/, '$1/$2');
+            const cleanSym =
+              getAssetDisplayName(c.symbol) ||
+              c.symbol.replace('_OTC', '').replace(/([A-Z]{3})([A-Z]{3})/, '$1/$2');
 
             return (
               <div

@@ -1,10 +1,12 @@
 import React from 'react';
 import { isNewTraderoomEnabled } from '../lib/feature-flags';
+import type { SymbolFeedState } from '../feed/TradingFeedManager';
 
 export interface StalenessOverlayProps {
   isStale: boolean;
   symbol: string;
   tickAgeMs?: number;
+  feedState?: SymbolFeedState;
   circuitBreakerOpen?: boolean;
   circuitBreakerRemainingSeconds?: number;
 }
@@ -13,13 +15,21 @@ export const StalenessOverlay: React.FC<StalenessOverlayProps> = ({
   isStale,
   symbol,
   tickAgeMs = 4000,
+  feedState,
   circuitBreakerOpen = false,
   circuitBreakerRemainingSeconds = 30,
 }) => {
-  if (!isStale && !circuitBreakerOpen) return null;
+  const effectiveState: SymbolFeedState =
+    feedState ?? (isStale ? 'STALE' : 'LIVE');
+
+  if (!isStale && effectiveState !== 'STALE' && effectiveState !== 'DEAD' && !circuitBreakerOpen) {
+    return null;
+  }
 
   const seconds = Math.max(4, Math.round(tickAgeMs / 1000));
   const isBinmax = isNewTraderoomEnabled();
+  const isDead = effectiveState === 'DEAD';
+  const badgeLabel = isDead ? 'DEAD · STALE' : 'STALE';
 
   // Modo Turbo Prata Moderno (Pill discreto flutuante que não cobre as velas nem as ferramentas)
   if (isBinmax) {
@@ -68,6 +78,7 @@ export const StalenessOverlay: React.FC<StalenessOverlayProps> = ({
     return (
       <div
         data-testid="staleness-pill"
+        data-feed-state={effectiveState}
         style={{
           position: 'absolute',
           top: '12px',
@@ -91,6 +102,22 @@ export const StalenessOverlay: React.FC<StalenessOverlayProps> = ({
           }}
         >
           <span style={{ fontSize: '12px' }}>⚠️</span>
+          <span
+            data-testid="staleness-state-badge"
+            style={{
+              color: '#F2545B',
+              fontSize: '10px',
+              fontWeight: 800,
+              letterSpacing: '0.4px',
+              padding: '1px 6px',
+              borderRadius: '4px',
+              background: 'rgba(242, 84, 91, 0.16)',
+              border: '1px solid rgba(242, 84, 91, 0.35)',
+              fontFamily: "'Geist Mono', monospace",
+            }}
+          >
+            {badgeLabel}
+          </span>
           <span
             style={{
               color: '#F2545B',
@@ -152,6 +179,8 @@ export const StalenessOverlay: React.FC<StalenessOverlayProps> = ({
 
   return (
     <div
+      data-testid="staleness-legacy-banner"
+      data-feed-state={effectiveState}
       style={{
         position: 'absolute',
         top: '48px',
@@ -181,7 +210,7 @@ export const StalenessOverlay: React.FC<StalenessOverlayProps> = ({
         <span style={{ fontSize: '16px' }}>⚠️</span>
         <div style={{ textAlign: 'left' }}>
           <div style={{ color: '#ff6b6b', fontSize: '11px', fontWeight: 800, letterSpacing: '0.5px' }}>
-            FEED DESATUALIZADO — COTAÇÃO CONGELADA ({symbol})
+            <span data-testid="staleness-state-badge">[{badgeLabel}]</span> FEED DESATUALIZADO — COTAÇÃO CONGELADA ({symbol})
           </div>
           <div style={{ color: '#fca5a5', fontSize: '10px', fontWeight: 600 }}>
             Sem cotações oficiais há {seconds}s. Abertura de novos contratos bloqueada pela governança de risco.

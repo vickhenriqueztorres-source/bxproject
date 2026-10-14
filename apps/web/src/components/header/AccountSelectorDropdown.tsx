@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { formatMinor, formatCurrencyBinmax } from '../../lib/money';
 import { useRouter } from '../../router/RouterContext';
 import { AuthService } from '../../auth/auth-service';
+import { useUiLanguage } from '../../i18n';
 
 export interface AccountSelectorDropdownProps {
   balanceMinor: number | null;
@@ -27,6 +28,8 @@ export const AccountSelectorDropdown: React.FC<AccountSelectorDropdownProps> = (
   const [isOpen, setIsOpen] = useState(initialOpen);
   const containerRef = useRef<HTMLDivElement>(null);
   const { navigate } = useRouter();
+  const uiLang = useUiLanguage('es');
+  const isPt = uiLang === 'pt';
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
@@ -119,7 +122,9 @@ export const AccountSelectorDropdown: React.FC<AccountSelectorDropdownProps> = (
                 letterSpacing: '0.2px',
               }}
             >
-              {accountType === 'DEMO' ? 'Cuenta de práctica' : 'Cuenta real'}
+              {accountType === 'DEMO'
+                ? isPt ? 'Conta de prática' : 'Cuenta de práctica'
+                : isPt ? 'Conta real' : 'Cuenta real'}
             </span>
             <span style={{ fontSize: '9px', color: '#8A92A1', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 100ms cubic-bezier(0.16, 1, 0.3, 1)' }}>
               ▼
@@ -188,7 +193,7 @@ export const AccountSelectorDropdown: React.FC<AccountSelectorDropdownProps> = (
                 </span>
               )}
               <div>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: '#F4F5F7' }}>Cuenta real</div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#F4F5F7' }}>{isPt ? 'Conta real' : 'Cuenta real'}</div>
                 <div style={{ fontSize: '9px', color: '#8A92A1' }}>{accountEmail}</div>
               </div>
             </div>
@@ -224,8 +229,8 @@ export const AccountSelectorDropdown: React.FC<AccountSelectorDropdownProps> = (
                   </span>
                 )}
                 <div>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#F4F5F7' }}>Cuenta de práctica</div>
-                  <div style={{ fontSize: '9px', color: '#8A92A1' }}>Saldo demonstrativo</div>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#F4F5F7' }}>{isPt ? 'Conta de prática' : 'Cuenta de práctica'}</div>
+                  <div style={{ fontSize: '9px', color: '#8A92A1' }}>{isPt ? 'Saldo demonstrativo' : 'Saldo demostrativo'}</div>
                 </div>
               </div>
               <strong style={{ fontSize: '13px', color: '#22C47A', fontFamily: "'Geist Mono', monospace" }}>
@@ -257,10 +262,10 @@ export const AccountSelectorDropdown: React.FC<AccountSelectorDropdownProps> = (
                 gap: '5px',
                 transition: 'all 0.15s ease',
               }}
-              title="Recargar $10.000 demo"
+              title={isPt ? 'Recarregar $10.000 demo' : 'Recargar $10.000 demo'}
             >
               <span>↺</span>
-              <span>Recargar práctica</span>
+              <span>{isPt ? 'Recarregar prática' : 'Recargar práctica'}</span>
             </button>
 
             {/* Divisor Institucional */}
@@ -289,7 +294,7 @@ export const AccountSelectorDropdown: React.FC<AccountSelectorDropdownProps> = (
                   transition: 'background 0.15s ease',
                 }}
               >
-                Iniciar sesión
+                {isPt ? 'Entrar' : 'Iniciar sesión'}
               </button>
               <button
                 type="button"
@@ -312,7 +317,7 @@ export const AccountSelectorDropdown: React.FC<AccountSelectorDropdownProps> = (
                   transition: 'background 0.15s ease',
                 }}
               >
-                Crear cuenta
+                {isPt ? 'Criar conta' : 'Crear cuenta'}
               </button>
             </div>
 
@@ -359,7 +364,7 @@ export const AccountSelectorDropdown: React.FC<AccountSelectorDropdownProps> = (
                   <polyline points="16 17 21 12 16 7" />
                   <line x1="21" y1="12" x2="9" y2="12" />
                 </svg>
-                <span>Cerrar sesión</span>
+                <span>{isPt ? 'Sair' : 'Cerrar sesión'}</span>
               </button>
             )}
           </div>

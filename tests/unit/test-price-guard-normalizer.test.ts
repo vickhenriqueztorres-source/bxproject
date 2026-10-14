@@ -100,6 +100,25 @@ describe("Subetapa 3 (Unit): Price Guard — Rejeição de Preço Velho (>5s) e 
     assert.strictEqual(result.accepted, true);
     assert.strictEqual(guard.getLastAcceptedPrice(), 61200);
   });
+
+  it("7b. Deve rejeitar tick fora de ordem (timestamp < último aceito) e não sobrescrever preço fresco", () => {
+    const guard = new PriceGuard(60_000);
+    const now = Date.now();
+
+    // Tick fresco em t = now - 500ms (61.500)
+    const newerQuote = PriceNormalizer.normalizeQuote("BTCUSD_OTC", 61_500, now - 500);
+    const firstResult = guard.evaluate(newerQuote, now);
+    assert.strictEqual(firstResult.accepted, true);
+    assert.strictEqual(guard.getLastAcceptedPrice(), 61_500);
+
+    // Tick atrasado/fora de ordem em t = now - 2000ms (< now - 500ms, embora dentro de 5s de now)
+    const outOfOrderQuote = PriceNormalizer.normalizeQuote("BTCUSD_OTC", 59_900, now - 2000);
+    const secondResult = guard.evaluate(outOfOrderQuote, now);
+
+    assert.strictEqual(secondResult.accepted, false);
+    assert.strictEqual(secondResult.rejectReason, "OUT_OF_ORDER");
+    assert.strictEqual(guard.getLastAcceptedPrice(), 61_500, "Preço fresco jamais pode ser sobrescrito por tick velho");
+  });
 });
 
 describe("Subetapa 3 (Unit): RealMarketDataFeedAdapter com Pipeline Integrado e Resiliência", () => {

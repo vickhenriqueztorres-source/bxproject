@@ -6,6 +6,7 @@ export interface BilleteraModalProps {
   isOpen: boolean;
   onClose: () => void;
   availableMinor?: number | null;
+  reservedMinor?: number | null;
   onResetDemo?: () => void;
 }
 
@@ -13,6 +14,7 @@ export function BilleteraModal({
   isOpen,
   onClose,
   availableMinor = 0,
+  reservedMinor = 0,
   onResetDemo,
 }: BilleteraModalProps) {
   const [activeTab, setActiveTab] = useState<'depositar' | 'metodos' | 'historial'>('depositar');
@@ -32,6 +34,10 @@ export function BilleteraModal({
 
   const formattedBalance = availableMinor !== null && availableMinor !== undefined
     ? `$${(availableMinor / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : '$0.00';
+
+  const formattedReservedBalance = reservedMinor !== null && reservedMinor !== undefined
+    ? `$${(reservedMinor / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : '$0.00';
 
   const handleDepositSuccess = (amountUsd: number) => {
@@ -167,7 +173,7 @@ export function BilleteraModal({
                   marginTop: '2px',
                 }}
               >
-                $0.00
+                {formattedReservedBalance}
               </div>
             </div>
 

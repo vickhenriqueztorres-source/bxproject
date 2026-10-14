@@ -37,24 +37,26 @@ export function formatTimeHhMm(date: Date, timeZoneOffsetHours: number = -3): st
 /**
  * Calcula os slots de tempo de expiração disponíveis no momento exato (Modelo IQ Option)
  * 
- * Regra dos 30 segundos:
- * Se faltar menos de 30s para o fechamento da vela atual, a expiração
- * avança para a vela seguinte, garantindo margem para abertura de ordens.
+ * Regra dos 60 segundos (Piso Mínimo Inviolável):
+ * O tempo mínimo de expiração das operações é de 60 segundos.
+ * Se faltar menos de 60s para o fechamento da vela atual, a expiração
+ * avança para a vela seguinte, garantindo duração >= 60s.
  */
 export function calculateExpirySlots(now: Date = new Date(), timeZoneOffsetHours: number = -3): ExpirySlot[] {
-  const nowMs = now.getTime();
+  const rawNowMs = now instanceof Date && Number.isFinite(now.getTime()) ? now.getTime() : Date.now();
+  const nowMs = rawNowMs;
 
-  // 1. Fim de Vela de 1 Minuto (1M)
+  // 1. Fim de Vela de 1 Minuto (1M) — Piso mínimo de 60s
   const cur1mEndMs = Math.ceil(nowMs / 60_000) * 60_000;
   const rem1mSec = Math.floor((cur1mEndMs - nowMs) / 1000);
-  const target1mMs = rem1mSec < 30 ? cur1mEndMs + 60_000 : cur1mEndMs;
-  const final1mSec = Math.max(30, Math.floor((target1mMs - nowMs) / 1000));
+  const target1mMs = rem1mSec < 60 ? cur1mEndMs + 60_000 : cur1mEndMs;
+  const final1mSec = Math.max(60, Math.floor((target1mMs - nowMs) / 1000));
 
-  // 2. Fim de Vela de 5 Minutos (5M)
+  // 2. Fim de Vela de 5 Minutos (5M) — Piso mínimo de 60s
   const cur5mEndMs = Math.ceil(nowMs / 300_000) * 300_000;
   const rem5mSec = Math.floor((cur5mEndMs - nowMs) / 1000);
-  const target5mMs = rem5mSec < 30 ? cur5mEndMs + 300_000 : cur5mEndMs;
-  const final5mSec = Math.max(30, Math.floor((target5mMs - nowMs) / 1000));
+  const target5mMs = rem5mSec < 60 ? cur5mEndMs + 300_000 : cur5mEndMs;
+  const final5mSec = Math.max(60, Math.floor((target5mMs - nowMs) / 1000));
 
   // 3. 1 Minuto Corrido (Turbo 60s)
   const turbo1mSec = 60;
@@ -101,35 +103,36 @@ export function calculateExpirySlots(now: Date = new Date(), timeZoneOffsetHours
 
 /**
  * Calcula o tempo oficial de expiração no momento do envio da ordem
- * Impondo a garantia inviolável de NUNCA liquidar em menos de 30 segundos!
+ * Impondo a garantia inviolável de NUNCA liquidar em menos de 60 segundos!
  */
 export function calculateExecutionExpiry(
   mode: ExpiryMode = '1M_FIXED',
   nowMs: number = Date.now()
 ): { durationMs: number; targetEpochMs: number } {
+  const safeNowMs = Number.isFinite(nowMs) && nowMs > 0 ? nowMs : Date.now();
   let targetEpochMs: number;
 
   if (mode === 'CANDLE_1M') {
-    const cur1mEndMs = Math.ceil(nowMs / 60_000) * 60_000;
-    const remSec = Math.floor((cur1mEndMs - nowMs) / 1000);
-    // Se faltar menos de 30s para o minuto fechar, expira no fim do próximo minuto (+1m)
-    targetEpochMs = remSec < 30 ? cur1mEndMs + 60_000 : cur1mEndMs;
+    const cur1mEndMs = Math.ceil(safeNowMs / 60_000) * 60_000;
+    const remSec = Math.floor((cur1mEndMs - safeNowMs) / 1000);
+    // Se faltar menos de 60s para o minuto fechar, expira no fim do próximo minuto (+1m)
+    targetEpochMs = remSec < 60 ? cur1mEndMs + 60_000 : cur1mEndMs;
   } else if (mode === 'CANDLE_5M') {
-    const cur5mEndMs = Math.ceil(nowMs / 300_000) * 300_000;
-    const remSec = Math.floor((cur5mEndMs - nowMs) / 1000);
-    // Se faltar menos de 30s para o bloco de 5m fechar, expira no próximo bloco de 5m
-    targetEpochMs = remSec < 30 ? cur5mEndMs + 300_000 : cur5mEndMs;
+    const cur5mEndMs = Math.ceil(safeNowMs / 300_000) * 300_000;
+    const remSec = Math.floor((cur5mEndMs - safeNowMs) / 1000);
+    // Se faltar menos de 60s para o bloco de 5m fechar, expira no próximo bloco de 5m
+    targetEpochMs = remSec < 60 ? cur5mEndMs + 300_000 : cur5mEndMs;
   } else {
     // 1M_FIXED (60 segundos corridos a partir do clique)
-    targetEpochMs = nowMs + 60_000;
+    targetEpochMs = safeNowMs + 60_000;
   }
 
-  // PISO DE SEGURANÇA: NUNCA MENOS DE 30 SEGUNDOS!
-  const diffMs = targetEpochMs - nowMs;
-  const durationMs = Math.max(30_000, diffMs);
+  // PISO DE SEGURANÇA: NUNCA MENOS DE 60 SEGUNDOS (60.000ms)!
+  const diffMs = targetEpochMs - safeNowMs;
+  const durationMs = Math.max(60_000, diffMs);
 
   return {
     durationMs,
-    targetEpochMs: nowMs + durationMs,
+    targetEpochMs: safeNowMs + durationMs,
   };
 }

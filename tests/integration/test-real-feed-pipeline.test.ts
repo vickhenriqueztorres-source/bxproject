@@ -140,28 +140,33 @@ describe("Subetapa 4 (Integration): Pipeline Criptográfico, Candles e Liquidaç
     assert.strictEqual(profitMinor, 8500, "Lucro fixo de 85% em inteiros (minor units)");
     assert.strictEqual(totalPayoutMinor, 18500, "Payout total = stake (10000) + lucro (8500)");
 
-    // Valida nomenclatura oficial das contas do Ledger Demo para as 6 moedas (Seção 7.1 e 7.2)
-    const currencies = ["BRL", "MXN", "COP", "ARS", "CLP", "PEN"];
-    for (const curr of currencies) {
-      assert.strictEqual(
-        BlnkClient.getUserDemoAccount("usr-123", "available", curr),
-        `user:usr-123:demo:${curr}:available`
-      );
-      assert.strictEqual(
-        BlnkClient.getUserDemoAccount("usr-123", "reserved", curr),
-        `user:usr-123:demo:${curr}:reserved`
-      );
-      assert.strictEqual(
-        BlnkClient.getPlatformDemoAccount("liability", curr),
-        `platform:demo:${curr}:liability`
-      );
-      assert.strictEqual(
-        BlnkClient.getPlatformDemoAccount("revenue", curr),
-        `platform:demo:${curr}:revenue`
-      );
-      assert.strictEqual(
-        BlnkClient.getPlatformDemoAccount("payout", curr),
-        `platform:demo:${curr}:payout`
+    // Valida nomenclatura oficial das contas do Ledger Demo ancoradas em USD e bloqueio de conversão silenciosa
+    assert.strictEqual(
+      BlnkClient.getUserDemoAccount("usr-123", "available", "USD"),
+      "user:usr-123:demo:USD:available"
+    );
+    assert.strictEqual(
+      BlnkClient.getUserDemoAccount("usr-123", "reserved", "USD"),
+      "user:usr-123:demo:USD:reserved"
+    );
+    assert.strictEqual(
+      BlnkClient.getPlatformDemoAccount("liability", "USD"),
+      "platform:demo:USD:liability"
+    );
+    assert.strictEqual(
+      BlnkClient.getPlatformDemoAccount("revenue", "USD"),
+      "platform:demo:USD:revenue"
+    );
+    assert.strictEqual(
+      BlnkClient.getPlatformDemoAccount("payout", "USD"),
+      "platform:demo:USD:payout"
+    );
+
+    const displayCurrencies = ["BRL", "MXN", "COP", "ARS", "CLP", "PEN"];
+    for (const curr of displayCurrencies) {
+      assert.throws(
+        () => BlnkClient.getUserDemoAccount("usr-123", "available", curr),
+        /SILENT_CONVERSION_FORBIDDEN/
       );
     }
   });

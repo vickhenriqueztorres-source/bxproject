@@ -3,15 +3,21 @@ import { TournamentModalProps, TournamentItem } from './TournamentTypes';
 import { TOURNAMENTS_LIST_DATA } from './tournaments-mock-data';
 import { TournamentListView } from './TournamentListView';
 import { TournamentDetailView } from './TournamentDetailView';
+import { getJoinedTournamentIds, joinTournamentLocal } from './tournament-enrollment';
+import { useRouter } from '../../router/RouterContext';
 
 export function TournamentModal({
   isOpen,
   onClose,
   initialTournamentId = 'copa-binmax',
   initialView = 'list',
+  onOpenArena,
+  onJoinTournament,
 }: TournamentModalProps) {
+  const { navigate, currentPath } = useRouter();
   const [currentView, setCurrentView] = useState<'list' | 'details'>(initialView);
   const [selectedTournamentId, setSelectedTournamentId] = useState<string>(initialTournamentId);
+  const [joinedIds, setJoinedIds] = useState<string[]>(() => getJoinedTournamentIds());
 
   // Sincroniza estado inicial ao abrir o modal
   useEffect(() => {
@@ -20,8 +26,16 @@ export function TournamentModal({
       if (initialTournamentId) {
         setSelectedTournamentId(initialTournamentId);
       }
+      setJoinedIds(getJoinedTournamentIds());
     }
   }, [isOpen, initialView, initialTournamentId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleSync = () => setJoinedIds(getJoinedTournamentIds());
+    window.addEventListener('binmax:tournaments-updated', handleSync);
+    return () => window.removeEventListener('binmax:tournaments-updated', handleSync);
+  }, []);
 
   // Tecla Escape para fechar
   useEffect(() => {
@@ -47,6 +61,30 @@ export function TournamentModal({
 
   const handleBackToList = () => {
     setCurrentView('list');
+  };
+
+  const handleJoin = (id: string) => {
+    const res = joinTournamentLocal(id);
+    if (res.success) {
+      setJoinedIds(res.joinedIds);
+      onJoinTournament?.(id);
+    }
+  };
+
+  const handleOpenArena = () => {
+    onClose();
+    if (onOpenArena) {
+      onOpenArena();
+    } else {
+      navigate('/arena');
+    }
+  };
+
+  const handleStartTrading = () => {
+    onClose();
+    if (currentPath !== '/' && currentPath !== '/operar') {
+      navigate('/operar');
+    }
   };
 
   return (
@@ -106,15 +144,22 @@ export function TournamentModal({
             tournaments={TOURNAMENTS_LIST_DATA}
             onSelectTournament={handleSelectTournament}
             onClose={onClose}
+            joinedIds={joinedIds}
+            onOpenArena={handleOpenArena}
           />
         ) : (
           <TournamentDetailView
             tournament={selectedTournament}
             onBack={handleBackToList}
             onClose={onClose}
+            isJoined={joinedIds.includes(selectedTournament.id)}
+            onJoin={handleJoin}
+            onStartTrading={handleStartTrading}
+            onOpenArena={handleOpenArena}
           />
         )}
       </div>
     </div>
   );
 }
+

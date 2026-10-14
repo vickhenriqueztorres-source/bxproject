@@ -140,7 +140,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
     return reply.send({
       ledger: "blnk_main_ledger",
-      currency: "USD_CENT",
+      currency: "USD",
+      precision: 100,
       totalAssetsMinor: 100000000, // US$ 1.000.000,00
       totalLiabilitiesMinor: 15000000, // US$ 150.000,00
       floatCapPct: 3,

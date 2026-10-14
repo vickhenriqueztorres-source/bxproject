@@ -9,6 +9,10 @@ import { getTabDisplayTitle } from '../components/header/TerminalHeader';
 import { setFeatureFlagForTesting } from '../lib/feature-flags';
 import type { Contract } from '../api/client';
 import type { IndicatorConfig } from './drawing-types';
+import { setTraderoomPolishEnabled } from '../lib/traderoom-polish';
+
+// Este arquivo cobre os overlays anteriores (cápsula de sentimento, pílula de expiração). Ver chart/subetapa-polish-05-time-mood.
+setTraderoomPolishEnabled(false);
 
 describe('SUBETAPA 18-03: Engenharia Gráfica, Overlays e Limpeza do Grid', () => {
   const mockIndicators: IndicatorConfig[] = [

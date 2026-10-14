@@ -13,13 +13,15 @@ class ContractSettler {
     redis;
     blnkClient;
     consumerName;
+    maxExitTickLagMs;
     STREAM_KEY = "stream:contracts:expiring";
     GROUP_NAME = "cg:settlement";
-    constructor(pool, redis, blnkClient, consumerName) {
+    constructor(pool, redis, blnkClient, consumerName, options = {}) {
         this.pool = pool;
         this.redis = redis;
         this.blnkClient = blnkClient;
         this.consumerName = consumerName;
+        this.maxExitTickLagMs = options.maxExitTickLagMs ?? 30_000;
     }
     /**
      * Processa a liquidação de um contrato específico com bloqueio pessimista (B-08, DB-07, I-04)
@@ -29,7 +31,7 @@ class ContractSettler {
         try {
             await client.query("BEGIN");
             // 1. Bloqueio pessimista com SKIP LOCKED para prevenir concorrência entre workers
-            const lockRes = await client.query(`SELECT id, user_id, symbol, direction, status, stake_minor, entry_price, opened_at, expires_at
+            const lockRes = await client.query(`SELECT id, user_id, symbol, direction, status, stake_minor, entry_price, entry_tick_sequence, opened_at, expires_at
          FROM contracts
          WHERE id = $1
          FOR UPDATE SKIP LOCKED;`, [contractId]);
@@ -39,11 +41,20 @@ class ContractSettler {
                 return { success: false, reason: "ALREADY_LOCKED_OR_NOT_FOUND" };
             }
             const contract = lockRes.rows[0];
-            // Idempotência: se já foi liquidado anteriormente, finaliza
+            // Idempotência e Máquina de Estados (Perigo 5 — Técnicas 3 e 4):
             if (contract.status === "SETTLED") {
                 await client.query("COMMIT");
                 await this.redis.zrem("contracts:pending", contractId);
                 return { success: true, reason: "ALREADY_SETTLED" };
+            }
+            if (contract.status === "CANCELLED") {
+                await client.query("COMMIT");
+                await this.redis.zrem("contracts:pending", contractId);
+                return { success: true, reason: "ALREADY_CANCELLED" };
+            }
+            if (contract.status !== "OPEN" && contract.status !== "EXPIRING") {
+                await client.query("ROLLBACK");
+                return { success: false, reason: "INVALID_CONTRACT_STATE_TRANSITION" };
             }
             // 2. Validação de Sessão de Mercado (Perigo 7 / Técnica 4)
             if (!(0, calendar_js_1.isMarketOpen)(contract.symbol, contract.expires_at)) {
@@ -51,7 +62,7 @@ class ContractSettler {
                 return { success: false, reason: "MARKET_CLOSED_AT_EXPIRY" };
             }
             // 3. Busca rigorosa do primeiro tick oficial gravado no PostgreSQL onde ts >= expires_at (B-08)
-            const tickRes = await client.query(`SELECT sequence, price, ts
+            const tickRes = await client.query(`SELECT symbol, sequence, price, ts
          FROM ticks
          WHERE symbol = $1
            AND ts >= $2
@@ -63,12 +74,38 @@ class ContractSettler {
                 return { success: false, reason: "EXIT_TICK_NOT_YET_AVAILABLE" };
             }
             const exitTick = tickRes.rows[0];
+            // Perigo 5 (Técnica 2): Asserção estrita anti-cross-asset (tick.symbol === contract.symbol)
+            if (exitTick.symbol && exitTick.symbol !== contract.symbol) {
+                await client.query("ROLLBACK");
+                return { success: false, reason: "CROSS_ASSET_TICK_MISMATCH" };
+            }
+            // Perigo 5 (Técnica 2): Validação de progressão monotônica de sequência em relação à entrada
+            const exitSeq = BigInt(exitTick.sequence);
+            if (contract.entry_tick_sequence !== undefined &&
+                contract.entry_tick_sequence !== null &&
+                exitSeq < BigInt(contract.entry_tick_sequence)) {
+                await client.query("ROLLBACK");
+                return { success: false, reason: "EXIT_TICK_SEQUENCE_REGRESSION" };
+            }
+            // Perigo 5 (Técnica 2): Validação temporal do tick de saída (ts >= expires_at e não stale)
+            const expiresAtMs = new Date(contract.expires_at).getTime();
+            const exitTickMs = new Date(exitTick.ts).getTime();
+            if (Number.isFinite(expiresAtMs) && Number.isFinite(exitTickMs)) {
+                const exitTickLagMs = exitTickMs - expiresAtMs;
+                if (exitTickLagMs < -5) {
+                    await client.query("ROLLBACK");
+                    return { success: false, reason: "EXIT_TICK_BEFORE_EXPIRY" };
+                }
+                if (exitTickLagMs > this.maxExitTickLagMs) {
+                    await client.query("ROLLBACK");
+                    return { success: false, reason: "STALE_EXIT_TICK" };
+                }
+            }
             if (!(0, calendar_js_1.isMarketOpen)(contract.symbol, exitTick.ts)) {
                 await client.query("ROLLBACK");
                 return { success: false, reason: "TICK_OUT_OF_SESSION" };
             }
             const exitPrice = exitTick.price.toString();
-            const exitSeq = BigInt(exitTick.sequence);
             // 3. Determinação de resultado e cálculo de payout com inteiros (D-19)
             const result = payout_calculator_js_1.PayoutCalculator.determineResult(contract.direction, contract.entry_price.toString(), exitPrice);
             const stakeMinor = parseInt(contract.stake_minor, 10);
@@ -114,7 +151,9 @@ class ContractSettler {
                 contract_id: contractId,
                 user_id: contract.user_id,
                 result,
+                stake_minor: stakeMinor,
                 payout_minor: calc.payout_minor,
+                profit_minor: calc.profit_minor,
                 exit_price: exitPrice
             }));
             return { success: true };

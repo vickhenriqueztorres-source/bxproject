@@ -93,9 +93,10 @@ export function isCandlesPriceAligned(candles: Candle[], symbol: string): boolea
   if (!Number.isFinite(close) || close <= 0) return false;
   const base = getAssetBasePrice(symbol);
   if (!Number.isFinite(base) || base <= 0) return true;
-  // Tolerância máxima de 25% entre o preço das velas e o preço base de mercado
-  const diffRatio = Math.abs(close - base) / base;
-  return diffRatio <= 0.25;
+  // Proteção contra contaminação cross-asset (ex: BTCUSD ~65000 salvo em EURUSD ~1.08),
+  // permitindo deriva natural de múltiplos dias nos índices sintéticos (ex: VOL_50 em 672.55 ou 125.00).
+  const ratio = close / base;
+  return ratio >= 0.05 && ratio <= 20.0;
 }
 
 // Purgado na Etapa 8: a liquidação oficial é 100% executada pelo backend e Blnk Ledger
@@ -421,8 +422,12 @@ export const openContract = async (
   targetExpiresAt?: string,
   expiryMode: string = '1M_FIXED'
 ): Promise<Receipt> => {
-  // PISO INVIOLÁVEL: NUNCA MENOS DE 30 SEGUNDOS
-  const durationMs = Math.max(30_000, durationSeconds * 1000);
+  // PISO INVIOLÁVEL: NUNCA MENOS DE 60 SEGUNDOS
+  const safeDurationSeconds = Math.max(
+    60,
+    Math.min(300, Number.isFinite(durationSeconds) ? Math.round(durationSeconds) : 60)
+  );
+  const durationMs = Math.max(60_000, safeDurationSeconds * 1000);
   const expiresAt = targetExpiresAt || new Date(Date.now() + durationMs).toISOString();
 
   if (isGuestMode()) {
@@ -431,7 +436,7 @@ export const openContract = async (
         symbol,
         direction,
         stake_minor: stakeMinor,
-        duration_seconds: durationSeconds,
+        duration_seconds: safeDurationSeconds,
         expiry_mode: expiryMode,
       };
       if (targetExpiresAt) {
@@ -502,7 +507,13 @@ export const openContract = async (
     direction,
     stake_minor: stakeMinor,
   };
-  if (durationSeconds && durationSeconds !== 60 && durationSeconds <= 300) {
+  if (
+    typeof durationSeconds === 'number' &&
+    Number.isInteger(durationSeconds) &&
+    durationSeconds >= 60 &&
+    durationSeconds <= 300 &&
+    (durationSeconds !== 60 || expiryMode === 'duration')
+  ) {
     contractBody.duration_seconds = durationSeconds;
   }
 

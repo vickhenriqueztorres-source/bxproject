@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { TournamentModal } from '../tournaments/TournamentModal';
+import { useRouter } from '../../router/RouterContext';
+import { useTranslation, useUiLanguage } from '../../i18n';
 
 export interface TournamentsDrawerProps {
   onClose?: () => void;
@@ -10,6 +12,10 @@ export const TournamentsDrawer: React.FC<TournamentsDrawerProps> = ({
   onClose,
   initialJoined = false,
 }) => {
+  const { navigate } = useRouter();
+  const { isI18nActive } = useTranslation();
+  const uiLang = useUiLanguage('es');
+  const isPt = uiLang === 'pt';
   const [isJoined, setIsJoined] = useState<boolean>(initialJoined);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
@@ -28,6 +34,37 @@ export const TournamentsDrawer: React.FC<TournamentsDrawerProps> = ({
         width: '100%',
       }}
     >
+      {/* Botão Direto: Entrar na Arena Blitz · 15 min */}
+      <button
+        type="button"
+        data-testid="btn-open-arena-blitz-drawer"
+        onClick={() => {
+          onClose?.();
+          navigate('/arena');
+        }}
+        style={{
+          width: '100%',
+          padding: '10px 14px',
+          borderRadius: '8px',
+          backgroundColor: '#1a0b2e',
+          border: '1px solid #9d4edd',
+          color: '#FFFFFF',
+          fontSize: '12px',
+          fontWeight: 700,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          transition: 'all 0.15s ease',
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ color: '#9d4edd' }}>⚡</span>
+          <span>Arena Blitz · 15 min</span>
+        </span>
+        <span style={{ color: '#9d4edd', fontSize: '14px' }}>→</span>
+      </button>
+
       {/* Botão de Destaque: Abrir Pop-up Oficial de Torneios */}
       <button
         type="button"
@@ -51,7 +88,7 @@ export const TournamentsDrawer: React.FC<TournamentsDrawerProps> = ({
       >
         <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span>🏆</span>
-          <span>Abrir Hub de Torneios</span>
+          <span>{!isI18nActive || isPt ? 'Abrir Hub de Torneios' : 'Abrir Hub de Torneos'}</span>
         </span>
         <span style={{ color: '#22C47A', fontSize: '14px' }}>→</span>
       </button>
@@ -86,7 +123,7 @@ export const TournamentsDrawer: React.FC<TournamentsDrawerProps> = ({
               gap: '4px',
             }}
           >
-            <span style={{ fontSize: '8px' }}>●</span> EN VIVO
+            <span style={{ fontSize: '8px' }}>●</span> {isPt ? 'AO VIVO' : 'EN VIVO'}
           </span>
           <span
             data-testid="live-tournament-countdown"
@@ -96,7 +133,7 @@ export const TournamentsDrawer: React.FC<TournamentsDrawerProps> = ({
               fontFamily: "'Geist Mono', monospace",
             }}
           >
-            Termina en 14h 22m
+            {isPt ? 'Termina em 14h 22m' : 'Termina en 14h 22m'}
           </span>
         </div>
 
@@ -112,7 +149,7 @@ export const TournamentsDrawer: React.FC<TournamentsDrawerProps> = ({
               letterSpacing: '-0.2px',
             }}
           >
-            Torneo Turbo Sprint
+            {isPt ? 'Torneio Turbo Sprint' : 'Torneo Turbo Sprint'}
           </h3>
           <p
             style={{
@@ -122,7 +159,9 @@ export const TournamentsDrawer: React.FC<TournamentsDrawerProps> = ({
               lineHeight: 1.45,
             }}
           >
-            Compite con saldo de práctica por premios en efectivo.
+            {isPt
+              ? 'Compita com saldo de prática por prêmios em dinheiro.'
+              : 'Compite con saldo de práctica por premios en efectivo.'}
           </p>
         </div>
 
@@ -138,7 +177,9 @@ export const TournamentsDrawer: React.FC<TournamentsDrawerProps> = ({
             border: '1px solid rgba(244, 245, 247, 0.04)',
           }}
         >
-          <span style={{ fontSize: '11px', color: '#8A92A1' }}>Premio total</span>
+          <span style={{ fontSize: '11px', color: '#8A92A1' }}>
+            {isPt ? 'Prêmio total' : 'Premio total'}
+          </span>
           <strong
             data-testid="live-tournament-prize"
             style={{
@@ -217,7 +258,7 @@ export const TournamentsDrawer: React.FC<TournamentsDrawerProps> = ({
               letterSpacing: '0.4px',
             }}
           >
-            PRÓXIMAMENTE
+            {isPt ? 'EM BREVE' : 'PRÓXIMAMENTE'}
           </span>
           <span
             data-testid="upcoming-tournament-start"
@@ -227,7 +268,7 @@ export const TournamentsDrawer: React.FC<TournamentsDrawerProps> = ({
               fontFamily: "'Geist Mono', monospace",
             }}
           >
-            Inicia en 3d 14h
+            {isPt ? 'Inicia em 3d 14h' : 'Inicia en 3d 14h'}
           </span>
         </div>
 
@@ -242,10 +283,12 @@ export const TournamentsDrawer: React.FC<TournamentsDrawerProps> = ({
               color: '#F4F5F7',
             }}
           >
-            Torneo Semanal
+            {isPt ? 'Torneio Semanal' : 'Torneo Semanal'}
           </h3>
           <p style={{ margin: 0, fontSize: '11.5px', color: '#8A92A1' }}>
-            Compite con los mejores traders de la región por premios garantizados.
+            {isPt
+              ? 'Compita com os melhores traders da região por prêmios garantidos.'
+              : 'Compite con los mejores traders de la región por premios garantizados.'}
           </p>
         </div>
       </div>

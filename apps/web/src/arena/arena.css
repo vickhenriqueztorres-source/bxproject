@@ -1,0 +1,394 @@
+/* ==========================================================================
+   ARENA BLITZ SCOPED UTILITY STYLES (React + Vite parity with landing-binmax)
+   ========================================================================== */
+
+.arena-root {
+  color: var(--foreground);
+  background-color: var(--background);
+  font-family: var(--font-ui, 'Geist', sans-serif);
+}
+
+.arena-root *,
+.arena-root *::before,
+.arena-root *::after {
+  box-sizing: border-box;
+  border-color: var(--border);
+}
+
+.arena-root button,
+.arena-root input,
+.arena-root optgroup,
+.arena-root select,
+.arena-root textarea {
+  font-family: inherit;
+  font-feature-settings: inherit;
+  font-variation-settings: inherit;
+  font-size: 100%;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+  background-image: none;
+  border-width: 0;
+  border-style: solid;
+  border-color: var(--border);
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.arena-root button {
+  cursor: pointer;
+}
+
+.arena-root button:disabled {
+  cursor: not-allowed;
+}
+
+/* Scoped Surface & Semantic Colors (beats any element reset) */
+.arena-root .bg-background { background-color: var(--background, #07090c); }
+.arena-root .bg-background\/50 { background-color: rgba(7, 9, 12, 0.5); }
+.arena-root .bg-background\/60 { background-color: rgba(7, 9, 12, 0.6); }
+.arena-root .bg-background\/70 { background-color: rgba(7, 9, 12, 0.7); }
+.arena-root .bg-background\/75 { background-color: rgba(7, 9, 12, 0.75); }
+.arena-root .bg-surface { background-color: var(--surface, #0f1318); }
+.arena-root .bg-raised { background-color: var(--raised, #161b22); }
+.arena-root .bg-elevated { background-color: var(--raised, #161b22); }
+.arena-root .bg-arena { background-color: var(--tournament-purple-glow, #9d4edd); }
+.arena-root .bg-arena-surface { background-color: var(--tournament-purple-surface, #1a0b2e); }
+.arena-root .bg-arena\/20 { background-color: rgba(157, 78, 221, 0.2); }
+.arena-root .bg-arena\/25 { background-color: rgba(157, 78, 221, 0.25); }
+.arena-root .bg-primary { background-color: var(--primary, #22c55e); }
+.arena-root .bg-primary\/5 { background-color: rgba(34, 197, 94, 0.05); }
+.arena-root .bg-primary\/10 { background-color: rgba(34, 197, 94, 0.10); }
+.arena-root .bg-primary\/15 { background-color: rgba(34, 197, 94, 0.15); }
+.arena-root .bg-destructive { background-color: var(--destructive, #e5484d); }
+.arena-root .bg-destructive\/10 { background-color: rgba(229, 72, 77, 0.10); }
+.arena-root .bg-bonus { background-color: var(--tournament-gold-bonus, #ffb703); }
+.arena-root .bg-bonus\/5 { background-color: rgba(255, 183, 3, 0.05); }
+.arena-root .bg-bonus\/10 { background-color: rgba(255, 183, 3, 0.10); }
+.arena-root .bg-bonus\/15 { background-color: rgba(255, 183, 3, 0.15); }
+.arena-root .bg-alert\/10 { background-color: rgba(255, 0, 84, 0.10); }
+
+.arena-root .text-foreground { color: var(--foreground, #f2f4f7); }
+.arena-root .text-muted-foreground { color: var(--muted-foreground, #8b95a3); }
+.arena-root .text-primary { color: var(--primary, #22c55e); }
+.arena-root .text-primary-foreground { color: var(--primary-foreground, #07090c); }
+.arena-root .text-destructive { color: var(--destructive, #e5484d); }
+.arena-root .text-arena { color: var(--tournament-purple-glow, #9d4edd); }
+.arena-root .text-bonus { color: var(--tournament-gold-bonus, #ffb703); }
+.arena-root .text-bonus\/60 { color: rgba(255, 183, 3, 0.6); }
+.arena-root .text-alert { color: var(--timer-alert, #ff0054); }
+
+.arena-root .border-border { border-color: var(--border, #1c232c); }
+.arena-root .border-arena { border-color: var(--tournament-purple-glow, #9d4edd); }
+.arena-root .border-arena-border { border-color: var(--tournament-purple-border, #5a189a); }
+
+.arena-root .chart-host {
+  height: 100% !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  flex: 1 1 0% !important;
+}
+
+.arena-root .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Layout & Flexbox / Grid */
+.arena-root.flex, .arena-root .flex { display: flex; }
+.arena-root .inline-flex { display: inline-flex; }
+.arena-root .grid { display: grid; }
+.arena-root .block { display: block; }
+.arena-root .hidden { display: none; }
+.arena-root .empty\:hidden:empty { display: none; }
+.arena-root.flex-col, .arena-root .flex-col { flex-direction: column; }
+.arena-root .flex-wrap { flex-wrap: wrap; }
+.arena-root.flex-1, .arena-root .flex-1 { flex: 1 1 0%; }
+.arena-root .shrink-0 { flex-shrink: 0; }
+.arena-root .items-start { align-items: flex-start; }
+.arena-root .items-center { align-items: center; }
+.arena-root .items-end { align-items: flex-end; }
+.arena-root .justify-center { justify-content: center; }
+.arena-root .justify-between { justify-content: space-between; }
+
+.arena-root .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.arena-root .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.arena-root .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.arena-root .grid-cols-\[92px_1fr\] { grid-template-columns: 92px 1fr; }
+
+/* Gaps & Spacing */
+.arena-root .gap-0\.5 { gap: 2px; }
+.arena-root .gap-1 { gap: 4px; }
+.arena-root .gap-1\.5 { gap: 6px; }
+.arena-root .gap-2 { gap: 8px; }
+.arena-root .gap-2\.5 { gap: 10px; }
+.arena-root .gap-3 { gap: 12px; }
+.arena-root .gap-4 { gap: 16px; }
+.arena-root .gap-5 { gap: 20px; }
+.arena-root .gap-6 { gap: 24px; }
+.arena-root .gap-8 { gap: 32px; }
+.arena-root .gap-x-3 { column-gap: 12px; }
+.arena-root .gap-x-6 { column-gap: 24px; }
+.arena-root .gap-x-8 { column-gap: 32px; }
+.arena-root .gap-y-1\.5 { row-gap: 6px; }
+.arena-root .gap-y-3 { row-gap: 12px; }
+
+/* Sizing */
+.arena-root .w-fit { width: fit-content; }
+.arena-root .w-full { width: 100%; }
+.arena-root .w-10 { width: 40px; }
+.arena-root .w-16 { width: 64px; }
+.arena-root .w-60 { width: 240px; }
+.arena-root .w-64 { width: 256px; }
+.arena-root .min-w-0 { min-width: 0; }
+.arena-root .min-w-12 { min-width: 48px; }
+.arena-root .min-w-48 { min-width: 192px; }
+.arena-root .max-w-md { max-width: 448px; }
+.arena-root .max-w-xl { max-width: 576px; }
+.arena-root .max-w-\[1400px\] { max-width: 1400px; }
+.arena-root .max-w-\[calc\(100\%-2rem\)\] { max-width: calc(100% - 32px); }
+
+.arena-root .h-0\.5 { height: 2px; }
+.arena-root .h-1\.5 { height: 6px; }
+.arena-root .h-6 { height: 24px; }
+.arena-root .h-8 { height: 32px; }
+.arena-root .h-9 { height: 36px; }
+.arena-root .h-10 { height: 40px; }
+.arena-root .h-11 { height: 44px; }
+.arena-root .h-12 { height: 48px; }
+.arena-root.h-full, .arena-root .h-full { height: 100%; }
+.arena-root .h-\[380px\] { height: 380px; }
+.arena-root.min-h-0, .arena-root .min-h-0 { min-height: 0; }
+.arena-root .min-h-full { min-height: 100%; }
+
+.arena-root .size-1\.5 { width: 6px; height: 6px; }
+.arena-root .size-2 { width: 8px; height: 8px; }
+.arena-root .size-3 { width: 12px; height: 12px; }
+.arena-root .size-3\.5 { width: 14px; height: 14px; }
+.arena-root .size-4 { width: 16px; height: 16px; }
+.arena-root .size-5 { width: 20px; height: 20px; }
+.arena-root .size-6 { width: 24px; height: 24px; }
+.arena-root .size-7 { width: 28px; height: 28px; }
+.arena-root .size-8 { width: 32px; height: 32px; }
+.arena-root .size-10 { width: 40px; height: 40px; }
+.arena-root .size-14 { width: 56px; height: 56px; }
+.arena-root .size-16 { width: 64px; height: 64px; }
+
+/* Positioning */
+.arena-root .relative { position: relative; }
+.arena-root .absolute { position: absolute; }
+.arena-root .fixed { position: fixed; }
+.arena-root .sticky { position: sticky; }
+.arena-root .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+.arena-root .inset-x-3 { left: 12px; right: 12px; }
+.arena-root .top-0 { top: 0; }
+.arena-root .top-4 { top: 16px; }
+.arena-root .top-11 { top: 44px; }
+.arena-root .right-0 { right: 0; }
+.arena-root .right-4 { right: 16px; }
+.arena-root .bottom-0 { bottom: 0; }
+.arena-root .z-10 { z-index: 10; }
+.arena-root .z-30 { z-index: 30; }
+.arena-root .z-50 { z-index: 50; }
+
+/* Padding & Margin */
+.arena-root .mx-auto { margin-left: auto; margin-right: auto; }
+.arena-root .ml-auto { margin-left: auto; }
+.arena-root .ml-1\.5 { margin-left: 6px; }
+.arena-root .mt-0\.5 { margin-top: 2px; }
+.arena-root .mt-1 { margin-top: 4px; }
+.arena-root .mb-3 { margin-bottom: 12px; }
+.arena-root .my-1 { margin-top: 4px; margin-bottom: 4px; }
+
+.arena-root .p-0\.5 { padding: 2px; }
+.arena-root .p-1\.5 { padding: 6px; }
+.arena-root .p-2\.5 { padding: 10px; }
+.arena-root .p-3 { padding: 12px; }
+.arena-root .p-3\.5 { padding: 14px; }
+.arena-root .p-4 { padding: 16px; }
+.arena-root .p-5 { padding: 20px; }
+.arena-root .p-6 { padding: 24px; }
+.arena-root .px-1 { padding-left: 4px; padding-right: 4px; }
+.arena-root .px-2 { padding-left: 8px; padding-right: 8px; }
+.arena-root .px-2\.5 { padding-left: 10px; padding-right: 10px; }
+.arena-root .px-3 { padding-left: 12px; padding-right: 12px; }
+.arena-root .px-4 { padding-left: 16px; padding-right: 16px; }
+.arena-root .px-6 { padding-left: 24px; padding-right: 24px; }
+.arena-root .py-0\.5 { padding-top: 2px; padding-bottom: 2px; }
+.arena-root .py-1 { padding-top: 4px; padding-bottom: 4px; }
+.arena-root .py-1\.5 { padding-top: 6px; padding-bottom: 6px; }
+.arena-root .py-2 { padding-top: 8px; padding-bottom: 8px; }
+.arena-root .py-2\.5 { padding-top: 10px; padding-bottom: 10px; }
+.arena-root .py-3 { padding-top: 12px; padding-bottom: 12px; }
+.arena-root .py-6 { padding-top: 24px; padding-bottom: 24px; }
+.arena-root .pt-1 { padding-top: 4px; }
+.arena-root .pt-2 { padding-top: 8px; }
+.arena-root .pt-3 { padding-top: 12px; }
+.arena-root .pb-1 { padding-bottom: 4px; }
+.arena-root .pb-1\.5 { padding-bottom: 6px; }
+.arena-root .pl-2\.5 { padding-left: 10px; }
+.arena-root .pl-3 { padding-left: 12px; }
+.arena-root .pr-3 { padding-right: 12px; }
+
+/* Borders & Radius */
+.arena-root .border { border-width: 1px; border-style: solid; }
+.arena-root .border-t { border-top-width: 1px; border-top-style: solid; }
+.arena-root .border-b { border-bottom-width: 1px; border-bottom-style: solid; }
+.arena-root .border-l { border-left-width: 1px; border-left-style: solid; }
+.arena-root .border-r { border-right-width: 1px; border-right-style: solid; }
+.arena-root .border-dashed { border-style: dashed; }
+.arena-root .rounded { border-radius: 4px; }
+.arena-root .rounded-md { border-radius: 6px; }
+.arena-root .rounded-lg { border-radius: 8px; }
+.arena-root .rounded-xl { border-radius: 12px; }
+.arena-root .rounded-2xl { border-radius: 16px; }
+.arena-root .rounded-full { border-radius: 9999px; }
+.arena-root.overflow-hidden, .arena-root .overflow-hidden { overflow: hidden; }
+.arena-root .divide-y > :not([hidden]) ~ :not([hidden]) { border-top: 1px solid var(--border); }
+.arena-root .divide-x > :not([hidden]) ~ :not([hidden]) { border-left: 1px solid var(--tournament-purple-border); }
+
+/* Typography */
+.arena-root .font-mono { font-family: var(--font-mono, 'Geist Mono', monospace); }
+.arena-root .tabular-nums { font-variant-numeric: tabular-nums; }
+.arena-root .text-\[10px\] { font-size: 10px; }
+.arena-root .text-\[11px\] { font-size: 11px; }
+.arena-root .text-xs { font-size: 12px; }
+.arena-root .text-sm { font-size: 14px; }
+.arena-root .text-base { font-size: 16px; }
+.arena-root .text-lg { font-size: 18px; }
+.arena-root .text-xl { font-size: 20px; }
+.arena-root .text-2xl { font-size: 24px; }
+.arena-root .text-4xl { font-size: 36px; line-height: 1.1; }
+.arena-root .text-7xl { font-size: 72px; line-height: 1; }
+.arena-root .font-medium { font-weight: 500; }
+.arena-root .font-semibold { font-weight: 600; }
+.arena-root .font-bold { font-weight: 700; }
+.arena-root .uppercase { text-transform: uppercase; }
+.arena-root .text-left { text-align: left; }
+.arena-root .text-center { text-align: center; }
+.arena-root .text-right { text-align: right; }
+.arena-root .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arena-root .leading-none { line-height: 1; }
+.arena-root .leading-tight { line-height: 1.25; }
+.arena-root .leading-snug { line-height: 1.375; }
+.arena-root .leading-relaxed { line-height: 1.625; }
+.arena-root .tracking-tight { letter-spacing: -0.025em; }
+.arena-root .tracking-wide { letter-spacing: 0.025em; }
+.arena-root .tracking-\[0\.14em\] { letter-spacing: 0.14em; }
+.arena-root .tracking-\[0\.2em\] { letter-spacing: 0.2em; }
+.arena-root .tracking-\[-0\.03em\] { letter-spacing: -0.03em; }
+
+/* Effects & Misc */
+.arena-root .bg-transparent { background-color: transparent !important; }
+.arena-root .bg-border { background-color: var(--border); }
+.arena-root .bg-arena-surface\/70 { background-color: rgba(26, 11, 46, 0.7); }
+.arena-root .border-b-2 { border-bottom-width: 2px; border-bottom-style: solid; }
+.arena-root .border-b-arena\/60 { border-bottom-color: rgba(157, 78, 221, 0.6); }
+.arena-root .border-muted-foreground { border-color: var(--muted-foreground); }
+.arena-root .whitespace-nowrap { white-space: nowrap; }
+.arena-root .pointer-events-none { pointer-events: none; }
+.arena-root.max-h-full, .arena-root .max-h-full { max-height: 100%; }
+.arena-root .overflow-y-auto { overflow-y: auto; }
+.arena-root .overflow-x-hidden { overflow-x: hidden; }
+.arena-root .pl-2 { padding-left: 8px; }
+.arena-root .pr-2 { padding-right: 8px; }
+
+.arena-root .ring-1 {
+  box-shadow: inset 0 0 0 1px var(--tw-ring-color, var(--border));
+}
+.arena-root .ring-2 {
+  box-shadow: inset 0 0 0 2px var(--tw-ring-color, var(--tournament-purple-glow));
+}
+.arena-root .ring-border { --tw-ring-color: var(--border); }
+.arena-root .ring-arena { --tw-ring-color: var(--tournament-purple-glow); }
+.arena-root .ring-arena-border { --tw-ring-color: var(--tournament-purple-border); }
+.arena-root .ring-primary\/30 { --tw-ring-color: rgba(34, 197, 94, 0.30); }
+.arena-root .ring-bonus\/30 { --tw-ring-color: rgba(255, 183, 3, 0.30); }
+.arena-root .ring-alert\/40 { --tw-ring-color: rgba(255, 0, 84, 0.40); }
+
+.arena-root .hover\:bg-raised:hover { background-color: var(--raised); }
+.arena-root .hover\:bg-surface:hover { background-color: var(--surface); }
+.arena-root .hover\:text-foreground:hover { color: var(--foreground); }
+.arena-root .hover\:border-arena\/60:hover { border-color: rgba(157, 78, 221, 0.6); }
+.arena-root .hover\:brightness-110:hover { filter: brightness(1.1); }
+
+.arena-root .focus-visible\:bg-raised:focus-visible { background-color: var(--raised); }
+.arena-root .focus-visible\:text-foreground:focus-visible { color: var(--foreground); }
+.arena-root .focus-within\:border-arena:focus-within { border-color: var(--tournament-purple-glow); }
+
+.arena-root .disabled\:opacity-35:disabled { opacity: 0.35; }
+.arena-root .disabled\:opacity-40:disabled { opacity: 0.40; }
+.arena-root .disabled\:opacity-60:disabled { opacity: 0.60; }
+.arena-root .disabled\:pointer-events-none:disabled { pointer-events: none; }
+.arena-root .disabled\:cursor-not-allowed:disabled { cursor: not-allowed; }
+.arena-root .disabled\:saturate-0:disabled { filter: saturate(0); }
+
+@keyframes arena-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes arena-pulse {
+  50% { opacity: 0.5; }
+}
+.arena-root .animate-spin { animation: arena-spin 1s linear infinite; }
+.arena-root .animate-pulse { animation: arena-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+.arena-root .object-cover { object-fit: cover; }
+.arena-root .object-right { object-position: right; }
+.arena-root .opacity-70 { opacity: 0.7; }
+.arena-root .backdrop-blur { backdrop-filter: blur(8px); }
+.arena-root .backdrop-blur-sm { backdrop-filter: blur(4px); }
+.arena-root .bg-gradient-to-r {
+  background-image: linear-gradient(90deg, var(--tournament-purple-surface) 0%, rgba(26, 11, 46, 0.96) 55%, rgba(26, 11, 46, 0.45) 82%, transparent 100%);
+}
+.arena-root .shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65); }
+.arena-root .cursor-pointer { cursor: pointer; }
+.arena-root .outline-none { outline: none; }
+.arena-root table { border-collapse: collapse; }
+.arena-root fieldset { border: none; margin: 0; padding: 0; }
+.arena-root ul, .arena-root ol, .arena-root dl, .arena-root dd, .arena-root p, .arena-root h1, .arena-root h2, .arena-root h3 {
+  margin: 0;
+  padding: 0;
+}
+.arena-root ul, .arena-root ol { list-style: none; }
+
+@media (min-width: 640px) {
+  .arena-root .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .arena-root .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .arena-root .sm\:flex-row { flex-direction: row; }
+  .arena-root .sm\:items-center { align-items: center; }
+  .arena-root .sm\:p-4 { padding: 16px; }
+  .arena-root .sm\:p-6 { padding: 24px; }
+  .arena-root .sm\:p-10 { padding: 40px; }
+  .arena-root .sm\:px-6 { padding-left: 24px; padding-right: 24px; }
+  .arena-root .sm\:text-5xl { font-size: 48px; line-height: 1.08; }
+}
+
+@media (min-width: 1024px) {
+  .arena-root .lg\:h-full { height: 100%; }
+  .arena-root .lg\:h-auto { height: auto; }
+  .arena-root .lg\:flex-1 { flex: 1 1 0%; }
+  .arena-root .lg\:flex-row { flex-direction: row; }
+  .arena-root .lg\:shrink-0 { flex-shrink: 0; }
+  .arena-root .lg\:w-\[380px\] { width: 380px; }
+  .arena-root .lg\:w-auto { width: auto; }
+  .arena-root .lg\:min-w-72 { min-width: 288px; }
+  .arena-root .lg\:max-w-\[66\%\] { max-width: 66%; }
+  .arena-root .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .arena-root .lg\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .arena-root .lg\:border-t-0 { border-top-width: 0; }
+  .arena-root .lg\:border-l { border-left-width: 1px; border-left-style: solid; }
+  .arena-root .lg\:overflow-y-auto { overflow-y: auto; }
+  .arena-root .lg\:px-8 { padding-left: 32px; padding-right: 32px; }
+  .arena-root .lg\:py-8 { padding-top: 32px; padding-bottom: 32px; }
+}

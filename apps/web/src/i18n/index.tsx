@@ -126,6 +126,11 @@ const COUNTRY_TO_CURRENCY: Record<CountryCode, DisplayCurrencyCode> = {
   PE: "PEN"
 };
 
+export function isSupportedLocale(val: unknown): val is Locale {
+  if (typeof val !== "string") return false;
+  return Object.prototype.hasOwnProperty.call(catalogs, val);
+}
+
 interface I18nContextType {
   locale: Locale;
   setLocale: (loc: Locale) => void;
@@ -137,28 +142,45 @@ interface I18nContextType {
   t: (path: string, params?: Record<string, string | number>) => string;
   formatBalance: (minorUSD: number | null) => string;
   formatDateTime: (date: Date | string | number) => string;
+  isI18nActive?: boolean;
 }
 
 const I18nContext = createContext<I18nContextType | null>(null);
 
-export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const I18nProvider: React.FC<{ children: React.ReactNode; initialLocale?: Locale }> = ({
+  children,
+  initialLocale,
+}) => {
   const [geoBlocked, setGeoBlocked] = useState<boolean>(false);
+  const [explicitSelection, setExplicitSelection] = useState<boolean>(() => {
+    if (initialLocale && isSupportedLocale(initialLocale)) return true;
+    try {
+      if (typeof localStorage !== "undefined" && localStorage.getItem("broker_locale_explicit") === "true") {
+        return true;
+      }
+    } catch {}
+    return typeof document !== "undefined";
+  });
 
   const [locale, setLocaleState] = useState<Locale>(() => {
+    if (initialLocale && isSupportedLocale(initialLocale)) {
+      return initialLocale;
+    }
+
     // 1. Tenta recuperar do cookie
-    const cookieLocale = getLocaleCookie() as Locale;
-    if (cookieLocale && catalogs[cookieLocale]) return cookieLocale;
+    const cookieLocale = getLocaleCookie();
+    if (isSupportedLocale(cookieLocale)) return cookieLocale;
 
     // 2. Tenta recuperar do localStorage
     try {
-      const saved = localStorage.getItem("broker_locale") as Locale;
-      if (saved && catalogs[saved]) return saved;
+      const saved = localStorage.getItem("broker_locale");
+      if (isSupportedLocale(saved)) return saved;
     } catch {}
 
     // 3. Fallback pelo país detectado (se injetado no DOM ou window)
     if (typeof window !== "undefined" && (window as any).__GEO_LOCALE__) {
-      const geoLocale = (window as any).__GEO_LOCALE__ as Locale;
-      if (catalogs[geoLocale]) {
+      const geoLocale = (window as any).__GEO_LOCALE__;
+      if (isSupportedLocale(geoLocale)) {
         try {
           localStorage.setItem("broker_locale", geoLocale);
         } catch {}
@@ -187,6 +209,13 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return detected;
   });
 
+  useEffect(() => {
+    if (initialLocale && isSupportedLocale(initialLocale)) {
+      setLocaleState(initialLocale);
+      setExplicitSelection(true);
+    }
+  }, [initialLocale]);
+
   const country = LOCALE_TO_COUNTRY[locale] || "BR";
   const timezone = getTimezoneForCountry(country);
 
@@ -194,7 +223,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       if (typeof localStorage !== "undefined") {
         const saved = localStorage.getItem("broker_currency");
-        if (saved && (saved === "USD" || CURRENCY_CONFIGS[saved as DisplayCurrencyCode])) {
+        if (saved && (saved === "USD" || Object.prototype.hasOwnProperty.call(CURRENCY_CONFIGS, saved))) {
           return saved as ActiveDisplayCurrency;
         }
       }
@@ -204,6 +233,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Consulta assíncrona ao Region Router (Seções 3.1 e 10.1)
   useEffect(() => {
+    if (initialLocale && isSupportedLocale(initialLocale)) return;
     let isExplicit = false;
     let isCurrencyExplicit = false;
     try {
@@ -223,14 +253,14 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
           }
           setGeoBlocked(false);
-          if (!isExplicit && data && data.defaultLocale && catalogs[data.defaultLocale]) {
+          if (!isExplicit && data && isSupportedLocale(data.defaultLocale)) {
             setLocaleState(data.defaultLocale);
             try {
               localStorage.setItem("broker_locale", data.defaultLocale);
             } catch {}
             setLocaleCookie(data.defaultLocale);
           }
-          if (!isCurrencyExplicit && data && data.defaultCurrency && CURRENCY_CONFIGS[data.defaultCurrency as DisplayCurrencyCode]) {
+          if (!isCurrencyExplicit && data && data.defaultCurrency && Object.prototype.hasOwnProperty.call(CURRENCY_CONFIGS, data.defaultCurrency)) {
             setCurrencyState(data.defaultCurrency as ActiveDisplayCurrency);
             try {
               localStorage.setItem("broker_currency", data.defaultCurrency);
@@ -241,21 +271,23 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Ignora silenciosamente em offline
         });
     }
-  }, []);
+  }, [initialLocale]);
 
   const setLocale = (loc: Locale) => {
-    setLocaleState(loc);
-    const nextCountry = LOCALE_TO_COUNTRY[loc] || "BR";
+    const safeLoc: Locale = isSupportedLocale(loc) ? loc : "pt-BR";
+    setLocaleState(safeLoc);
+    setExplicitSelection(true);
+    const nextCountry = LOCALE_TO_COUNTRY[safeLoc] || "BR";
     const autoCurr = COUNTRY_TO_CURRENCY[nextCountry];
     try {
-      localStorage.setItem("broker_locale", loc);
+      localStorage.setItem("broker_locale", safeLoc);
       localStorage.setItem("broker_locale_explicit", "true");
       if (!localStorage.getItem("broker_currency_explicit") && autoCurr) {
         setCurrencyState(autoCurr);
         localStorage.setItem("broker_currency", autoCurr);
       }
     } catch {}
-    setLocaleCookie(loc);
+    setLocaleCookie(safeLoc);
   };
 
   const setCurrency = (curr: ActiveDisplayCurrency) => {
@@ -355,7 +387,8 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
         timezone,
         t,
         formatBalance,
-        formatDateTime
+        formatDateTime,
+        isI18nActive: true,
       }}
     >
       {children}
@@ -376,8 +409,18 @@ export function useTranslation(): I18nContextType {
       timezone: "America/Mexico_City",
       t: (path: string) => path,
       formatBalance: () => "--",
-      formatDateTime: () => "--"
+      formatDateTime: () => "--",
+      isI18nActive: false,
     };
   }
   return context;
 }
+
+export function useUiLanguage(defaultLang: "pt" | "es" = "es"): "pt" | "es" {
+  const context = useContext(I18nContext);
+  if (!context) {
+    return defaultLang;
+  }
+  return context.locale.startsWith("pt") ? "pt" : "es";
+}
+

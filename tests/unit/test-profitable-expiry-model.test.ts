@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { OpenContractSchema } from "../../packages/shared/src/index.ts";
 
-describe("SUBETAPA 01 — Modelo Lucrativo: Schema e Validação com Piso de 30s", () => {
+describe("SUBETAPA 01 — Modelo Lucrativo: Schema e Validação com Piso de 60s", () => {
   it("aceita duração padrão de 60 segundos quando omitida", () => {
     const validPayload = {
       symbol: "BTCUSD_OTC",
@@ -15,8 +15,8 @@ describe("SUBETAPA 01 — Modelo Lucrativo: Schema e Validação com Piso de 30s
     }
   });
 
-  it("aceita durações válidas no intervalo seguro e lucrativo (30s a 300s)", () => {
-    const durations = [30, 45, 60, 90, 120, 300];
+  it("aceita durações válidas no intervalo seguro e lucrativo (60s a 300s)", () => {
+    const durations = [60, 75, 90, 120, 180, 300];
     for (const d of durations) {
       const parsed = OpenContractSchema.safeParse({
         symbol: "EURUSD_OTC",
@@ -31,8 +31,8 @@ describe("SUBETAPA 01 — Modelo Lucrativo: Schema e Validação com Piso de 30s
     }
   });
 
-  it("bloqueia estritamente qualquer duração abaixo de 30 segundos (anti-arbitragem e anti-frontrunning)", () => {
-    const toxicDurations = [0, -1, 5, 10, 15, 20, 25, 29];
+  it("bloqueia estritamente qualquer duração abaixo de 60 segundos (piso mínimo inviolável de 60s)", () => {
+    const toxicDurations = [0, -1, 5, 10, 15, 20, 25, 29, 30, 45, 59];
     for (const d of toxicDurations) {
       const parsed = OpenContractSchema.safeParse({
         symbol: "ETHUSD_OTC",

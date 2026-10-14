@@ -9,27 +9,54 @@ export interface MarketNewsDrawerProps {
 }
 
 function formatRelativeTime(isoString: string): string {
-  const diffMs = Date.now() - Date.parse(isoString);
+  const parsed = Date.parse(isoString);
+  if (!Number.isFinite(parsed)) return 'hace 1 min';
+  const diffMs = Math.max(0, Date.now() - parsed);
   const diffMins = Math.max(1, Math.floor(diffMs / 60000));
-  if (diffMins < 60) return `há ${diffMins} min`;
+  if (diffMins < 60) return `hace ${diffMins} min`;
   const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `há ${diffHours} h`;
+  if (diffHours < 24) return `hace ${diffHours} h`;
   const diffDays = Math.floor(diffHours / 24);
-  return `há ${diffDays} d`;
+  return `hace ${diffDays} d`;
 }
 
 function getSentimentBadge(sentiment: NewsSentiment) {
   switch (sentiment) {
     case 'BULLISH':
-      return { label: '🟢 ALTA', color: '#00e676', bg: 'rgba(0, 230, 118, 0.12)' };
+      return {
+        label: 'ALCISTA',
+        dotColor: '#22C47A',
+        color: '#22C47A',
+        bg: 'rgba(34, 196, 122, 0.10)',
+        border: 'rgba(34, 196, 122, 0.26)',
+      };
     case 'BEARISH':
-      return { label: '🔴 BAIXA', color: '#ff3d71', bg: 'rgba(255, 61, 113, 0.12)' };
+      return {
+        label: 'BAJISTA',
+        dotColor: '#F2545B',
+        color: '#F2545B',
+        bg: 'rgba(242, 84, 91, 0.10)',
+        border: 'rgba(242, 84, 91, 0.26)',
+      };
     default:
-      return { label: '⚪ NEUTRO', color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.12)' };
+      return {
+        label: 'NEUTRAL',
+        dotColor: '#8A92A1',
+        color: '#9BA3B2',
+        bg: 'rgba(138, 146, 161, 0.10)',
+        border: 'rgba(138, 146, 161, 0.22)',
+      };
   }
 }
 
-export function MarketNewsDrawer({ isOpen, onClose }: MarketNewsDrawerProps) {
+function sanitizeExternalUrl(url: string | undefined | null): string | null {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return null;
+}
+
+export function MarketNewsDrawer({ isOpen }: MarketNewsDrawerProps) {
   const [selectedCategory, setSelectedCategory] = useState<NewsCategory>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -46,199 +73,244 @@ export function MarketNewsDrawer({ isOpen, onClose }: MarketNewsDrawerProps) {
     { id: 'ALL', label: 'Todas' },
     { id: 'INDICES', label: 'Índices' },
     { id: 'CRYPTO', label: 'Cripto' },
-    { id: 'FOREX', label: 'Câmbio / Forex' },
-    { id: 'GLOBAL', label: 'Economia Global' },
+    { id: 'FOREX', label: 'Forex' },
+    { id: 'GLOBAL', label: 'Macro' },
   ];
 
-  const filteredNews = news.filter((item) => {
+  const safeNews = Array.isArray(news) ? news : [];
+  const filteredNews = safeNews.filter((item) => {
+    if (!item || typeof item !== 'object') return false;
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return (
-      item.title.toLowerCase().includes(q) ||
-      item.summary.toLowerCase().includes(q) ||
-      item.source.toLowerCase().includes(q)
+      String(item.title ?? '').toLowerCase().includes(q) ||
+      String(item.summary ?? '').toLowerCase().includes(q) ||
+      String(item.source ?? '').toLowerCase().includes(q)
     );
   });
 
   return (
     <div
+      data-testid="market-news-drawer"
+      className="bm-stealth-scroll"
       style={{
         width: '100%',
-        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         boxSizing: 'border-box',
+        fontFamily: "'Geist', sans-serif",
+        color: '#F4F5F7',
+        overflowX: 'hidden',
       }}
     >
-      {/* Cabeçalho */}
+      {/* Barra de Pesquisa + Botão Atualizar Compacto (Sem Cabeçalho Duplicado) */}
       <div
         style={{
-          padding: '16px 18px',
-          borderBottom: '1px solid #1f2e4b',
+          padding: '12px 16px 8px',
           display: 'flex',
-          justifyContent: 'space-between',
           alignItems: 'center',
-          background: '#0a0f1d',
+          gap: '8px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '18px' }}>📰</span>
-          <div>
-            <h2 style={{ fontSize: '14px', fontWeight: 800, color: '#fff', margin: 0 }}>
-              Notícias do Mercado
-            </h2>
-            <small style={{ fontSize: '10px', color: '#687b99' }}>
-              Feed financeiro global e sentimento
-            </small>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <button
-            type="button"
-            onClick={() => void refetch()}
+        <div style={{ position: 'relative', flex: 1 }}>
+          <input
+            type="text"
+            data-testid="market-news-search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar noticias o activos..."
             style={{
-              background: '#162238',
-              border: '1px solid #233555',
+              width: '100%',
+              background: '#0B0E14',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
               borderRadius: '6px',
-              color: '#8ea2c2',
-              padding: '4px 8px',
-              fontSize: '11px',
-              cursor: 'pointer',
+              padding: '7px 10px',
+              color: '#F4F5F7',
+              fontSize: '12px',
+              fontFamily: "'Geist', sans-serif",
+              outline: 'none',
+              boxSizing: 'border-box',
             }}
-            title="Atualizar Notícias"
-          >
-            🔄
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#8ea2c2',
-              fontSize: '16px',
-              cursor: 'pointer',
-              padding: '4px 8px',
-            }}
-            title="Fechar aba"
-          >
-            ✕
-          </button>
+          />
         </div>
-      </div>
-
-      {/* Barra de Pesquisa */}
-      <div style={{ padding: '12px 18px 8px' }}>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Buscar notícias..."
+        <button
+          type="button"
+          data-testid="market-news-refresh"
+          onClick={() => void refetch()}
           style={{
-            width: '100%',
-            background: '#080d1a',
-            border: '1px solid #1f2e4b',
+            background: '#151D2B',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
             borderRadius: '6px',
-            padding: '8px 12px',
-            color: '#fff',
-            fontSize: '12px',
-            outline: 'none',
-            boxSizing: 'border-box',
+            color: '#9BA3B2',
+            width: '32px',
+            height: '32px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            flexShrink: 0,
+            transition: 'color 0.15s ease, border-color 0.15s ease',
           }}
-        />
+          title="Actualizar análisis"
+          aria-label="Actualizar análisis"
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 2v6h-6" />
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+            <path d="M3 22v-6h6" />
+            <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+          </svg>
+        </button>
       </div>
 
-      {/* Filtros por Categoria (Pills) */}
+      {/* Filtros por Categoria (Pills com flexWrap e bm-no-scrollbar — Zero Scroll Horizontal) */}
       <div
+        data-testid="market-news-categories"
+        className="bm-no-scrollbar"
         style={{
           display: 'flex',
+          flexWrap: 'wrap',
           gap: '6px',
-          padding: '4px 18px 12px',
-          overflowX: 'auto',
-          borderBottom: '1px solid #172238',
+          padding: '4px 16px 12px',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+          overflowX: 'hidden',
         }}
       >
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            type="button"
-            onClick={() => setSelectedCategory(cat.id)}
-            style={{
-              background: selectedCategory === cat.id ? '#1e3052' : '#0e172a',
-              border: '1px solid ' + (selectedCategory === cat.id ? '#3b82f6' : '#1e293b'),
-              color: selectedCategory === cat.id ? '#60a5fa' : '#8898b8',
-              padding: '4px 10px',
-              borderRadius: '12px',
-              fontSize: '11px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {cat.label}
-          </button>
-        ))}
+        {categories.map((cat) => {
+          const isSelected = selectedCategory === cat.id;
+          return (
+            <button
+              key={cat.id}
+              type="button"
+              data-testid={`news-category-${cat.id}`}
+              onClick={() => setSelectedCategory(cat.id)}
+              style={{
+                background: isSelected ? 'rgba(34, 196, 122, 0.14)' : '#101622',
+                border: `1px solid ${isSelected ? 'rgba(34, 196, 122, 0.45)' : 'rgba(255, 255, 255, 0.08)'}`,
+                color: isSelected ? '#22C47A' : '#8A92A1',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: isSelected ? 700 : 600,
+                fontFamily: "'Geist', sans-serif",
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {cat.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Lista de Notícias */}
       <div
+        data-testid="market-news-list"
+        className="bm-stealth-scroll"
         style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: '12px 18px',
+          padding: '12px 16px 16px',
           display: 'flex',
           flexDirection: 'column',
-          gap: '12px',
+          gap: '10px',
+          overflowX: 'hidden',
         }}
       >
         {isLoading ? (
-          <div style={{ textAlign: 'center', padding: '30px 0', color: '#687b99', fontSize: '12px' }}>
-            Carregando notícias financeiras...
+          <div style={{ textAlign: 'center', padding: '32px 0', color: '#8A92A1', fontSize: '12px' }}>
+            Cargando análisis de mercado...
           </div>
         ) : filteredNews.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '30px 0', color: '#687b99', fontSize: '12px' }}>
-            Nenhuma notícia encontrada nesta categoria.
+          <div
+            data-testid="market-news-empty"
+            style={{ textAlign: 'center', padding: '32px 0', color: '#8A92A1', fontSize: '12px' }}
+          >
+            No se encontraron noticias en esta categoría.
           </div>
         ) : (
-          filteredNews.map((article) => {
+          filteredNews.map((article, idx) => {
             const badge = getSentimentBadge(article.sentiment);
+            const safeUrl = sanitizeExternalUrl(article.url);
             return (
               <div
-                key={article.id}
+                key={article.id || `news-${idx}`}
+                data-testid={`market-news-card-${article.id || idx}`}
                 style={{
-                  background: '#101a2f',
-                  border: '1px solid #1f2e4b',
+                  background: '#151D2B',
+                  border: '1px solid rgba(255, 255, 255, 0.07)',
                   borderRadius: '8px',
-                  padding: '12px',
+                  padding: '12px 14px',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '6px',
-                  transition: 'border-color 0.15s ease',
+                  boxSizing: 'border-box',
                 }}
               >
                 {/* Metadados: Fonte, Hora e Sentimento */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#38bdf8' }}>
-                      {article.source}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        color: '#DCE1EA',
+                        letterSpacing: '0.02em',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {article.source || 'BINMAX RESEARCH'}
                     </span>
-                    <span style={{ fontSize: '10px', color: '#566a87' }}>•</span>
-                    <span style={{ fontSize: '10px', color: '#7b8da7' }}>
+                    <span style={{ fontSize: '10px', color: '#5A6578' }}>•</span>
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        color: '#8A92A1',
+                        fontFamily: "'Geist Mono', monospace",
+                        fontVariantNumeric: 'tabular-nums',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
                       {formatRelativeTime(article.published_at)}
                     </span>
                   </div>
 
                   <span
                     style={{
-                      fontSize: '9px',
-                      fontWeight: 800,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      fontSize: '9.5px',
+                      fontWeight: 700,
                       color: badge.color,
                       background: badge.bg,
                       padding: '2px 6px',
                       borderRadius: '4px',
-                      border: `1px solid ${badge.color}33`,
+                      border: `1px solid ${badge.border}`,
+                      letterSpacing: '0.03em',
+                      flexShrink: 0,
                     }}
                   >
+                    <span
+                      style={{
+                        width: '5px',
+                        height: '5px',
+                        borderRadius: '50%',
+                        background: badge.dotColor,
+                        display: 'inline-block',
+                      }}
+                    />
                     {badge.label}
                   </span>
                 </div>
@@ -246,9 +318,9 @@ export function MarketNewsDrawer({ isOpen, onClose }: MarketNewsDrawerProps) {
                 {/* Título */}
                 <h3
                   style={{
-                    fontSize: '12px',
+                    fontSize: '12.5px',
                     fontWeight: 700,
-                    color: '#f1f5f9',
+                    color: '#F4F5F7',
                     lineHeight: '1.4',
                     margin: 0,
                   }}
@@ -259,9 +331,9 @@ export function MarketNewsDrawer({ isOpen, onClose }: MarketNewsDrawerProps) {
                 {/* Resumo */}
                 <p
                   style={{
-                    fontSize: '11px',
-                    color: '#8295b3',
-                    lineHeight: '1.5',
+                    fontSize: '11.5px',
+                    color: '#8A92A1',
+                    lineHeight: '1.48',
                     margin: 0,
                   }}
                 >
@@ -269,21 +341,23 @@ export function MarketNewsDrawer({ isOpen, onClose }: MarketNewsDrawerProps) {
                 </p>
 
                 {/* Link para Matéria */}
-                <div style={{ marginTop: '4px', display: 'flex', justifyContent: 'flex-end' }}>
-                  <a
-                    href={article.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      fontSize: '10px',
-                      color: '#60a5fa',
-                      textDecoration: 'none',
-                      fontWeight: 600,
-                    }}
-                  >
-                    Ler matéria original ↗
-                  </a>
-                </div>
+                {safeUrl && (
+                  <div style={{ marginTop: '2px', display: 'flex', justifyContent: 'flex-end' }}>
+                    <a
+                      href={safeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontSize: '10.5px',
+                        color: '#22C47A',
+                        textDecoration: 'none',
+                        fontWeight: 600,
+                      }}
+                    >
+                      Ver fuente ↗
+                    </a>
+                  </div>
+                )}
               </div>
             );
           })

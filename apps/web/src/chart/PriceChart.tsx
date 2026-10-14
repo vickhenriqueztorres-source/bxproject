@@ -922,13 +922,41 @@ export function PriceChart({
     });
   }, [tick, symbol]);
 
-  // Pausa e Retomada de Renderização sob Segundo Plano
+  // Pausa e Retomada de Renderização sob Segundo Plano + IntersectionObserver de Viewport (Perigo 6 — Técnica 5)
   useEffect(() => {
     if (!isVisible) {
       rafUpdaterRef.current.pause();
-    } else {
-      rafUpdaterRef.current.resume();
+      return;
     }
+
+    rafUpdaterRef.current.resume();
+
+    const containerEl = host.current;
+    if (
+      !containerEl ||
+      typeof IntersectionObserver === 'undefined'
+    ) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        if (!entry.isIntersecting) {
+          rafUpdaterRef.current.pause();
+        } else if (isVisible) {
+          rafUpdaterRef.current.resume();
+        }
+      },
+      { threshold: 0.01 }
+    );
+
+    observer.observe(containerEl);
+
+    return () => {
+      observer.disconnect();
+    };
   }, [isVisible]);
 
   // Sincronizar linhas de strike para ordens ativas

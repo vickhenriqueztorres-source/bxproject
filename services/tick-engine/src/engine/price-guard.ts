@@ -2,7 +2,7 @@ import { NormalizedQuote } from "./price-normalizer.js";
 
 export interface GuardEvaluationResult {
   accepted: boolean;
-  rejectReason?: "OLD_PRICE" | "ABSURD_JUMP" | "INVALID_QUOTE";
+  rejectReason?: "OLD_PRICE" | "OUT_OF_ORDER" | "ABSURD_JUMP" | "INVALID_QUOTE";
   message?: string;
   price: number;
   timestampIso: string;
@@ -21,7 +21,7 @@ export class PriceGuard {
   constructor(initialAnchorPrice?: number) {
     if (initialAnchorPrice && initialAnchorPrice > 0) {
       this.lastAcceptedPrice = initialAnchorPrice;
-      this.lastAcceptedTimestampMs = Date.now();
+      this.lastAcceptedTimestampMs = 0;
     }
   }
 
@@ -41,8 +41,22 @@ export class PriceGuard {
       };
     }
 
-    // 1. Rejeição de Preço Velho (> 5 segundos)
     const ageMs = Math.abs(nowMs - quote.timestampMs);
+
+    // 1. Rejeição de Tick Fora de Ordem (timestamp < último aceito)
+    if (this.lastAcceptedTimestampMs > 0 && quote.timestampMs < this.lastAcceptedTimestampMs) {
+      return {
+        accepted: false,
+        rejectReason: "OUT_OF_ORDER",
+        message: `Tick fora de ordem rejeitado: timestamp ${quote.timestampMs}ms é anterior ao último aceito (${this.lastAcceptedTimestampMs}ms)`,
+        price: quote.price,
+        timestampIso: quote.timestampIso,
+        ageMs,
+        variationPercentage: 0
+      };
+    }
+
+    // 2. Rejeição de Preço Velho / Atrasado (> 5 segundos)
     if (ageMs > PriceGuard.MAX_AGE_MS) {
       return {
         accepted: false,
@@ -55,7 +69,7 @@ export class PriceGuard {
       };
     }
 
-    // 2. Rejeição de Salto Absurdo (> 10%)
+    // 3. Rejeição de Salto Absurdo (> 10%)
     let variation = 0;
     if (this.lastAcceptedPrice !== null && this.lastAcceptedPrice > 0) {
       variation = Math.abs(quote.price - this.lastAcceptedPrice) / this.lastAcceptedPrice;
@@ -72,7 +86,7 @@ export class PriceGuard {
       }
     }
 
-    // Cotação Aprovada: atualiza o último preço aceito
+    // Cotação Aprovada: atualiza o último preço e timestamp aceitos
     this.lastAcceptedPrice = quote.price;
     this.lastAcceptedTimestampMs = quote.timestampMs;
 
@@ -89,8 +103,12 @@ export class PriceGuard {
     return this.lastAcceptedPrice;
   }
 
+  public getLastAcceptedTimestampMs(): number {
+    return this.lastAcceptedTimestampMs;
+  }
+
   public setAnchorPrice(price: number): void {
     this.lastAcceptedPrice = price;
-    this.lastAcceptedTimestampMs = Date.now();
+    this.lastAcceptedTimestampMs = 0;
   }
 }

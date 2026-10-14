@@ -1,11 +1,16 @@
 import React from 'react';
 import { TournamentItem } from './TournamentTypes';
 import { CountryFlagBadge } from './CountryFlagBadge';
+import { useUiLanguage } from '../../i18n';
 
 export interface TournamentDetailViewProps {
   tournament: TournamentItem;
   onBack: () => void;
   onClose: () => void;
+  isJoined?: boolean;
+  onJoin?: (id: string) => void;
+  onStartTrading?: (id: string) => void;
+  onOpenArena?: () => void;
 }
 
 /* ── Cores cromáticas de medalhas ─────────────────────────────────────── */
@@ -19,8 +24,15 @@ export function TournamentDetailView({
   tournament,
   onBack,
   onClose,
+  isJoined = false,
+  onJoin,
+  onStartTrading,
+  onOpenArena,
 }: TournamentDetailViewProps) {
+  const uiLang = useUiLanguage('pt');
+  const isEs = uiLang === 'es';
   const isLive = tournament.status === 'AO_VIVO';
+  const isUpcoming = tournament.status === 'EM_BREVE';
 
   return (
     <div
@@ -66,7 +78,7 @@ export function TournamentDetailView({
           onMouseLeave={(e) => (e.currentTarget.style.color = '#8A92A1')}
         >
           <span>←</span>
-          <span>Voltar para todos os torneios</span>
+          <span>{isEs ? 'Volver a todos los torneos' : 'Voltar para todos os torneios'}</span>
         </button>
 
         <button
@@ -85,8 +97,8 @@ export function TournamentDetailView({
           }}
           onMouseEnter={(e) => (e.currentTarget.style.color = '#FFFFFF')}
           onMouseLeave={(e) => (e.currentTarget.style.color = '#8A92A1')}
-          title="Fechar (ESC)"
-          aria-label="Fechar detalhes do torneio"
+          title={isEs ? 'Cerrar (ESC)' : 'Fechar (ESC)'}
+          aria-label={isEs ? 'Cerrar detalles del torneo' : 'Fechar detalhes do torneio'}
         >
           ✕
         </button>
@@ -149,10 +161,10 @@ export function TournamentDetailView({
               >
                 {isLive && <span style={{ fontSize: '7px' }}>●</span>}
                 {tournament.status === 'AO_VIVO'
-                  ? 'AO VIVO'
+                  ? isEs ? 'EN VIVO' : 'AO VIVO'
                   : tournament.status === 'EM_BREVE'
-                  ? 'EM BREVE'
-                  : 'ENCERRADO'}
+                  ? isEs ? 'PRÓXIMO' : 'EM BREVE'
+                  : isEs ? 'FINALIZADO' : 'ENCERRADO'}
               </span>
 
               {/* Timer Container — Widget de Terminal */}
@@ -168,7 +180,7 @@ export function TournamentDetailView({
                 }}
               >
                 <span style={{ fontSize: '11px', color: '#596273' }}>
-                  Termina em
+                  {isEs ? 'Termina en' : 'Termina em'}
                 </span>
                 <span style={{ fontSize: '12px', color: '#596273' }}>⏱</span>
                 <strong
@@ -240,7 +252,7 @@ export function TournamentDetailView({
               }}
             >
               <span>📋</span>
-              <span>Regras do torneio</span>
+              <span>{isEs ? 'Reglas del torneo' : 'Regras do torneio'}</span>
             </div>
 
             {/* Tabela de Regras — Container Recuado */}
@@ -259,9 +271,9 @@ export function TournamentDetailView({
             >
               {[
                 { label: 'Período', value: tournament.rules.period, mono: true },
-                { label: 'Depósito', value: tournament.rules.deposit, mono: false },
-                { label: 'Ativos', value: tournament.rules.assets, mono: false },
-                { label: 'Classificação', value: tournament.rules.criteria, mono: false },
+                { label: isEs ? 'Depósito' : 'Depósito', value: tournament.rules.deposit, mono: false },
+                { label: isEs ? 'Activos' : 'Ativos', value: tournament.rules.assets, mono: false },
+                { label: isEs ? 'Clasificación' : 'Classificação', value: tournament.rules.criteria, mono: false },
                 { label: 'Mínimo', value: tournament.rules.minOps, mono: true },
               ].map((rule, idx, arr) => (
                 <div
@@ -292,6 +304,160 @@ export function TournamentDetailView({
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* ─── BLOCO DE AÇÃO FUNCIONAL DO TORNEIO ─────────────────────────── */}
+          <div
+            data-testid="tournament-detail-actions"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              paddingTop: '12px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+            }}
+          >
+            {isLive ? (
+              isJoined ? (
+                <>
+                  <div
+                    data-testid="tournament-detail-joined-status"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      backgroundColor: 'rgba(34, 196, 122, 0.12)',
+                      border: '1px solid rgba(34, 196, 122, 0.32)',
+                      color: '#22C47A',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      textAlign: 'center',
+                    }}
+                  >
+                    {isEs
+                      ? '✓ Inscrito en el torneo · Cuenta de torneo activa'
+                      : '✓ Inscrito no torneio · Conta de torneio ativa'}
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="tournament-detail-trade-btn"
+                    onClick={() => onStartTrading?.(tournament.id)}
+                    style={{
+                      width: '100%',
+                      padding: '11px 16px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      backgroundColor: '#22C47A',
+                      color: '#08140B',
+                      fontSize: '13px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      transition: 'background-color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
+                    }}
+                  >
+                    {isEs ? 'Operar en el Torneo →' : 'Operar no Torneio →'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    data-testid="tournament-detail-join-btn"
+                    onClick={() => onJoin?.(tournament.id)}
+                    style={{
+                      width: '100%',
+                      padding: '11px 16px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      backgroundColor: '#22C47A',
+                      color: '#08140B',
+                      fontSize: '13px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      transition: 'background-color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
+                    }}
+                  >
+                    {isEs ? 'Participar gratis →' : 'Participar gratuitamente →'}
+                  </button>
+                  {onOpenArena && (
+                    <button
+                      type="button"
+                      data-testid="tournament-detail-arena-btn"
+                      onClick={onOpenArena}
+                      style={{
+                        width: '100%',
+                        padding: '9px 14px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(157, 78, 221, 0.35)',
+                        backgroundColor: '#0E131D',
+                        color: '#C77DFF',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'border-color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
+                      }}
+                    >
+                      {isEs ? '⚡ Ir a Arena Blitz · 15 min' : '⚡ Ir para Arena Blitz · 15 min'}
+                    </button>
+                  )}
+                </>
+              )
+            ) : isUpcoming ? (
+              isJoined ? (
+                <div
+                  data-testid="tournament-detail-joined-status"
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                    backgroundColor: 'rgba(34, 196, 122, 0.12)',
+                    border: '1px solid rgba(34, 196, 122, 0.32)',
+                    color: '#22C47A',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    textAlign: 'center',
+                  }}
+                >
+                  {isEs ? '✓ Cupo reservado gratuitamente' : '✓ Vaga reservada gratuitamente'}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="tournament-detail-join-btn"
+                  onClick={() => onJoin?.(tournament.id)}
+                  style={{
+                    width: '100%',
+                    padding: '11px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(34, 196, 122, 0.4)',
+                    backgroundColor: '#121A26',
+                    color: '#22C47A',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'background-color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
+                  }}
+                >
+                  {isEs ? 'Reservar cupo gratis →' : 'Reservar vaga gratuita →'}
+                </button>
+              )
+            ) : (
+              <div
+                data-testid="tournament-detail-ended-status"
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: '#0A0D13',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  color: '#8A92A1',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  textAlign: 'center',
+                }}
+              >
+                {isEs
+                  ? 'Torneo finalizado · Resultado auditado'
+                  : 'Torneio encerrado · Resultado auditado'}
+              </div>
+            )}
           </div>
         </div>
 
@@ -327,7 +493,7 @@ export function TournamentDetailView({
                 color: '#FFFFFF',
               }}
             >
-              Ranking em tempo real
+              {isEs ? 'Ranking en tiempo real' : 'Ranking em tempo real'}
             </h3>
             <span
               data-testid="ranking-participants-count"
@@ -356,7 +522,7 @@ export function TournamentDetailView({
           >
             <span>#</span>
             <span>Trader</span>
-            <span style={{ textAlign: 'right' }}>Rentabilidade</span>
+            <span style={{ textAlign: 'right' }}>{isEs ? 'Rentabilidad' : 'Rentabilidade'}</span>
             <span style={{ textAlign: 'right' }}>Ops</span>
           </div>
 
@@ -501,7 +667,7 @@ export function TournamentDetailView({
                 color: '#FFFFFF',
               }}
             >
-              Prêmios por posição
+              {isEs ? 'Premios por posición' : 'Prêmios por posição'}
             </h3>
           </div>
 

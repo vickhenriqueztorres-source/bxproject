@@ -20,6 +20,13 @@ export class RegionalMetricsService {
   private http5xxCounts: Map<string, number> = new Map();
   private apiLatenciesP95: Map<string, number> = new Map();
 
+  // Perigo 1 (Método 7) — As 5 Métricas de Saúde de Feed por Símbolo
+  private tickAgeSecondsBySymbol: Map<string, number> = new Map();
+  private feedGapCountBySymbol: Map<string, number> = new Map();
+  private feedLatencyMsBySymbol: Map<string, number> = new Map();
+  private stalenessAlertBySymbol: Map<string, number> = new Map();
+  private reconnectCountBySymbol: Map<string, number> = new Map();
+
   private activeUsersByCountry: Map<string, number> = new Map([
     ["BR", 120],
     ["MX", 65],
@@ -40,6 +47,13 @@ export class RegionalMetricsService {
   private http5xxByCountry: Map<string, number> = new Map();
   private flagChangesCount: Map<string, number> = new Map();
 
+  // Métricas de Governança de Feature Flags & Geoblocking (Inconsistência entre nós, Expiração, Interação e Falha de Provider)
+  private flagInconsistencyAlertActive = 0;
+  private flagInconsistencyAlertsTotal = 0;
+  private expiredFlagsCount: Map<string, number> = new Map();
+  private flagInteractionConflictsCount: Map<string, number> = new Map();
+  private geoblockProviderFailuresTotal = 0;
+
   private constructor() {
     // Inicializa os 4 ativos OTC com estado CLOSED e latência saudável inicial
     const otcAssets = ["BTCUSD_OTC", "ETHUSD_OTC", "EURUSD_OTC", "XAUUSD_OTC"];
@@ -56,7 +70,7 @@ export class RegionalMetricsService {
   }
 
   private sanitizeSymbol(symbol: string): string {
-    return /^[A-Z0-9_]{3,20}$/.test(symbol) ? symbol : "UNKNOWN";
+    return /^[A-Z0-9_-]{3,24}$/.test(symbol) ? symbol : "UNKNOWN";
   }
 
   private sanitizePath(path: string): string {
@@ -159,6 +173,66 @@ export class RegionalMetricsService {
     }
   }
 
+  // --- Perigo 1 (Método 7): As 5 Métricas de Saúde de Feed por Símbolo ---
+  public recordTickAgeSeconds(symbol: string, ageSeconds: number): void {
+    const sym = this.sanitizeSymbol(symbol);
+    this.tickAgeSecondsBySymbol.set(sym, Math.max(0, Number(ageSeconds.toFixed(3))));
+  }
+
+  public incrementFeedGapCount(symbol: string, count = 1): void {
+    const sym = this.sanitizeSymbol(symbol);
+    this.feedGapCountBySymbol.set(sym, (this.feedGapCountBySymbol.get(sym) || 0) + Math.max(1, count));
+  }
+
+  public recordFeedLatencyMs(symbol: string, latencyMs: number): void {
+    const sym = this.sanitizeSymbol(symbol);
+    this.feedLatencyMsBySymbol.set(sym, Math.max(0, Number(latencyMs.toFixed(2))));
+  }
+
+  public setStalenessAlert(symbol: string, isStale: boolean): void {
+    const sym = this.sanitizeSymbol(symbol);
+    this.stalenessAlertBySymbol.set(sym, isStale ? 1 : 0);
+  }
+
+  public incrementReconnectCount(symbol: string, count = 1): void {
+    const sym = this.sanitizeSymbol(symbol);
+    this.reconnectCountBySymbol.set(sym, (this.reconnectCountBySymbol.get(sym) || 0) + Math.max(1, count));
+  }
+
+  // --- Governança de Feature Flags & Geoblocking (Seção 4) ---
+  public recordFlagInconsistencyAlert(inconsistent: boolean): void {
+    this.flagInconsistencyAlertActive = inconsistent ? 1 : 0;
+    if (inconsistent) {
+      this.flagInconsistencyAlertsTotal += 1;
+    }
+  }
+
+  public isFlagInconsistencyActive(): boolean {
+    return this.flagInconsistencyAlertActive === 1;
+  }
+
+  public getFlagInconsistencyAlertsTotal(): number {
+    return this.flagInconsistencyAlertsTotal;
+  }
+
+  public recordExpiredFlag(flagKey: string): void {
+    const safeFlag = /^[a-zA-Z0-9_:-]{1,64}$/.test(flagKey) ? flagKey : "unknown_flag";
+    this.expiredFlagsCount.set(safeFlag, (this.expiredFlagsCount.get(safeFlag) || 0) + 1);
+  }
+
+  public recordFlagInteractionConflict(combination: string): void {
+    const safeCombo = /^[a-zA-Z0-9_:-]{1,64}$/.test(combination) ? combination : "unknown_conflict";
+    this.flagInteractionConflictsCount.set(safeCombo, (this.flagInteractionConflictsCount.get(safeCombo) || 0) + 1);
+  }
+
+  public incrementGeoblockProviderFailure(): void {
+    this.geoblockProviderFailuresTotal += 1;
+  }
+
+  public getGeoblockProviderFailuresTotal(): number {
+    return this.geoblockProviderFailuresTotal;
+  }
+
   public renderOpenMetrics(): string {
     const lines: string[] = [];
 
@@ -192,6 +266,33 @@ export class RegionalMetricsService {
         const [country, flagKey] = key.split("|");
         lines.push(`broker_feature_flag_changes_total{country="${country}",flag="${flagKey}"} ${val}`);
       }
+    }
+    if (this.flagInconsistencyAlertsTotal > 0 || this.flagInconsistencyAlertActive > 0) {
+      lines.push("# HELP broker_feature_flag_inconsistency_alert Alerta de inconsistencia de feature flags entre nos (1=inconsistente, 0=consistente)");
+      lines.push("# TYPE broker_feature_flag_inconsistency_alert gauge");
+      lines.push(`broker_feature_flag_inconsistency_alert ${this.flagInconsistencyAlertActive}`);
+      lines.push("# HELP broker_feature_flag_inconsistency_alerts_total Total de alertas disparados por divergencia de feature flags entre nos");
+      lines.push("# TYPE broker_feature_flag_inconsistency_alerts_total counter");
+      lines.push(`broker_feature_flag_inconsistency_alerts_total ${this.flagInconsistencyAlertsTotal}`);
+    }
+    if (this.expiredFlagsCount.size > 0) {
+      lines.push("# HELP broker_feature_flag_expired_total Total de avaliacoes de feature flags expiradas (dead flags bloqueadas)");
+      lines.push("# TYPE broker_feature_flag_expired_total counter");
+      for (const [flagKey, count] of this.expiredFlagsCount.entries()) {
+        lines.push(`broker_feature_flag_expired_total{flag="${flagKey}"} ${count}`);
+      }
+    }
+    if (this.flagInteractionConflictsCount.size > 0) {
+      lines.push("# HELP broker_feature_flag_interaction_conflicts_total Total de conflitos de combinacao de feature flags interceptados");
+      lines.push("# TYPE broker_feature_flag_interaction_conflicts_total counter");
+      for (const [combo, count] of this.flagInteractionConflictsCount.entries()) {
+        lines.push(`broker_feature_flag_interaction_conflicts_total{combination="${combo}"} ${count}`);
+      }
+    }
+    if (this.geoblockProviderFailuresTotal > 0) {
+      lines.push("# HELP broker_geoblock_provider_failures_total Total de falhas no motor de geoblocking bloqueadas em modo Fail-Closed");
+      lines.push("# TYPE broker_geoblock_provider_failures_total counter");
+      lines.push(`broker_geoblock_provider_failures_total ${this.geoblockProviderFailuresTotal}`);
     }
 
     // 4. broker_otc_real_feed_status & latency
@@ -303,6 +404,47 @@ export class RegionalMetricsService {
       lines.push("# TYPE api_request_latency_p95_ms gauge");
       for (const [path, val] of this.apiLatenciesP95.entries()) {
         lines.push(`api_request_latency_p95_ms{path="${path}"} ${val}`);
+      }
+    }
+
+    // 13. Perigo 1 (Método 7): As 5 Métricas de Feed por Símbolo
+    if (this.tickAgeSecondsBySymbol.size > 0) {
+      lines.push("# HELP tick_age_seconds Idade em segundos desde o ultimo tick recebido por simbolo");
+      lines.push("# TYPE tick_age_seconds gauge");
+      for (const [sym, val] of this.tickAgeSecondsBySymbol.entries()) {
+        lines.push(`tick_age_seconds{symbol="${sym}"} ${val}`);
+      }
+    }
+
+    if (this.feedGapCountBySymbol.size > 0) {
+      lines.push("# HELP feed_gap_count Total de gaps de sequencia detectados no feed por simbolo");
+      lines.push("# TYPE feed_gap_count counter");
+      for (const [sym, val] of this.feedGapCountBySymbol.entries()) {
+        lines.push(`feed_gap_count{symbol="${sym}"} ${val}`);
+      }
+    }
+
+    if (this.feedLatencyMsBySymbol.size > 0) {
+      lines.push("# HELP feed_latency_ms Latencia arrival_time - event_time em milissegundos por simbolo");
+      lines.push("# TYPE feed_latency_ms gauge");
+      for (const [sym, val] of this.feedLatencyMsBySymbol.entries()) {
+        lines.push(`feed_latency_ms{symbol="${sym}"} ${val}`);
+      }
+    }
+
+    if (this.stalenessAlertBySymbol.size > 0) {
+      lines.push("# HELP staleness_alert Estado de alerta de staleness por simbolo (1=stale, 0=fresco)");
+      lines.push("# TYPE staleness_alert gauge");
+      for (const [sym, val] of this.stalenessAlertBySymbol.entries()) {
+        lines.push(`staleness_alert{symbol="${sym}"} ${val}`);
+      }
+    }
+
+    if (this.reconnectCountBySymbol.size > 0) {
+      lines.push("# HELP reconnect_count Total de reconexoes do feed por simbolo");
+      lines.push("# TYPE reconnect_count counter");
+      for (const [sym, val] of this.reconnectCountBySymbol.entries()) {
+        lines.push(`reconnect_count{symbol="${sym}"} ${val}`);
       }
     }
 

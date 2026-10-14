@@ -5,7 +5,7 @@ import { ChartSandbox } from './ChartSandbox';
 import { StalenessOverlay } from './StalenessOverlay';
 import { ReconnectingOverlay } from './ReconnectingOverlay';
 import { useVisibilityPause } from './useVisibilityPause';
-import { tradingFeedManager } from '../feed/TradingFeedManager';
+import { tradingFeedManager, type SymbolFeedState } from '../feed/TradingFeedManager';
 import type { Tick } from '../feed/protocol';
 import { ASSET_CATALOG, type AssetCategory, isSameAsset } from '../catalog/assets';
 import { isNewTraderoomEnabled } from '../lib/feature-flags';
@@ -70,8 +70,9 @@ const GridCell = React.memo(function GridCell({
   const [tick, setTick] = useState<Tick | null>(null);
   const [isStale, setIsStale] = useState(false);
   const [tickAgeMs, setTickAgeMs] = useState(0);
+  const [feedState, setFeedState] = useState<SymbolFeedState>('LIVE');
 
-  // Subscribe to symbol ticks & per-symbol staleness via single WebSocket manager
+  // Subscribe to symbol ticks & per-symbol staleness/state via single WebSocket manager
   useEffect(() => {
     tradingFeedManager.connect();
     const unsubscribeTick = tradingFeedManager.subscribeSymbol(symbol, (incomingTick) => {
@@ -84,11 +85,17 @@ const GridCell = React.memo(function GridCell({
       setIsStale(stale);
       setTickAgeMs(age);
     });
+    const unsubscribeState = tradingFeedManager.onSymbolStateChange(symbol, (state, age) => {
+      setFeedState(state);
+      setTickAgeMs(age);
+    });
     return () => {
       unsubscribeTick();
       unsubscribeStale();
+      unsubscribeState();
       setTick(null);
       setIsStale(false);
+      setFeedState('LIVE');
     };
   }, [symbol]);
 
@@ -235,7 +242,7 @@ const GridCell = React.memo(function GridCell({
       <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', position: 'relative' }}>
         <div style={{ flex: 1, height: '100%', minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
           <ReconnectingOverlay isReconnecting={isStale} symbol={symbol} />
-          <StalenessOverlay isStale={isStale} symbol={symbol} tickAgeMs={tickAgeMs} />
+          <StalenessOverlay isStale={isStale} symbol={symbol} tickAgeMs={tickAgeMs} feedState={feedState} />
           <ChartSandbox
             candles={candlesQuery.data ?? EMPTY_CANDLES}
             tick={tick}

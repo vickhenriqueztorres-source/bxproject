@@ -11,6 +11,7 @@ import { ExpiryDropdown } from './ExpiryDropdown';
 import { calculateExecutionExpiry, calculateExpirySlots, formatSecondsToMmSs, type ExpirySlot, type ExpiryMode } from './expiry-calculator';
 import { isNewTraderoomEnabled } from '../lib/feature-flags';
 import { isTraderoomPolishEnabled } from '../lib/traderoom-polish';
+import { useUiLanguage } from '../i18n';
 
 const messages: Record<string, string> = {
   INDEX_PAUSED: 'Índice pausado pela operação.',
@@ -45,6 +46,8 @@ export function OrderTicket({
   const isBinmax = isNewTraderoomEnabled();
   // Acabamento profissional (TRADEROOM_POLISH). Desligada = ticket idêntico ao anterior.
   const polish = isBinmax && isTraderoomPolishEnabled();
+  const uiLang = useUiLanguage('es');
+  const isPt = uiLang === 'pt';
   const queryClient = useQueryClient();
   const [stake, setStake] = useState(isBinmax ? '100' : '10,00');
   const [busy, setBusy] = useState(false);
@@ -159,7 +162,7 @@ export function OrderTicket({
     // Resolução de modo corrigida: honra o slot ativo (CANDLE_1M) se selectedSlot for null (Subetapa 9.1)
     const mode: ExpiryMode = (selectedSlot ?? activeSlot).mode;
     const { durationMs, targetEpochMs } = calculateExecutionExpiry(mode, Date.now());
-    const durationSeconds = Math.max(30, Math.round(durationMs / 1000));
+    const durationSeconds = Math.max(60, Math.min(300, Math.round(durationMs / 1000)));
     const targetExpiresAt = new Date(targetEpochMs).toISOString();
 
     // Captura da cotação instantânea no milissegundo exato do clique (< 16ms)
@@ -274,7 +277,7 @@ export function OrderTicket({
   if (isBinmax) {
     const formattedExpiryDisplay = activeSlot
       ? formatSecondsToMmSs(activeSlot.remainingSeconds)
-      : '00:21';
+      : '01:00';
 
     const ticketGap = isCompact ? 'clamp(2px, 0.4vh, 4px)' : '8px';
     const fieldHeight = isCompact ? 'clamp(28px, 3.8vh, 32px)' : '42px';
@@ -308,8 +311,8 @@ export function OrderTicket({
               marginBottom: isCompact ? '3px' : '6px',
             }}
           >
-            <span style={{ fontSize: isCompact ? '11px' : '12px', color: 'var(--text-muted)', fontWeight: 500, fontFamily: polish ? 'var(--font-ui)' : "'Inter', sans-serif" }}>
-              Monto
+            <span style={{ fontSize: isCompact ? '11px' : '12px', color: polish ? 'var(--text-muted)' : '#8A92A1', fontWeight: 500, fontFamily: polish ? 'var(--font-ui)' : "'Inter', sans-serif" }}>
+              {isPt ? 'Valor' : 'Monto'}
             </span>
             <span
               aria-label="Ayuda monto"
@@ -484,8 +487,8 @@ export function OrderTicket({
               marginBottom: isCompact ? '3px' : '6px',
             }}
           >
-            <span style={{ fontSize: isCompact ? '11px' : '12px', color: 'var(--text-muted)', fontWeight: 500, fontFamily: polish ? 'var(--font-ui)' : "'Inter', sans-serif" }}>
-              Expiración
+            <span style={{ fontSize: isCompact ? '11px' : '12px', color: polish ? 'var(--text-muted)' : '#8A92A1', fontWeight: 500, fontFamily: polish ? 'var(--font-ui)' : "'Inter', sans-serif" }}>
+              {isPt ? 'Expiração' : 'Expiración'}
             </span>
             <span
               aria-label="Ayuda expiración"
@@ -675,8 +678,8 @@ export function OrderTicket({
               marginBottom: isCompact ? '1px' : '2px',
             }}
           >
-            <span style={{ fontSize: isCompact ? '10px' : '12px', color: 'var(--text-muted)', fontWeight: 500, fontFamily: polish ? 'var(--font-ui)' : "'Inter', sans-serif" }}>
-              Ganancia
+            <span style={{ fontSize: isCompact ? '10px' : '12px', color: polish ? 'var(--text-muted)' : '#8A92A1', fontWeight: 500, fontFamily: polish ? 'var(--font-ui)' : "'Inter', sans-serif" }}>
+              {isPt ? 'Lucro' : 'Ganancia'}
             </span>
             <span
               aria-label="Ayuda ganancia"
@@ -704,7 +707,7 @@ export function OrderTicket({
               fontSize: polish ? (isCompact ? '28px' : '40px') : (isCompact ? '18px' : '22px'),
               fontWeight: polish ? 600 : 800,
               lineHeight: '1.05',
-              color: 'var(--profit)',
+              color: polish ? 'var(--profit)' : '#22C55E',
               fontFamily: "'Geist Mono', monospace",
               letterSpacing: '-0.3px',
             }}
@@ -722,7 +725,7 @@ export function OrderTicket({
             style={{
               fontSize: polish ? (isCompact ? '14px' : '18px') : (isCompact ? '11.5px' : '13px'),
               fontWeight: 700,
-              color: 'var(--profit)',
+              color: polish ? 'var(--profit)' : '#22C55E',
               fontFamily: "'Geist Mono', monospace",
               marginTop: isCompact ? '0' : '1px',
             }}
@@ -742,7 +745,7 @@ export function OrderTicket({
             width: '100%',
             height: polish && !isCompact ? '80px' : btnHeight,
             borderRadius: polish ? '10px' : '6px',
-            background: 'var(--profit)',
+            background: polish ? 'var(--profit)' : '#22C55E',
             border: 'none',
             color: polish ? 'var(--bg-0)' : '#FFFFFF',
             cursor: blocked || busy ? 'not-allowed' : 'pointer',
@@ -776,7 +779,7 @@ export function OrderTicket({
             <polyline points="16 7 22 7 22 13" />
           </svg>
           <span style={{ fontSize: polish ? (isCompact ? '13px' : '15px') : (isCompact ? '12px' : '13px'), fontWeight: polish ? 700 : 800, letterSpacing: '0.6px', color: polish ? 'currentColor' : '#FFFFFF' }}>
-            SUBE
+            {isPt ? 'ACIMA' : 'SUBE'}
           </span>
         </button>
 
@@ -791,7 +794,7 @@ export function OrderTicket({
             width: '100%',
             height: polish && !isCompact ? '80px' : btnHeight,
             borderRadius: polish ? '10px' : '6px',
-            background: 'var(--loss)',
+            background: polish ? 'var(--loss)' : '#E5484D',
             border: 'none',
             color: polish ? 'var(--bg-0)' : '#FFFFFF',
             cursor: blocked || busy ? 'not-allowed' : 'pointer',
@@ -825,7 +828,7 @@ export function OrderTicket({
             <polyline points="16 17 22 17 22 11" />
           </svg>
           <span style={{ fontSize: polish ? (isCompact ? '13px' : '15px') : (isCompact ? '12px' : '13px'), fontWeight: polish ? 700 : 800, letterSpacing: '0.6px', color: polish ? 'currentColor' : '#FFFFFF' }}>
-            BAJA
+            {isPt ? 'ABAIXO' : 'BAJA'}
           </span>
         </button>
 

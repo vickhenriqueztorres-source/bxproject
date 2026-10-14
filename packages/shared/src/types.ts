@@ -8,7 +8,7 @@ export const OpenContractSchema = z.object({
   symbol: z.string().min(1).max(32),
   direction: z.enum(["UP", "DOWN"]),
   stake_minor: z.number().int().min(100).max(10000), // US$ 1,00 a US$ 100,00 em centavos
-  duration_seconds: z.number().int().min(30).max(300).optional(), // 30s a 5min (Piso inviolável de 30s)
+  duration_seconds: z.number().int().min(60).max(300).optional(), // 60s a 5min (Piso inviolável de 60s)
 }).strict();
 
 export type OpenContractDTO = z.infer<typeof OpenContractSchema>;

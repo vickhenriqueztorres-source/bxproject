@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import { useRouter } from '../../router/RouterContext';
 import { isNewTraderoomEnabled } from '../../lib/feature-flags';
+import { useUiLanguage } from '../../i18n';
 import {
   IconOperar,
   IconPortafolio,
   IconHistorial,
   IconTorneos,
+  IconArena,
   IconAnalisis,
   IconTutoriales,
   IconPromociones,
@@ -38,6 +41,7 @@ export interface SidebarDockProps {
   portfolioContent?: React.ReactNode;
   newsContent?: React.ReactNode;
   tournamentsContent?: React.ReactNode;
+  activeRoute?: 'trade' | 'arena' | 'tournaments';
 }
 
 export function SidebarDock({
@@ -52,6 +56,7 @@ export function SidebarDock({
   portfolioContent,
   newsContent,
   tournamentsContent,
+  activeRoute,
 }: SidebarDockProps) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -64,7 +69,16 @@ export function SidebarDock({
   }, [activeTab, onSelectTab]);
 
   const isBinmax = isNewTraderoomEnabled();
+  const { navigate, currentPath } = useRouter();
+  const uiLang = useUiLanguage('es');
+  const isPt = uiLang === 'pt';
   const [isTournamentsModalOpen, setIsTournamentsModalOpen] = useState(false);
+  const isArenaActive =
+    activeRoute === 'arena' ||
+    currentPath === '/arena' ||
+    currentPath.startsWith('/arena/') ||
+    currentPath === '/sala/arena';
+  const isOperarActive = !isArenaActive && (activeTab === null || activeTab === 'operar');
 
   const toggleTab = (tab: SidebarTab) => {
     onSelectTab(activeTab === tab ? null : tab);
@@ -101,7 +115,7 @@ export function SidebarDock({
                 cursor: 'pointer',
                 userSelect: 'none',
               }}
-              title="Barra de herramientas"
+              title={isPt ? 'Barra de ferramentas' : 'Barra de herramientas'}
             >
               <IconChevronDouble size={14} color="#55657E" />
             </div>
@@ -111,13 +125,18 @@ export function SidebarDock({
               type="button"
               data-testid="sidebar-item-operar"
               className="sidebar-dock-btn"
-              onClick={() => onSelectTab(null)}
+              onClick={() => {
+                onSelectTab(null);
+                if (isArenaActive) {
+                  navigate('/');
+                }
+              }}
               style={{
                 width: '100%',
                 padding: '8px 0 4px',
                 background: 'transparent',
                 border: 'none',
-                color: (activeTab === null || activeTab === 'operar') ? '#F4F5F7' : '#8A92A1',
+                color: isOperarActive ? '#F4F5F7' : '#8A92A1',
                 cursor: 'pointer',
                 display: 'flex',
                 flexDirection: 'column',
@@ -125,15 +144,15 @@ export function SidebarDock({
                 gap: '3px',
                 transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
               }}
-              title="Operar en gráfico"
+              title={isPt ? 'Operar no gráfico' : 'Operar en gráfico'}
             >
               <div style={{
                 padding: '5px 10px',
                 borderRadius: '6px',
-                border: (activeTab === null || activeTab === 'operar') ? '1.5px solid #22C55E' : '1.5px solid transparent',
+                border: isOperarActive ? '1.5px solid #22C55E' : '1.5px solid transparent',
                 transition: 'border-color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
               }}>
-                <IconOperar size={22} color={(activeTab === null || activeTab === 'operar') ? '#F4F5F7' : 'currentColor'} />
+                <IconOperar size={22} color={isOperarActive ? '#F4F5F7' : 'currentColor'} />
               </div>
               <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1 }}>Operar</span>
             </button>
@@ -158,7 +177,7 @@ export function SidebarDock({
                 transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
                 position: 'relative',
               }}
-              title="Portafolio total"
+              title={isPt ? 'Portfólio total' : 'Portafolio total'}
             >
               <div style={{
                 padding: '5px 10px',
@@ -168,7 +187,9 @@ export function SidebarDock({
               }}>
                 <IconPortafolio size={22} color={activeTab === 'portfolio' ? '#F4F5F7' : 'currentColor'} />
               </div>
-              <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1 }}>Portafolio</span>
+              <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1 }}>
+                {isPt ? 'Portfólio' : 'Portafolio'}
+              </span>
               {activeContractsCount > 0 && (
                 <span
                   data-testid="sidebar-portfolio-badge"
@@ -209,7 +230,7 @@ export function SidebarDock({
                 gap: '3px',
                 transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
               }}
-              title="Historial de trading"
+              title={isPt ? 'Histórico de trading' : 'Historial de trading'}
             >
               <div style={{
                 padding: '5px 10px',
@@ -219,7 +240,9 @@ export function SidebarDock({
               }}>
                 <IconHistorial size={22} color={activeTab === 'history' ? '#F4F5F7' : 'currentColor'} />
               </div>
-              <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1 }}>Historial</span>
+              <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1 }}>
+                {isPt ? 'Histórico' : 'Historial'}
+              </span>
             </button>
 
             {/* 4. Torneos de trading */}
@@ -244,7 +267,7 @@ export function SidebarDock({
                 gap: '3px',
                 transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
               }}
-              title="Torneos de trading"
+              title={isPt ? 'Torneios de trading' : 'Torneos de trading'}
             >
               <div style={{
                 padding: '5px 10px',
@@ -254,7 +277,42 @@ export function SidebarDock({
               }}>
                 <IconTorneos size={22} color={activeTab === 'tournaments' ? '#F4F5F7' : 'currentColor'} />
               </div>
-              <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1 }}>Torneos</span>
+              <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1 }}>
+                {isPt ? 'Torneios' : 'Torneos'}
+              </span>
+            </button>
+
+            {/* 4b. Arena Blitz (Competição 15min — rota /arena) */}
+            <button
+              type="button"
+              data-testid="sidebar-item-arena"
+              className="sidebar-dock-btn"
+              onClick={() => navigate('/arena')}
+              style={{
+                width: '100%',
+                padding: '4px 0',
+                background: 'transparent',
+                border: 'none',
+                color: isArenaActive ? '#F4F5F7' : '#8A92A1',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '3px',
+                transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
+              }}
+              title="Arena Blitz — 15 min"
+              aria-current={isArenaActive ? 'page' : undefined}
+            >
+              <div style={{
+                padding: '5px 10px',
+                borderRadius: '6px',
+                border: isArenaActive ? '1.5px solid #22C55E' : '1.5px solid transparent',
+                transition: 'border-color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
+              }}>
+                <IconArena size={22} color={isArenaActive ? '#F4F5F7' : 'currentColor'} />
+              </div>
+              <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1 }}>Arena</span>
             </button>
 
             {/* 5. Análisis de mercado */}
@@ -276,7 +334,7 @@ export function SidebarDock({
                 gap: '3px',
                 transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
               }}
-              title="Análisis de mercado"
+              title={isPt ? 'Análise de mercado' : 'Análisis de mercado'}
             >
               <div style={{
                 padding: '5px 10px',
@@ -286,7 +344,9 @@ export function SidebarDock({
               }}>
                 <IconAnalisis size={22} color={activeTab === 'news' ? '#F4F5F7' : 'currentColor'} />
               </div>
-              <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1 }}>Análisis</span>
+              <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1 }}>
+                {isPt ? 'Análises' : 'Análisis'}
+              </span>
             </button>
 
             {/* 6. Tutoriales en video */}
@@ -308,7 +368,7 @@ export function SidebarDock({
                 gap: '3px',
                 transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
               }}
-              title="Tutoriales en video"
+              title={isPt ? 'Tutoriais em vídeo' : 'Tutoriales en video'}
             >
               <div style={{
                 padding: '5px 10px',
@@ -318,7 +378,9 @@ export function SidebarDock({
               }}>
                 <IconTutoriales size={22} color={activeTab === 'tutorials' ? '#F4F5F7' : 'currentColor'} />
               </div>
-              <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1 }}>Tutoriales</span>
+              <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1 }}>
+                {isPt ? 'Tutoriais' : 'Tutoriales'}
+              </span>
             </button>
 
             {/* 7. Promociones y bonos */}
@@ -341,7 +403,7 @@ export function SidebarDock({
                 transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
                 boxSizing: 'border-box',
               }}
-              title="Promociones y bonos"
+              title={isPt ? 'Promoções e bônus' : 'Promociones y bonos'}
             >
               <div style={{
                 padding: '5px 10px',
@@ -351,7 +413,9 @@ export function SidebarDock({
               }}>
                 <IconPromociones size={22} color={activeTab === 'promotions' ? '#F4F5F7' : 'currentColor'} />
               </div>
-              <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1 }}>Promociones</span>
+              <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1 }}>
+                {isPt ? 'Promoções' : 'Promociones'}
+              </span>
             </button>
 
             {/* Espaçador flexível para empurrar Ajustes para o rodapé */}
@@ -377,7 +441,7 @@ export function SidebarDock({
                 transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)',
                 marginBottom: '8px',
               }}
-              title="Ajustes de la plataforma"
+              title={isPt ? 'Ajustes da plataforma' : 'Ajustes de la plataforma'}
             >
               <div style={{
                 padding: '5px 10px',
@@ -529,7 +593,7 @@ export function SidebarDock({
       </div>
 
       {/* Fly-out Drawer Lateral (340px) */}
-      {activeTab !== null && (
+      {activeTab !== null && !(activeTab === 'tournaments' && isTournamentsModalOpen) && (
         <>
           {/* Backdrop sutil */}
           <div
@@ -597,14 +661,14 @@ export function SidebarDock({
                     fontWeight: 700,
                   }}
                 >
-                  {activeTab === 'history' && (isBinmax ? 'Historial de trading' : 'Histórico de Trades')}
-                  {activeTab === 'portfolio' && (isBinmax ? 'Portafolio total' : 'Posições Ativas')}
-                  {activeTab === 'tournaments' && 'Torneos de trading'}
-                  {activeTab === 'alerts' && (isBinmax ? 'Alertas y soporte' : 'Alertas & Notificações')}
-                  {activeTab === 'news' && (isBinmax ? 'Análisis de mercado' : 'Notícias do Mercado')}
-                  {activeTab === 'tutorials' && 'Tutoriales en video'}
-                  {activeTab === 'promotions' && 'Promociones y bonos'}
-                  {activeTab === 'settings' && (isBinmax ? 'Ajustes de la plataforma' : 'Ajustes da Plataforma')}
+                  {activeTab === 'history' && (isBinmax ? (isPt ? 'Histórico de trading' : 'Historial de trading') : 'Histórico de Trades')}
+                  {activeTab === 'portfolio' && (isBinmax ? (isPt ? 'Portfólio total' : 'Portafolio total') : 'Posições Ativas')}
+                  {activeTab === 'tournaments' && (isPt ? 'Torneios de trading' : 'Torneos de trading')}
+                  {activeTab === 'alerts' && (isBinmax ? (isPt ? 'Alertas e suporte' : 'Alertas y soporte') : 'Alertas & Notificações')}
+                  {activeTab === 'news' && (isBinmax ? (isPt ? 'Análise de mercado' : 'Análisis de mercado') : 'Notícias do Mercado')}
+                  {activeTab === 'tutorials' && (isPt ? 'Tutoriais em vídeo' : 'Tutoriales en video')}
+                  {activeTab === 'promotions' && (isPt ? 'Promoções e bônus' : 'Promociones y bonos')}
+                  {activeTab === 'settings' && (isBinmax ? (isPt ? 'Ajustes da plataforma' : 'Ajustes de la plataforma') : 'Ajustes da Plataforma')}
                 </strong>
               </div>
               <button
@@ -626,7 +690,17 @@ export function SidebarDock({
             </div>
 
             {/* Conteúdo do Drawer */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: activeTab === 'news' ? 0 : '16px', boxSizing: 'border-box' }}>
+            <div
+              className="bm-stealth-scroll sidebar-drawer-scroll"
+              data-testid="sidebar-drawer-scroll"
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                padding: activeTab === 'news' ? 0 : '16px',
+                boxSizing: 'border-box',
+              }}
+            >
               {activeTab === 'history' && (
                 <div>{historyContent ?? <p style={{ color: '#7a8ba7' }}>Nenhum trade finalizado.</p>}</div>
               )}

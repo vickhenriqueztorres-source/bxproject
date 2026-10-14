@@ -1,7 +1,7 @@
 import { OpenContractSchema, COUNTRY_STAKE_LIMITS } from "@broker/shared";
 import { ContractService } from "../services/contract-service.js";
 export const contractRoutes = async (server) => {
-    const contractService = new ContractService(server.pg, server.redis);
+    const contractService = new ContractService(server.pg, server.redis, server.blnkClient);
     // POST /api/v1/contracts (Abertura de contrato UP/DOWN)
     const preHandlers = [server.authenticate];
     if (typeof server.enforceTradingEnabled === 'function') {
@@ -57,6 +57,24 @@ export const contractRoutes = async (server) => {
             });
         }
         catch (err) {
+            if (err.message?.includes("IDEMPOTENCY_KEY_CONFLICT")) {
+                return reply.status(409).send({
+                    error: "IDEMPOTENCY_KEY_CONFLICT",
+                    message: err.message
+                });
+            }
+            if (err.message?.includes("INSUFFICIENT_BALANCE")) {
+                return reply.status(422).send({
+                    error: "INSUFFICIENT_BALANCE",
+                    message: err.message
+                });
+            }
+            if (err.message?.includes("INVALID_MINOR_AMOUNT")) {
+                return reply.status(400).send({
+                    error: "INVALID_MINOR_AMOUNT",
+                    message: err.message
+                });
+            }
             if (err.message?.includes("KILLSWITCH_ACTIVE")) {
                 return reply.status(503).send({
                     error: "KILLSWITCH_ACTIVE",

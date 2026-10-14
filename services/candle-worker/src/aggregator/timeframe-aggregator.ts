@@ -1,4 +1,7 @@
 import { Redis } from "ioredis";
+import { isMarketOpen, shouldCloseCandle, aggregateCandleGapTolerant } from "./trading-calendar.js";
+
+export { isMarketOpen, shouldCloseCandle, aggregateCandleGapTolerant };
 
 export interface TickInput {
   symbol: string;
@@ -80,14 +83,20 @@ export class TimeframeAggregator {
 
   /**
    * Processa um tick para um determinado intervalo.
+   * Valida sessão de trading por símbolo (Perigo 7 — Técnica 3) antes de agregar/fechar candle.
    * Se o tick cruzar para um novo bucket, retorna o bucket_start do anterior que foi fechado.
    */
   async processTickForInterval(
     tick: TickInput,
     interval: string
-  ): Promise<{ activeCandle: CandleData; closedBucketStart: Date | null }> {
+  ): Promise<{ activeCandle: CandleData | null; closedBucketStart: Date | null }> {
     const intervalMs = TIMEFRAMES[interval];
     if (!intervalMs) throw new Error(`Intervalo desconhecido: ${interval}`);
+
+    // Perigo 7 (Técnica 3): Se o mercado estiver fechado para o símbolo neste timestamp UTC, ignora o tick sem criar candle espúrio
+    if (!shouldCloseCandle(tick, tick.symbol)) {
+      return { activeCandle: null, closedBucketStart: null };
+    }
 
     const bucketStart = TimeframeAggregator.calculateBucketStart(tick.ts, intervalMs);
     const bucketStartMs = bucketStart.getTime();

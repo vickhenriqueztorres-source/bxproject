@@ -101,4 +101,121 @@ describe("FinancialReconciler (Continuous Audit & Hash Integrity)", () => {
     assert.equal(report.checks.stuck_settling_contracts, false);
     assert.ok(report.discrepancies.some(d => d.includes("contracts stuck past expiration")));
   });
+
+  it("reconcileTournamentEscrowAndRealWallet reports HEALTHY when escrow, withdrawal holds, and bonus margin isolation hold", () => {
+    const report = FinancialReconciler.reconcileTournamentEscrowAndRealWallet({
+      tournaments: [
+        {
+          tournamentId: "tourney-active-1",
+          status: "RUNNING",
+          escrowBalanceMinor: 50000,
+          entries: [
+            { id: "e1", entry_type: "BUY_IN", escrow_amount_minor: 800 },
+            { id: "e2", entry_type: "REBUY", escrow_amount_minor: 400 },
+            { id: "e3", entry_type: "OVERLAY_INJECTION", escrow_amount_minor: 48800 }
+          ]
+        },
+        {
+          tournamentId: "tourney-settled-1",
+          status: "SETTLED",
+          escrowBalanceMinor: 0,
+          entries: [
+            { id: "e4", entry_type: "BUY_IN", escrow_amount_minor: 50000 }
+          ]
+        }
+      ],
+      realWalletHolds: [
+        {
+          userId: "user-1",
+          reservedBalanceMinor: 5000,
+          walletTransactions: [
+            { id: "w1", type: "WITHDRAWAL", status: "PENDING", amount_minor: 3000 },
+            { id: "w2", type: "WITHDRAWAL", status: "PENDING", amount_minor: 2000 },
+            { id: "w3", type: "WITHDRAWAL", status: "COMPLETED", amount_minor: 10000 }
+          ]
+        }
+      ],
+      bonusMargins: [
+        {
+          userId: "user-1",
+          ledgerTransactions: [
+            {
+              reference: "bonus-unlock-1",
+              source: "@user_user-1:bonus_margin",
+              destination: "@user_user-1:real:available",
+              amount: 2500,
+              currency: "USD"
+            }
+          ],
+          bonusGrants: [
+            {
+              id: "bg-1",
+              amount_minor: 2500,
+              required_rollover_minor: 75000,
+              completed_volume_minor: 80000,
+              status: "UNLOCKED"
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(report.status, "HEALTHY");
+    assert.equal(report.checks.tournament_escrow_conservation, true);
+    assert.equal(report.checks.real_wallet_withdrawals_hold_check, true);
+    assert.equal(report.checks.bonus_margin_isolation_check, true);
+    assert.equal(report.discrepancies.length, 0);
+  });
+
+  it("reconcileTournamentEscrowAndRealWallet detects violations across escrow, withdrawal holds, and bonus margin isolation", () => {
+    const reconciler = new FinancialReconciler({} as any, {} as any);
+    const report = reconciler.reconcileTournamentEscrowAndRealWallet({
+      tournaments: [
+        {
+          tournamentId: "tourney-settled-leak",
+          status: "SETTLED",
+          escrowBalanceMinor: 1 // Residual cent in SETTLED tournament!
+        }
+      ],
+      realWalletHolds: [
+        {
+          userId: "user-overdrawn-hold",
+          reservedBalanceMinor: 2000,
+          walletTransactions: [
+            { id: "w-pending-1", type: "WITHDRAWAL", status: "PENDING", amount_minor: 2500 }
+          ]
+        }
+      ],
+      bonusMargins: [
+        {
+          userId: "user-bonus-exploit",
+          ledgerTransactions: [
+            {
+              reference: "unauthorized-bonus-transfer",
+              source: "@user_user-bonus-exploit:bonus_margin",
+              destination: "@user_user-bonus-exploit:real:available",
+              amount: 2500,
+              currency: "USD"
+            }
+          ],
+          bonusGrants: [
+            {
+              id: "bg-active",
+              amount_minor: 2500,
+              required_rollover_minor: 75000,
+              completed_volume_minor: 10000,
+              status: "ACTIVE"
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(report.status, "DISCREPANCY_DETECTED");
+    assert.equal(report.checks.tournament_escrow_conservation, false);
+    assert.equal(report.checks.real_wallet_withdrawals_hold_check, false);
+    assert.equal(report.checks.bonus_margin_isolation_check, false);
+    assert.equal(report.discrepancies.length, 3);
+  });
 });
+

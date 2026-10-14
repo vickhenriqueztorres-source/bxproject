@@ -7,6 +7,10 @@ import { FIBONACCI_LEVELS, type DrawingItem } from '../chart/drawing-types';
 import { resampleCandles, candleFromTick } from '../chart/candle-adapter';
 import type { Candle } from '../api/client';
 import { setNewTraderoomEnabled } from '../lib/feature-flags';
+import { setTraderoomPolishEnabled } from '../lib/traderoom-polish';
+
+// Este arquivo cobre os overlays anteriores (cápsula de sentimento, pílula de expiração). Ver chart/subetapa-polish-05-time-mood.
+setTraderoomPolishEnabled(false);
 
 describe('Subetapa 4: Motor Gráfico, Overlays em Tempo Real e Desenho 60 FPS', () => {
   beforeEach(() => {

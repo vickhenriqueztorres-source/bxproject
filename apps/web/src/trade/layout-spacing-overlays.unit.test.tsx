@@ -3,6 +3,10 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { TimeLinesOverlay } from '../chart/TimeLinesOverlay';
 import { setNewTraderoomEnabled } from '../lib/feature-flags';
+import { setTraderoomPolishEnabled } from '../lib/traderoom-polish';
+
+// Este arquivo cobre os overlays anteriores (cápsula de sentimento, pílula de expiração). Ver chart/subetapa-polish-05-time-mood.
+setTraderoomPolishEnabled(false);
 
 describe('SUBETAPA 2: Refinamento de Design, Espaçamento & Descolisão de Overlays', () => {
   beforeEach(() => {

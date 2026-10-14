@@ -54,4 +54,12 @@ export class SymbolShardingRouter {
   public getNumNodes(): number {
     return this.numNodes;
   }
+
+  /**
+   * Verifica se um símbolo pertence a este nó específico do cluster de WebSocket Gateway.
+   */
+  public isAssignedToNode(symbol: string, currentNodeIndex = 0): boolean {
+    if (this.numNodes <= 1) return true;
+    return this.getNodeIndex(symbol) === currentNodeIndex;
+  }
 }

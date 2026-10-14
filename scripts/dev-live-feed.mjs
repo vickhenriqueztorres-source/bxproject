@@ -443,6 +443,7 @@ for (const item of ASSETS_CONFIG) {
 
   assetState.set(item.symbol, {
     symbol: item.symbol,
+    basePrice: item.price,
     currentPrice: item.price.toFixed(item.precision),
     precision: item.precision,
     sigma: item.sigma,
@@ -2647,12 +2648,12 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
         let targetExpiryEpoch;
         let safeDurationMs;
 
-        // Se o cliente forneceu target_expires_at calibrado, valida e honra com precisão absoluta
+        // Se o cliente forneceu target_expires_at calibrado, valida e honra com piso mínimo de 60s
         if (payload.target_expires_at) {
           const clientExpiryMs = Date.parse(payload.target_expires_at);
-          if (Number.isFinite(clientExpiryMs) && clientExpiryMs - now >= 25_000 && clientExpiryMs - now <= 3_600_000) {
-            targetExpiryEpoch = clientExpiryMs;
-            safeDurationMs = Math.max(30_000, targetExpiryEpoch - now);
+          if (Number.isFinite(clientExpiryMs) && clientExpiryMs - now >= 55_000 && clientExpiryMs - now <= 3_600_000) {
+            targetExpiryEpoch = Math.max(now + 60_000, clientExpiryMs);
+            safeDurationMs = Math.max(60_000, targetExpiryEpoch - now);
           }
         }
 
@@ -2661,17 +2662,17 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
           if (expiryMode === 'CANDLE_1M') {
             const cur1mEnd = Math.ceil(now / 60_000) * 60_000;
             const remSec = Math.floor((cur1mEnd - now) / 1000);
-            calculatedDurationMs = (remSec < 30 ? cur1mEnd + 60_000 : cur1mEnd) - now;
+            calculatedDurationMs = (remSec < 60 ? cur1mEnd + 60_000 : cur1mEnd) - now;
           } else if (expiryMode === 'CANDLE_5M') {
             const cur5mEnd = Math.ceil(now / 300_000) * 300_000;
             const remSec = Math.floor((cur5mEnd - now) / 1000);
-            calculatedDurationMs = (remSec < 30 ? cur5mEnd + 300_000 : cur5mEnd) - now;
+            calculatedDurationMs = (remSec < 60 ? cur5mEnd + 300_000 : cur5mEnd) - now;
           } else {
             // 1M_FIXED ou turbo: segundos corridos a partir da recepção
             const requestedSec = parseInt(payload.duration_seconds, 10) || 60;
             calculatedDurationMs = requestedSec * 1000;
           }
-          safeDurationMs = Math.max(30_000, calculatedDurationMs);
+          safeDurationMs = Math.max(60_000, calculatedDurationMs);
           targetExpiryEpoch = now + safeDurationMs;
         }
 
@@ -2858,7 +2859,17 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
             for (const client of wss.clients) {
               if (client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({ type: 'wallet_balance', available_minor: finalBroadcastBal }));
-                client.send(JSON.stringify({ type: 'contract_settled', contract_id: contractId, result, payout_minor: payoutMinor }));
+                client.send(
+                  JSON.stringify({
+                    type: 'contract_settled',
+                    contract_id: contractId,
+                    result,
+                    stake_minor: stake,
+                    payout_minor: payoutMinor,
+                    symbol: target.symbol,
+                    direction: target.direction,
+                  })
+                );
               }
             }
           }
@@ -3234,9 +3245,14 @@ setInterval(() => {
     if (state.paused) continue;
     state.lastTs = now;
 
-    // 1. Gera próximo tick estocástico via Box-Muller CSPRNG Martingale
-    const nextPrice = generator(state.currentPrice, state.sigma, state.precision);
-    const nextPriceNum = parseFloat(nextPrice);
+    // 1. Gera próximo tick estocástico via Box-Muller CSPRNG + Reversão à Média (Ornstein-Uhlenbeck)
+    const rawNext = generator(state.currentPrice, state.sigma, state.precision);
+    const currentNum = parseFloat(state.currentPrice);
+    const rawNextNum = parseFloat(rawNext);
+    const theta = 0.004;
+    const ouPull = state.basePrice ? theta * (state.basePrice - currentNum) : 0;
+    const nextPriceNum = Math.max((state.basePrice || currentNum) * 0.1, rawNextNum + ouPull);
+    const nextPrice = nextPriceNum.toFixed(state.precision);
     const nextSeq = nextSequence(state.sequence);
     const hash = canonicalHash(state.prevHash, symbol, nextSeq, ts, nextPrice);
 

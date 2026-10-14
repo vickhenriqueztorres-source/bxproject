@@ -12,19 +12,19 @@ describe('OrderTicket — Requisitos Fiscais e Visual IQ Option (Etapa 07)', () 
     expect(parseStakeInput('abc')).toBeNull();
   });
 
-  it('D2 Expiración: gera slots de tempo com garantia inviolável >= 30 segundos', () => {
+  it('D2 Expiración: gera slots de tempo com garantia inviolável >= 60 segundos', () => {
     const fixedNow = new Date('2026-10-08T03:00:00.000Z');
     const slots = calculateExpirySlots(fixedNow, -3);
     expect(slots.length).toBeGreaterThanOrEqual(3);
     
-    // Todos os slots devem respeitar piso de 30 segundos
+    // Todos os slots devem respeitar piso de 60 segundos
     slots.forEach((slot) => {
-      expect(slot.remainingSeconds).toBeGreaterThanOrEqual(30);
-      expect(slot.durationSeconds).toBeGreaterThanOrEqual(30);
+      expect(slot.remainingSeconds).toBeGreaterThanOrEqual(60);
+      expect(slot.durationSeconds).toBeGreaterThanOrEqual(60);
     });
 
     const execution = calculateExecutionExpiry('1M_FIXED', fixedNow.getTime());
-    expect(execution.durationMs).toBeGreaterThanOrEqual(30000);
+    expect(execution.durationMs).toBeGreaterThanOrEqual(60000);
   });
 
   it('D3 Ganancia: formata payout e lucro com precisão monetária inteira', () => {

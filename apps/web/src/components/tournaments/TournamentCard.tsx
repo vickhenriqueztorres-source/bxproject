@@ -1,13 +1,24 @@
 import React from 'react';
 import { TournamentItem } from './TournamentTypes';
 import { TournamentTrophyArt } from './TournamentTrophyArt';
+import { useUiLanguage } from '../../i18n';
 
 export interface TournamentCardProps {
   tournament: TournamentItem;
   onSelect: (id: string) => void;
+  isJoined?: boolean;
 }
 
-export function TournamentCard({ tournament, onSelect }: TournamentCardProps) {
+function translateCardActionLabel(label: string, isEs: boolean): string {
+  if (!isEs) return label;
+  if (label === 'Ver detalhes') return 'Ver detalles';
+  if (label === 'Ver resultado') return 'Ver resultado';
+  return label;
+}
+
+export function TournamentCard({ tournament, onSelect, isJoined = false }: TournamentCardProps) {
+  const uiLang = useUiLanguage('pt');
+  const isEs = uiLang === 'es';
   const isLive = tournament.status === 'AO_VIVO';
   const isUpcoming = tournament.status === 'EM_BREVE';
   const isFinished = tournament.status === 'ENCERRADO';
@@ -79,7 +90,11 @@ export function TournamentCard({ tournament, onSelect }: TournamentCardProps) {
             }}
           >
             {isLive && <span style={{ fontSize: '8px' }}>●</span>}
-            {isLive ? 'AO VIVO' : isUpcoming ? 'EM BREVE' : 'ENCERRADO'}
+            {isLive
+              ? isEs ? 'EN VIVO' : 'AO VIVO'
+              : isUpcoming
+              ? isEs ? 'PRÓXIMO' : 'EM BREVE'
+              : isEs ? 'FINALIZADO' : 'ENCERRADO'}
           </span>
 
           {/* Prazo Restante */}
@@ -102,21 +117,41 @@ export function TournamentCard({ tournament, onSelect }: TournamentCardProps) {
 
         {/* Título e Subtítulo */}
         <div style={{ marginBottom: '14px' }}>
-          <h3
-            data-testid={`tournament-title-${tournament.id}`}
-            style={{
-              margin: '0 0 3px',
-              fontSize: '15px',
-              fontWeight: 700,
-              color: '#FFFFFF',
-              letterSpacing: '-0.01em',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {tournament.name}
-          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+            <h3
+              data-testid={`tournament-title-${tournament.id}`}
+              style={{
+                margin: '0 0 3px',
+                fontSize: '15px',
+                fontWeight: 700,
+                color: '#FFFFFF',
+                letterSpacing: '-0.01em',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {tournament.name}
+            </h3>
+            {isJoined && (
+              <span
+                data-testid={`tournament-joined-badge-${tournament.id}`}
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  color: '#22C47A',
+                  backgroundColor: 'rgba(34, 196, 122, 0.14)',
+                  border: '1px solid rgba(34, 196, 122, 0.35)',
+                  borderRadius: '4px',
+                  padding: '1px 6px',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                Inscrito ✓
+              </span>
+            )}
+          </div>
           <p
             data-testid={`tournament-subtitle-${tournament.id}`}
             style={{
@@ -152,7 +187,7 @@ export function TournamentCard({ tournament, onSelect }: TournamentCardProps) {
                 marginBottom: '2px',
               }}
             >
-              Prêmio total
+              {isEs ? 'Premio total' : 'Prêmio total'}
             </span>
             <strong
               data-testid={`tournament-prize-${tournament.id}`}
@@ -243,8 +278,13 @@ export function TournamentCard({ tournament, onSelect }: TournamentCardProps) {
           e.currentTarget.style.transform = 'scale(1)';
         }}
       >
-        <span>{tournament.actionLabel}</span>
+        <span>
+          {isJoined && isLive
+            ? 'Inscrito ✓ · Ver'
+            : translateCardActionLabel(tournament.actionLabel, isEs)}
+        </span>
       </button>
     </div>
   );
 }
+

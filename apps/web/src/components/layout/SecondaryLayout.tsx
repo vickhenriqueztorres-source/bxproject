@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BinmaxLogo } from '../brand/BinmaxLogo';
 import { useRouter } from '../../router/RouterContext';
-import { useTranslation } from '../../i18n';
+import { useTranslation, useUiLanguage } from '../../i18n';
 import {
   PRECISION_SURFACES,
   PRECISION_TEXT,
@@ -30,8 +30,10 @@ export function SecondaryLayout({
   showRiskDisclaimer = true,
 }: SecondaryLayoutProps) {
   const { navigate, currentPath } = useRouter();
-  const { locale, setLocale } = useTranslation();
-  const currentLang = locale?.startsWith('pt') ? 'PT' : 'ES';
+  const { setLocale } = useTranslation();
+  const uiLang = useUiLanguage('es');
+  const isPt = uiLang === 'pt';
+  const currentLang = isPt ? 'PT' : 'ES';
   const [langMenuOpen, setLangMenuOpen] = useState(false);
 
   const session = AuthService.getSession();
@@ -45,11 +47,12 @@ export function SecondaryLayout({
   const isLogged = Boolean(userEmail);
 
   const navItems = [
-    { label: 'Sala de Trading', path: '/operar' },
-    { label: 'Torneos', path: '/torneos' },
-    { label: 'Análisis', path: '/analisis' },
-    { label: 'Tutoriales', path: '/tutoriales' },
-    { label: 'Promociones', path: '/promociones' },
+    { label: 'Sala de Trading', matchLabel: 'Sala de Trading', path: '/operar' },
+    { label: isPt ? 'Torneios' : 'Torneos', matchLabel: 'Torneos', path: '/torneos' },
+    { label: 'Arena Blitz', matchLabel: 'Arena Blitz', path: '/arena' },
+    { label: isPt ? 'Análises' : 'Análisis', matchLabel: 'Análisis', path: '/analisis' },
+    { label: isPt ? 'Tutoriais' : 'Tutoriales', matchLabel: 'Tutoriales', path: '/tutoriales' },
+    { label: isPt ? 'Promoções' : 'Promociones', matchLabel: 'Promociones', path: '/promociones' },
   ];
 
 
@@ -94,7 +97,7 @@ export function SecondaryLayout({
               display: 'flex',
               alignItems: 'center',
             }}
-            aria-label="Ir a página de inicio"
+            aria-label={isPt ? 'Ir para a página inicial' : 'Ir a página de inicio'}
           >
             <BinmaxLogo variant="horizontal" height={26} />
           </button>
@@ -109,7 +112,7 @@ export function SecondaryLayout({
             className="secondary-nav-links"
           >
             {navItems.map((item) => {
-              const isActive = currentPath === item.path || activeNav === item.label;
+              const isActive = currentPath === item.path || activeNav === item.label || activeNav === item.matchLabel;
               return (
                 <button
                   key={item.path}
@@ -285,7 +288,9 @@ export function SecondaryLayout({
                   </svg>
                 </div>
                 <div style={{ textAlign: 'left', lineHeight: 1.15 }}>
-                  <div style={{ fontSize: '10px', color: PRECISION_TEXT.quiet, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cuenta de práctica</div>
+                  <div style={{ fontSize: '10px', color: PRECISION_TEXT.quiet, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    {isPt ? 'Conta de prática' : 'Cuenta de práctica'}
+                  </div>
                   <div style={{ fontSize: '13px', color: PRECISION_TEXT.strong, fontFamily: PRECISION_FONTS.mono, fontWeight: 700 }} className="bm-tabular-nums">
                     {balanceFormatted || '$10,000.00'}
                   </div>
@@ -340,7 +345,7 @@ export function SecondaryLayout({
                   transition: `border-color ${PRECISION_MOTION.tMicro}ms ${PRECISION_MOTION.ease}`,
                 }}
               >
-                Iniciar sesión
+                {isPt ? 'Entrar' : 'Iniciar sesión'}
               </button>
               <button
                 type="button"
@@ -358,7 +363,7 @@ export function SecondaryLayout({
                   transition: `background-color ${PRECISION_MOTION.tMicro}ms ${PRECISION_MOTION.ease}`,
                 }}
               >
-                Crear cuenta
+                {isPt ? 'Criar conta' : 'Crear cuenta'}
               </button>
             </div>
           )}
@@ -411,10 +416,10 @@ export function SecondaryLayout({
             <div style={{ display: 'flex', alignItems: 'center', gap: '28px' }}>
               <BinmaxLogo variant="short" height={22} />
               <div style={{ display: 'flex', gap: '20px', fontSize: '12.5px', color: PRECISION_TEXT.muted }}>
-                <a href="#sobre" style={{ color: PRECISION_TEXT.muted, textDecoration: 'none' }}>Sobre nosotros</a>
-                <a href="#terminos" style={{ color: PRECISION_TEXT.muted, textDecoration: 'none' }}>Términos y condiciones</a>
-                <a href="#privacidad" style={{ color: PRECISION_TEXT.muted, textDecoration: 'none' }}>Política de privacidad</a>
-                <a href="#contacto" style={{ color: PRECISION_TEXT.muted, textDecoration: 'none' }}>Contacto institucional</a>
+                <a href="#sobre" style={{ color: PRECISION_TEXT.muted, textDecoration: 'none' }}>{isPt ? 'Sobre nós' : 'Sobre nosotros'}</a>
+                <a href="#terminos" style={{ color: PRECISION_TEXT.muted, textDecoration: 'none' }}>{isPt ? 'Termos e condições' : 'Términos y condiciones'}</a>
+                <a href="#privacidad" style={{ color: PRECISION_TEXT.muted, textDecoration: 'none' }}>{isPt ? 'Política de privacidade' : 'Política de privacidad'}</a>
+                <a href="#contacto" style={{ color: PRECISION_TEXT.muted, textDecoration: 'none' }}>{isPt ? 'Contato institucional' : 'Contacto institucional'}</a>
               </div>
             </div>
 
@@ -434,7 +439,15 @@ export function SecondaryLayout({
                 paddingTop: '16px',
               }}
             >
-              <strong>Advertencia de riesgo:</strong> Los contratos de índices sintéticos y derivados implican un riesgo sustancial de pérdida de capital y no son adecuados para todos los perfiles. La ejecución se basa en modelos matemáticos estocásticos continuos. Los rendimientos simulados o pasados no constituyen garantía de rentabilidad futura. Opere con estricta gestión de riesgo y con fondos asignados a capital de riesgo.
+              {isPt ? (
+                <>
+                  <strong>Aviso de risco:</strong> Os contratos de índices sintéticos e derivativos envolvem risco substancial de perda de capital e não são adequados para todos os perfis. A execução baseia-se em modelos matemáticos estocásticos contínuos. Os rendimentos simulados ou passados não constituem garantia de rentabilidade futura. Opere com rigorosa gestão de risco e com fundos alocados a capital de risco.
+                </>
+              ) : (
+                <>
+                  <strong>Advertencia de riesgo:</strong> Los contratos de índices sintéticos y derivados implican un riesgo sustancial de pérdida de capital y no son adecuados para todos los perfiles. La ejecución se basa en modelos matemáticos estocásticos continuos. Los rendimientos simulados o pasados no constituyen garantía de rentabilidad futura. Opere con estricta gestión de riesgo y con fondos asignados a capital de riesgo.
+                </>
+              )}
             </div>
           )}
         </div>

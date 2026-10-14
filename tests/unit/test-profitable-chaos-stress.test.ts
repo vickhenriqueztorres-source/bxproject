@@ -3,8 +3,8 @@ import { OpenContractSchema } from "../../packages/shared/src/index.ts";
 
 describe("SUBETAPA 04 — Testes de Estresse, Caos e Segurança do Modelo Lucrativo", () => {
   describe("Segurança: Bloqueio de Arbitragem e Front-Running", () => {
-    it("rejeita qualquer tentativa de injeção de duração ultracurta (< 30s) que permitiria arbitragem", () => {
-      const maliciousDurations = [1, 2, 5, 10, 15, 20, 25, 28, 29];
+    it("rejeita qualquer tentativa de injeção de duração abaixo do piso mínimo (< 60s) que permitiria arbitragem", () => {
+      const maliciousDurations = [1, 2, 5, 10, 15, 20, 25, 28, 29, 30, 45, 59];
       for (const d of maliciousDurations) {
         const res = OpenContractSchema.safeParse({
           symbol: "BTCUSD_OTC",
@@ -53,7 +53,7 @@ describe("SUBETAPA 04 — Testes de Estresse, Caos e Segurança do Modelo Lucrat
         symbol: i % 2 === 0 ? "BTCUSD_OTC" : "EURUSD_OTC",
         direction: (i % 2 === 0 ? "UP" : "DOWN") as "UP" | "DOWN",
         stake_minor: 100 + (i * 10),
-        duration_seconds: 30 + ((i * 5) % 270),
+        duration_seconds: 60 + ((i * 5) % 241),
       }));
 
       const results = payloads.map((p) => OpenContractSchema.safeParse(p));
@@ -72,9 +72,9 @@ describe("SUBETAPA 04 — Testes de Estresse, Caos e Segurança do Modelo Lucrat
       const clientClockAdiantado = new Date("2026-10-10T12:15:00.000Z"); // +15 min
       const clientClockAtrasado = new Date("2026-10-10T11:45:00.000Z"); // -15 min
 
-      // O servidor calcula usando o seu próprio tempo base de tick
-      const durationSeconds = 60;
-      const safeDuration = Math.max(30, Math.min(300, durationSeconds));
+      // O servidor calcula usando o seu próprio tempo base de tick com piso inviolável de 60s
+      const durationSeconds = 30; // tentativa sub-60s clampeada pelo ContractService
+      const safeDuration = Math.max(60, Math.min(300, durationSeconds));
       const serverCalculatedExpiresAt = new Date(serverTickTime.getTime() + safeDuration * 1000);
 
       expect(serverCalculatedExpiresAt.toISOString()).toBe("2026-10-10T12:01:00.000Z");

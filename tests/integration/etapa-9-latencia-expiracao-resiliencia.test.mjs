@@ -146,7 +146,7 @@ test('Subetapa 9.4 — Suíte de Testes de Latência, Expiração e Resiliência
     }
   });
 
-  await t.test('3. Piso Inviolável de 30 Segundos em Expiração Curta', async () => {
+  await t.test('3. Piso Inviolável de 60 Segundos em Expiração Curta', async () => {
     const idemKey = `idem_floor_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
 
     // Solicita duração inválida de apenas 5 segundos
@@ -171,8 +171,8 @@ test('Subetapa 9.4 — Suíte de Testes de Latência, Expiração e Resiliência
     const expiryEpoch = Date.parse(body.expires_at);
     const diffMs = expiryEpoch - Date.now();
 
-    // Deve ter sido corrigido para pelo menos 29.5 segundos (tolerância de execução)
-    assert.ok(diffMs >= 29_500, `Expiração (${diffMs}ms) deve respeitar o piso inviolável de 30s`);
+    // Deve ter sido corrigido para pelo menos 59.5 segundos (tolerância de execução)
+    assert.ok(diffMs >= 59_500, `Expiração (${diffMs}ms) deve respeitar o piso inviolável de 60s`);
   });
 
   await t.test('4. Estresse Concorrente de Idempotência (15 requisições paralelas simultâneas)', async () => {

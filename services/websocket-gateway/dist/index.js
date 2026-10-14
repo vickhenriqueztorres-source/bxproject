@@ -4,19 +4,44 @@ import { Redis } from "ioredis";
 import { jwtVerify, createRemoteJWKSet } from "jose";
 import { RED_ZONE_COUNTRIES } from "@broker/shared";
 import { CatchupHandler } from "./handlers/catchup-handler.js";
+import { TickCoalescer } from "./coalescer.js";
+import { BackpressureGuard } from "./backpressure.js";
+import { SymbolShardingRouter } from "./sharding.js";
 const PORT = parseInt(process.env.WS_PORT || "3001", 10);
 const HOST = process.env.WS_HOST || "0.0.0.0";
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL || "http://localhost:8080";
 const REALM = process.env.KEYCLOAK_REALM || "broker-demo";
+const WS_NODE_ID = parseInt(process.env.WS_NODE_ID || "0", 10);
+const WS_TOTAL_NODES = parseInt(process.env.WS_TOTAL_NODES || "1", 10);
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL || "info" } });
 const redisSub = new Redis(REDIS_URL);
 const redisClient = new Redis(REDIS_URL);
 const catchupHandler = new CatchupHandler(redisClient);
+// Perigo 4 — Fan-out Escalável: Coalescing (50ms), Backpressure (64KB / 5s) e Sharding por Símbolo
+export const tickCoalescer = new TickCoalescer({ windowMs: 50 });
+export const backpressureGuard = new BackpressureGuard({
+    maxBufferedBytes: 64 * 1024,
+    slowClientTimeoutMs: 5000,
+});
+export const shardingRouter = new SymbolShardingRouter(WS_TOTAL_NODES);
 // Mapa de conexões ativas por usuário para aplicar o limite de 5 conexões (B-16)
 const activeConnectionsByUser = new Map();
 // Mapa de subscrições: symbol -> Set de sockets
 const subscriptionsBySymbol = new Map();
+/**
+ * Envia mensagem apenas para clientes que não excederam o limite de backpressure (64KB).
+ */
+export function broadcastToSubscribers(symbol, rawMessage) {
+    const subscribers = subscriptionsBySymbol.get(symbol);
+    if (!subscribers || subscribers.size === 0)
+        return;
+    for (const socket of subscribers) {
+        if (backpressureGuard.shouldSend(socket)) {
+            socket.send(rawMessage);
+        }
+    }
+}
 // JWKS para validação RS256
 let JWKS = null;
 try {
@@ -45,31 +70,37 @@ async function verifyToken(token) {
 }
 async function main() {
     await app.register(websocket);
-    // Escuta ticks do Redis Pub/Sub e distribui aos clientes inscritos
+    // Escuta ticks do Redis Pub/Sub e distribui aos clientes inscritos com Sharding, Coalescing (50ms) e Backpressure (64KB)
     await redisSub.psubscribe("market:ticks:*", "market:events:*");
     redisSub.on("pmessage", (_pattern, channel, message) => {
         if (channel.startsWith("market:ticks:")) {
             const symbol = channel.replace("market:ticks:", "");
+            if (!shardingRouter.isAssignedToNode(symbol, WS_NODE_ID)) {
+                return;
+            }
             const subscribers = subscriptionsBySymbol.get(symbol);
-            if (subscribers && subscribers.size > 0) {
-                for (const socket of subscribers) {
-                    if (socket.readyState === 1) { // OPEN
-                        socket.send(message);
-                    }
-                }
+            if (!subscribers || subscribers.size === 0)
+                return;
+            try {
+                const parsed = JSON.parse(message);
+                const tickObj = {
+                    ...parsed,
+                    symbol: parsed.symbol || symbol,
+                    sequence: typeof parsed.sequence === "number" ? parsed.sequence : Number(parsed.sequence || 0),
+                };
+                tickCoalescer.push(tickObj, (coalescedTick) => {
+                    broadcastToSubscribers(symbol, JSON.stringify(coalescedTick));
+                });
+            }
+            catch {
+                // Fallback caso a mensagem não seja JSON estruturado de tick
+                broadcastToSubscribers(symbol, message);
             }
         }
         else if (channel.startsWith("market:events:")) {
-            // Broadcast de eventos de liquidação
+            // Broadcast imediato de eventos de liquidação respeitando backpressure
             const symbol = channel.replace("market:events:", "");
-            const subscribers = subscriptionsBySymbol.get(symbol);
-            if (subscribers && subscribers.size > 0) {
-                for (const socket of subscribers) {
-                    if (socket.readyState === 1) {
-                        socket.send(message);
-                    }
-                }
-            }
+            broadcastToSubscribers(symbol, message);
         }
     });
     app.get("/ws", { websocket: true }, (socket, req) => {
@@ -94,6 +125,13 @@ async function main() {
         let isAuthenticated = false;
         let currentUserId = null;
         const clientSubscriptions = new Set();
+        // Listener de drenagem de buffer TCP para retomar envio após backpressure
+        const underlyingSocket = socket._socket;
+        if (underlyingSocket && typeof underlyingSocket.on === "function") {
+            underlyingSocket.on("drain", () => {
+                backpressureGuard.handleDrain(socket);
+            });
+        }
         let pongTimeoutTimer = null;
         const HEARTBEAT_INTERVAL_MS = 30000;
         const HEARTBEAT_TIMEOUT_MS = 5000;
@@ -218,6 +256,7 @@ async function main() {
             if (pongTimeoutTimer)
                 clearTimeout(pongTimeoutTimer);
             clearTimeout(authTimeout);
+            backpressureGuard.clearSocket(socket);
             if (currentUserId) {
                 redisClient.decr(`ws:conn:${currentUserId}`).catch(() => { });
                 const userConns = activeConnectionsByUser.get(currentUserId);

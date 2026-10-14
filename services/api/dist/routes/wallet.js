@@ -16,7 +16,9 @@ export const walletRoutes = async (server) => {
                 return {
                     user_id: user.id,
                     currency: "USD",
-                    ...balance
+                    precision: 100,
+                    ...balance,
+                    total_equity_minor: balance.available_minor + balance.reserved_minor
                 };
             }
             catch (err) {
@@ -29,26 +31,14 @@ export const walletRoutes = async (server) => {
                 return {
                     user_id: user.id,
                     currency: "USD",
-                    ...balance
+                    precision: 100,
+                    ...balance,
+                    total_equity_minor: balance.available_minor + balance.reserved_minor
                 };
             }
         }
         catch (err) {
-            server.log.error(err, "Failed to retrieve wallet balance from Blnk, attempting PostgreSQL fallback");
-            try {
-                const pgRes = await server.pg.query("SELECT demo_balance_minor FROM users WHERE id = $1", [user.id]);
-                if (pgRes.rows.length > 0) {
-                    return {
-                        user_id: user.id,
-                        currency: "USD",
-                        available_minor: Number(pgRes.rows[0].demo_balance_minor),
-                        reserved_minor: 0
-                    };
-                }
-            }
-            catch (dbErr) {
-                server.log.error(dbErr, "PostgreSQL wallet fallback query failed");
-            }
+            server.log.error(err, "Failed to retrieve wallet balance from Blnk");
             return reply.status(503).send({ error: "WALLET_UNAVAILABLE" });
         }
     });

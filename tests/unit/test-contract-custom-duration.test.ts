@@ -30,15 +30,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('SUBETAPA 03 — Sincronização End-to-End: Duração Personalizada e Piso de 30s', () => {
-  it('envia duration_seconds quando fornecida duração personalizada segura (ex: 45s fim de vela)', async () => {
+describe('SUBETAPA 03 — Sincronização End-to-End: Duração Personalizada e Piso de 60s', () => {
+  it('envia duration_seconds quando fornecida duração personalizada segura >= 60s (ex: 75s fim de vela)', async () => {
     const receipt = await openContract(
       'BTCUSD_OTC',
       'UP',
       1000,
-      'idemp-key-45s',
-      45,
-      '2026-10-10T12:00:45.000Z',
+      'idemp-key-75s',
+      75,
+      '2026-10-10T12:01:15.000Z',
       'CANDLE_1M'
     );
 
@@ -50,7 +50,7 @@ describe('SUBETAPA 03 — Sincronização End-to-End: Duração Personalizada e 
     expect(body.symbol).toBe('BTCUSD_OTC');
     expect(body.direction).toBe('UP');
     expect(body.stake_minor).toBe(1000);
-    expect(body.duration_seconds).toBe(45);
+    expect(body.duration_seconds).toBe(75);
 
     const parseResult = OpenContractSchema.safeParse(body);
     expect(parseResult.success).toBe(true);

@@ -3,6 +3,10 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { TradersMoodBar } from './TradersMoodBar';
 import { setFeatureFlagForTesting } from '../lib/feature-flags';
+import { setTraderoomPolishEnabled } from '../lib/traderoom-polish';
+
+// Este arquivo cobre os overlays anteriores (cápsula de sentimento, pílula de expiração). Ver chart/subetapa-polish-05-time-mood.
+setTraderoomPolishEnabled(false);
 
 describe('SUBETAPA UX 03: Redesign Ergonômico da Temperatura dos Traders (Traders Mood Bar)', () => {
   beforeEach(() => {

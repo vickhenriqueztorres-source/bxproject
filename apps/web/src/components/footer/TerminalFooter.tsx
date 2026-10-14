@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { isNewTraderoomEnabled } from '../../lib/feature-flags';
-import { useTranslation } from '../../i18n';
+import { useTranslation, useUiLanguage } from '../../i18n';
 
 export interface TerminalFooterProps {
   soundEnabled: boolean;
@@ -27,6 +27,8 @@ export function TerminalFooter({
   const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null);
   const { t, locale, timezone: regionalTz } = useTranslation();
   const isBinmax = isNewTraderoomEnabled();
+  const uiLang = useUiLanguage('es');
+  const isPt = uiLang === 'pt';
 
   useEffect(() => {
     function updateClock() {
@@ -187,13 +189,13 @@ export function TerminalFooter({
             {/* Métricas de Trading: Portafolio, Ganancia de hoy, Operaciones abiertas */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '10px', flexShrink: 0 }}>
               <span data-testid="footer-metric-portfolio">
-                Portafolio total <strong style={{ color: '#DCE1EA', fontFamily: "'Geist Mono', monospace" }}>{portfolioTotalFormatted}</strong>
+                {isPt ? 'Portfólio total' : 'Portafolio total'} <strong style={{ color: '#DCE1EA', fontFamily: "'Geist Mono', monospace" }}>{portfolioTotalFormatted}</strong>
               </span>
               <span data-testid="footer-metric-profit">
-                Ganancia de hoy <strong style={{ color: todayProfitFormatted.startsWith('-') ? '#E5484D' : todayProfitFormatted.startsWith('+') ? '#22C55E' : '#DCE1EA', fontFamily: "'Geist Mono', monospace" }}>{todayProfitFormatted}</strong>
+                {isPt ? 'Lucro de hoje' : 'Ganancia de hoy'} <strong style={{ color: todayProfitFormatted.startsWith('-') ? '#E5484D' : todayProfitFormatted.startsWith('+') ? '#22C55E' : '#DCE1EA', fontFamily: "'Geist Mono', monospace" }}>{todayProfitFormatted}</strong>
               </span>
               <span data-testid="footer-metric-contracts">
-                Operaciones abiertas <strong style={{ color: '#DCE1EA', fontFamily: "'Geist Mono', monospace" }}>{activeContractsCount}</strong>
+                {isPt ? 'Operações abertas' : 'Operaciones abiertas'} <strong style={{ color: '#DCE1EA', fontFamily: "'Geist Mono', monospace" }}>{activeContractsCount}</strong>
               </span>
             </div>
 
@@ -262,7 +264,7 @@ export function TerminalFooter({
                 <circle cx="12" cy="12" r="10" />
                 <polyline points="12 6 12 12 16 14" />
               </svg>
-              <span style={{ color: '#8A92A1' }}>Hora actual:</span>
+              <span style={{ color: '#8A92A1' }}>{isPt ? 'Hora atual:' : 'Hora actual:'}</span>
               <span>{serverTime || '08 OCT 2024, 02:20:22 (UTC-3)'}</span>
             </div>
 
@@ -282,8 +284,8 @@ export function TerminalFooter({
                 lineHeight: 1,
                 transition: 'color 0.15s ease',
               }}
-              title="Pantalla completa"
-              aria-label="Alternar pantalla completa"
+              title={isPt ? 'Tela cheia' : 'Pantalla completa'}
+              aria-label={isPt ? 'Alternar tela cheia' : 'Alternar pantalla completa'}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />

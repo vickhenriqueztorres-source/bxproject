@@ -57,7 +57,7 @@ async function run() {
   const resOrder1 = await fetch(`${BASE_URL}/api/contracts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ symbol: 'VOL_50', direction: 'UP', stake_minor: 1000, duration_seconds: 30 })
+    body: JSON.stringify({ symbol: 'VOL_50', direction: 'UP', stake_minor: 1000, duration_seconds: 60 })
   });
   assert.strictEqual(resOrder1.status, 201, 'Ordem canonical deve retornar 201');
   const order1 = await resOrder1.json();
@@ -66,7 +66,7 @@ async function run() {
   const resOrder2 = await fetch(`${BASE_URL}/api/contracts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ symbol: 'SYNTH_VOL_75', direction: 'DOWN', stake_minor: 1000, duration_seconds: 30 })
+    body: JSON.stringify({ symbol: 'SYNTH_VOL_75', direction: 'DOWN', stake_minor: 1000, duration_seconds: 60 })
   });
   assert.strictEqual(resOrder2.status, 201, 'Ordem legacy deve retornar 201');
   const order2 = await resOrder2.json();

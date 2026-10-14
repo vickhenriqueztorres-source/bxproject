@@ -50,4 +50,7 @@ export interface TournamentModalProps {
   onClose: () => void;
   initialTournamentId?: string;
   initialView?: 'list' | 'details';
+  onOpenArena?: () => void;
+  onJoinTournament?: (id: string) => void;
 }
+

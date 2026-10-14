@@ -9,15 +9,69 @@ import { tickAction, type Tick } from './protocol';
 export type PrivateEvent = {
   type: 'wallet_balance' | 'contract_settled';
   available_minor?: number;
+  reserved_minor?: number;
   contract_id?: string;
   result?: string;
+  stake_minor?: number;
   payout_minor?: number;
+  symbol?: string;
+  direction?: 'UP' | 'DOWN' | 'SUBE' | 'BAJA';
 };
+
+export type SymbolFeedState = 'LIVE' | 'DEGRADED' | 'STALE' | 'DEAD';
 
 export type TickCallback = (tick: Tick) => void;
 export type PrivateCallback = (event: PrivateEvent) => void;
 export type StatusCallback = (connected: boolean, stale: boolean) => void;
 export type CircuitBreakerCallback = (state: CircuitState, remainingMs: number) => void;
+export type SymbolStateCallback = (state: SymbolFeedState, ageMs: number) => void;
+
+export interface SymbolFeedMetrics {
+  symbol: string;
+  tick_age_seconds: number;
+  feed_gap_count: number;
+  latency_ms: number;
+  staleness_alert: boolean;
+  reconnect_count: number;
+  feed_state?: SymbolFeedState;
+  out_of_order_count?: number;
+  delayed_tick_count?: number;
+}
+
+const customSymbolThresholds = new Map<string, number>();
+
+/**
+ * Perigo 1 (Método 3): Threshold de Staleness ajustado por frequência esperada do instrumento.
+ * - Índices Sintéticos de alta frequência (R_10, R_25, R_50, R_75, R_100, SYNTH*, VOL*, CRASH*, BOOM*): 4000ms
+ * - Forex OTC (EURUSD-OTC, GBPUSD-OTC, USDJPY-OTC): 4000ms
+ * - Criptomoedas (BTC*, ETH*, SOL*): 4500ms
+ * - Commodities / Ações (XAU*, XAG*, AAPL*, TSLA*): 6000ms
+ */
+export function setSymbolStalenessThreshold(symbol: string, thresholdMs: number): void {
+  if (thresholdMs > 0) {
+    customSymbolThresholds.set(symbol.toUpperCase(), thresholdMs);
+  }
+}
+
+export function getSymbolStalenessThresholdMs(symbol: string): number {
+  const upper = (symbol || '').toUpperCase();
+  const custom = customSymbolThresholds.get(upper);
+  if (custom !== undefined) return custom;
+
+  if (
+    upper.startsWith('XAU') ||
+    upper.startsWith('XAG') ||
+    upper.startsWith('AAPL') ||
+    upper.startsWith('TSLA') ||
+    upper.startsWith('MSFT')
+  ) {
+    return 6000;
+  }
+  if (upper.startsWith('BTC') || upper.startsWith('ETH') || upper.startsWith('SOL')) {
+    return 4500;
+  }
+  return 4000;
+}
 
 export class TradingFeedManager {
   private socket: WebSocket | null = null;
@@ -26,7 +80,17 @@ export class TradingFeedManager {
   private symbolLastTickAt = new Map<string, number>();
   private symbolStaleListeners = new Map<string, Set<(isStale: boolean, ageMs: number) => void>>();
   private symbolStaleStates = new Map<string, boolean>();
+  private symbolFeedStates = new Map<string, SymbolFeedState>();
+  private symbolStateListeners = new Map<string, Set<SymbolStateCallback>>();
+  private symbolOutOfOrderCounts = new Map<string, number>();
+  private symbolDelayedCounts = new Map<string, number>();
+  private symbolFallbackFailed = new Map<string, boolean>();
+  private symbolStaleFallbackAttempted = new Map<string, boolean>();
+  private autoRestFallbackEnabled = false;
   private symbolLatencies = new Map<string, number>();
+  private symbolGapCounts = new Map<string, number>();
+  private symbolReconnectCounts = new Map<string, number>();
+  private totalReconnectCount = 0;
   private symbolResyncing = new Map<string, boolean>();
   private symbolTickBuffers = new Map<string, Tick[]>();
   private symbolLastPrices = new Map<string, string>();
@@ -176,7 +240,7 @@ export class TradingFeedManager {
         return;
       }
 
-      if (data.type === 'authenticated') {
+      if (data.type === 'authenticated' || data.type === 'auth_ok') {
         this.connected = true;
         this.attempt = 0;
         this.circuitBreaker.recordSuccess();
@@ -233,8 +297,18 @@ export class TradingFeedManager {
 
         const action = tickAction(lastSeq, incoming.sequence);
 
-        if (action === 'duplicate') return;
+        if (action === 'duplicate') {
+          this.symbolOutOfOrderCounts.set(
+            incoming.symbol,
+            (this.symbolOutOfOrderCounts.get(incoming.symbol) ?? 0) + 1
+          );
+          return;
+        }
         if (action === 'gap') {
+          this.symbolGapCounts.set(
+            incoming.symbol,
+            (this.symbolGapCounts.get(incoming.symbol) ?? 0) + 1
+          );
           // Detectou gap: suspende deltas e dispara rebuild via snapshot REST (Subetapa 4)
           this.triggerSnapshotRebuild(incoming.symbol, incoming);
           return;
@@ -270,6 +344,10 @@ export class TradingFeedManager {
 
   private scheduleReconnect(forcedDelay?: number) {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.totalReconnectCount += 1;
+    for (const sym of this.symbolSubscribers.keys()) {
+      this.symbolReconnectCounts.set(sym, (this.symbolReconnectCounts.get(sym) ?? 0) + 1);
+    }
 
     if (forcedDelay !== undefined && forcedDelay > 0) {
       this.reconnectTimer = setTimeout(() => {
@@ -335,34 +413,98 @@ export class TradingFeedManager {
     }
   }
 
-  private applyTick(incoming: Tick) {
-    if (this.closed) return;
+  /**
+   * Public ingestion entry point for ticks (validates sequence, timestamp monotonicity, and age).
+   * Returns true if the tick was accepted, false if rejected (out-of-order or delayed).
+   */
+  public ingestTick(incoming: Tick): boolean {
+    if (this.closed) return false;
+    const lastSeq = this.symbolLastSequences.get(incoming.symbol);
+    if (lastSeq !== undefined && incoming.sequence <= lastSeq) {
+      this.symbolOutOfOrderCounts.set(
+        incoming.symbol,
+        (this.symbolOutOfOrderCounts.get(incoming.symbol) ?? 0) + 1
+      );
+      return false;
+    }
+    return this.applyTick(incoming);
+  }
+
+  private applyTick(incoming: Tick): boolean {
+    if (this.closed) return false;
     const arrivalTime = Date.now();
+    const hasExplicitEventTime =
+      typeof incoming.event_time === 'number' ||
+      (typeof incoming.ts === 'string' && incoming.ts.length > 0);
+    const parsedTs = incoming.ts ? Date.parse(incoming.ts) : NaN;
     const eventTime = typeof incoming.event_time === 'number'
       ? incoming.event_time
-      : (incoming.ts ? Date.parse(incoming.ts) : arrivalTime);
+      : (Number.isFinite(parsedTs) ? parsedTs : arrivalTime);
+
+    const lastSeq = this.symbolLastSequences.get(incoming.symbol);
+    const lastTickAt = this.symbolLastTickAt.get(incoming.symbol);
+
+    // Regra 4: Rejeitar tick fora de ordem (timestamp < último aceito ou sequence < último aceito)
+    if (
+      (lastTickAt !== undefined && eventTime < lastTickAt) ||
+      (lastSeq !== undefined && incoming.sequence < lastSeq)
+    ) {
+      this.symbolOutOfOrderCounts.set(
+        incoming.symbol,
+        (this.symbolOutOfOrderCounts.get(incoming.symbol) ?? 0) + 1
+      );
+      return false;
+    }
+
+    // Modo de falha 4: Rejeitar tick atrasado (Delayed tick: age > staleness threshold na chegada)
+    const tickAgeAtArrival = Math.max(0, arrivalTime - eventTime);
+    const threshold = (tickAgeAtArrival > 1000 || customSymbolThresholds.size > 0)
+      ? getSymbolStalenessThresholdMs(incoming.symbol)
+      : 4000;
+
+    if (hasExplicitEventTime && tickAgeAtArrival > threshold) {
+      this.symbolDelayedCounts.set(
+        incoming.symbol,
+        (this.symbolDelayedCounts.get(incoming.symbol) ?? 0) + 1
+      );
+      // Se o ativo não possui cotação fresca, garante que o estado reflita STALE
+      const currentAge = lastTickAt !== undefined ? Math.max(0, arrivalTime - lastTickAt) : tickAgeAtArrival;
+      if (currentAge > threshold) {
+        this.transitionSymbolState(incoming.symbol, 'STALE', currentAge);
+        if (this.symbolStaleStates.get(incoming.symbol) !== true) {
+          this.symbolStaleStates.set(incoming.symbol, true);
+          this.notifySymbolStalenessListeners(incoming.symbol, true, currentAge);
+        }
+      }
+      return false;
+    }
 
     incoming.event_time = eventTime;
     incoming.arrival_time = arrivalTime;
-    incoming.latency_ms = Math.max(0, arrivalTime - eventTime);
+    incoming.latency_ms = tickAgeAtArrival;
     this.symbolLatencies.set(incoming.symbol, incoming.latency_ms);
 
     this.symbolLastSequences.set(incoming.symbol, incoming.sequence);
     this.symbolLastTickAt.set(incoming.symbol, eventTime);
     this.symbolLastPrices.set(incoming.symbol, incoming.price);
+    if (this.symbolFallbackFailed.get(incoming.symbol)) {
+      this.symbolFallbackFailed.set(incoming.symbol, false);
+    }
+    if (this.symbolStaleFallbackAttempted.get(incoming.symbol)) {
+      this.symbolStaleFallbackAttempted.set(incoming.symbol, false);
+    }
 
-    // De-staleness imediata no recebimento de tick
+    const degradedThreshold = Math.floor(threshold * 0.5);
+    const nextState: SymbolFeedState = tickAgeAtArrival > degradedThreshold ? 'DEGRADED' : 'LIVE';
+    if (this.symbolFeedStates.get(incoming.symbol) !== nextState) {
+      this.transitionSymbolState(incoming.symbol, nextState, tickAgeAtArrival);
+    }
+
+    // De-staleness imediata no recebimento de tick fresco
     if (this.symbolStaleStates.get(incoming.symbol) !== false) {
       this.symbolStaleStates.set(incoming.symbol, false);
       this.stale = false;
-      const staleCbs = this.symbolStaleListeners.get(incoming.symbol);
-      if (staleCbs) {
-        for (const cb of Array.from(staleCbs)) {
-          if (staleCbs.has(cb)) {
-            try { cb(false, 0); } catch { /* ignore */ }
-          }
-        }
-      }
+      this.notifySymbolStalenessListeners(incoming.symbol, false, tickAgeAtArrival);
     }
 
     const callbacks = this.symbolSubscribers.get(incoming.symbol);
@@ -373,11 +515,50 @@ export class TradingFeedManager {
         }
       }
     }
+    return true;
   }
 
-  public async triggerSnapshotRebuild(symbol: string, initialGapTick?: Tick) {
-    if (this.closed || this.symbolResyncing.get(symbol)) return;
+  private notifySymbolStalenessListeners(symbol: string, isStale: boolean, ageMs: number) {
+    const staleCbs = this.symbolStaleListeners.get(symbol);
+    if (staleCbs) {
+      for (const cb of Array.from(staleCbs)) {
+        if (staleCbs.has(cb)) {
+          try { cb(isStale, ageMs); } catch { /* ignore */ }
+        }
+      }
+    }
+  }
+
+  private transitionSymbolState(symbol: string, nextState: SymbolFeedState, ageMs: number) {
+    const prevState = this.symbolFeedStates.get(symbol);
+    if (prevState !== nextState) {
+      this.symbolFeedStates.set(symbol, nextState);
+      const stateCbs = this.symbolStateListeners.get(symbol);
+      if (stateCbs) {
+        for (const cb of Array.from(stateCbs)) {
+          if (stateCbs.has(cb)) {
+            try { cb(nextState, ageMs); } catch { /* ignore */ }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Regra 3 e 5: Executa REST fallback para símbolo STALE e marca como DEAD se o fallback falhar.
+   */
+  public async fetchRestFallback(symbol: string): Promise<boolean> {
+    return this.triggerSnapshotRebuild(symbol);
+  }
+
+  public setAutoRestFallback(enabled: boolean): void {
+    this.autoRestFallbackEnabled = enabled;
+  }
+
+  public async triggerSnapshotRebuild(symbol: string, initialGapTick?: Tick): Promise<boolean> {
+    if (this.closed || this.symbolResyncing.get(symbol)) return false;
     this.symbolResyncing.set(symbol, true);
+    const hadSubscribersAtStart = (this.symbolSubscribers.get(symbol)?.size ?? 0) > 0;
 
     let buffer = this.symbolTickBuffers.get(symbol);
     if (!buffer) {
@@ -388,68 +569,101 @@ export class TradingFeedManager {
       buffer.push(initialGapTick);
     }
 
-    // Tenta via REST snapshot endpoint (Subetapa 4)
+    // Tenta via REST snapshot endpoint (Subetapa 4 / Regra 3: REST fallback pra símbolo stale)
     try {
       const restBase = import.meta.env.VITE_API_URL ?? (
         typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost:3001'
       );
       const res = await fetch(`${restBase}/api/v1/snapshot?symbol=${encodeURIComponent(symbol)}`);
-      if (this.closed || !this.symbolSubscribers.has(symbol)) {
+      if (this.closed || (hadSubscribersAtStart && !this.symbolSubscribers.has(symbol))) {
         this.symbolResyncing.delete(symbol);
         this.symbolTickBuffers.delete(symbol);
-        return;
+        return false;
       }
-      if (res.ok) {
+      if (res && res.ok) {
         const snap = await res.json();
-        if (this.closed || !this.symbolSubscribers.has(symbol)) {
+        if (this.closed || (hadSubscribersAtStart && !this.symbolSubscribers.has(symbol))) {
           this.symbolResyncing.delete(symbol);
           this.symbolTickBuffers.delete(symbol);
-          return;
+          return false;
         }
-        if (snap && Number.isSafeInteger(snap.sequence)) {
-          this.applySnapshotAndDrainBuffer(symbol, snap);
-          return;
+        if (snap && Number.isSafeInteger(snap.sequence) && snap.price !== undefined) {
+          const recovered = this.applySnapshotAndDrainBuffer(symbol, {
+            sequence: Number(snap.sequence),
+            price: String(snap.price),
+            ts: typeof snap.ts === 'string' ? snap.ts : new Date().toISOString(),
+            event_time: typeof snap.event_time === 'number' ? snap.event_time : undefined,
+          });
+          if (recovered) {
+            return true;
+          }
         }
       }
     } catch {
-      // Fallback para WS catch-up se REST falhar
+      // Fallback falhou
     }
 
-    if (this.closed || !this.symbolSubscribers.has(symbol)) {
+    if (this.closed || (hadSubscribersAtStart && !this.symbolSubscribers.has(symbol))) {
       this.symbolResyncing.delete(symbol);
       this.symbolTickBuffers.delete(symbol);
-      return;
+      return false;
     }
 
-    // Se REST falhou, pede catch-up / resubscribe via WS
+    // Correção crítica: libera flag de resync para não travar futuros ticks WS no buffer
+    this.symbolResyncing.set(symbol, false);
+
+    // Regra 5: Marcar símbolo como DEAD se o fallback REST falhar
+    this.markSymbolDead(symbol);
+
+    // Pede catch-up / resubscribe via WS
     this.sendSubscribe(symbol, true);
+    return false;
   }
 
-  private applySnapshotAndDrainBuffer(symbol: string, snap: { sequence: number; price: string; ts: string; event_time?: number }) {
-    if (this.closed) return;
+  private markSymbolDead(symbol: string) {
+    this.symbolFallbackFailed.set(symbol, true);
+    this.symbolStaleStates.set(symbol, true);
+    const last = this.symbolLastTickAt.get(symbol);
+    const age = last ? Math.max(0, Date.now() - last) : 99999;
+    this.transitionSymbolState(symbol, 'DEAD', age);
+    this.notifySymbolStalenessListeners(symbol, true, age);
+  }
+
+  private applySnapshotAndDrainBuffer(
+    symbol: string,
+    snap: { sequence: number; price: string; ts: string; event_time?: number }
+  ): boolean {
+    if (this.closed) return false;
     const arrivalTime = Date.now();
+    const parsedTs = snap.ts ? Date.parse(snap.ts) : NaN;
     const eventTime = typeof snap.event_time === 'number'
       ? snap.event_time
-      : (snap.ts ? Date.parse(snap.ts) : arrivalTime);
+      : (Number.isFinite(parsedTs) ? parsedTs : arrivalTime);
     const latencyMs = Math.max(0, arrivalTime - eventTime);
+    const threshold = getSymbolStalenessThresholdMs(symbol);
+    const lastTickAt = this.symbolLastTickAt.get(symbol);
+
+    // Rejeita snapshot cujo timestamp seja mais velho que o último aceito ou já esteja stale
+    if ((lastTickAt !== undefined && eventTime < lastTickAt) || latencyMs > threshold) {
+      this.symbolResyncing.set(symbol, false);
+      return false;
+    }
 
     this.symbolLastSequences.set(symbol, snap.sequence);
     this.symbolLastTickAt.set(symbol, eventTime);
     this.symbolLatencies.set(symbol, latencyMs);
     this.symbolLastPrices.set(symbol, snap.price);
+    this.symbolFallbackFailed.set(symbol, false);
+    this.symbolStaleFallbackAttempted.set(symbol, false);
+
+    const degradedThreshold = Math.floor(threshold * 0.5);
+    this.transitionSymbolState(symbol, latencyMs > degradedThreshold ? 'DEGRADED' : 'LIVE', latencyMs);
 
     // De-staleness imediata
     if (this.symbolStaleStates.get(symbol) !== false) {
       this.symbolStaleStates.set(symbol, false);
       this.stale = false;
-      const staleCbs = this.symbolStaleListeners.get(symbol);
-      if (staleCbs) {
-        for (const cb of Array.from(staleCbs)) {
-          if (staleCbs.has(cb)) {
-            try { cb(false, 0); } catch { /* ignore */ }
-          }
-        }
-      }
+      this.notifySymbolStalenessListeners(symbol, false, latencyMs);
     }
 
     // Notifica gráficos do snapshot com tick sintético
@@ -487,6 +701,7 @@ export class TradingFeedManager {
 
     this.symbolTickBuffers.delete(symbol);
     this.symbolResyncing.set(symbol, false);
+    return true;
   }
 
   private sendSubscribe(symbol: string, resume = false) {
@@ -627,21 +842,88 @@ export class TradingFeedManager {
     };
   }
 
+  public onSymbolStateChange(symbol: string, callback: SymbolStateCallback): () => void {
+    let set = this.symbolStateListeners.get(symbol);
+    if (!set) {
+      set = new Set();
+      this.symbolStateListeners.set(symbol, set);
+    }
+    set.add(callback);
+
+    const last = this.symbolLastTickAt.get(symbol);
+    const age = last ? Math.max(0, Date.now() - last) : Infinity;
+    const initialState = this.getSymbolState(symbol);
+    this.symbolFeedStates.set(symbol, initialState);
+    callback(initialState, age === Infinity ? 99999 : age);
+
+    return () => {
+      set?.delete(callback);
+      if (set?.size === 0) {
+        this.symbolStateListeners.delete(symbol);
+      }
+    };
+  }
+
+  public getSymbolState(symbol: string): SymbolFeedState {
+    if (this.symbolFallbackFailed.get(symbol)) return 'DEAD';
+    const threshold = getSymbolStalenessThresholdMs(symbol);
+    const degradedThreshold = Math.floor(threshold * 0.5);
+    const last = this.symbolLastTickAt.get(symbol);
+
+    if (!last) {
+      return this.symbolFeedStates.get(symbol) ?? 'STALE';
+    }
+
+    if (!isGuestMode() && !this.connected && this.socket !== null) {
+      return 'STALE';
+    }
+
+    const age = Math.max(0, Date.now() - last);
+    if (age > threshold) return 'STALE';
+    if (age > degradedThreshold) return 'DEGRADED';
+    return 'LIVE';
+  }
+
   public isSymbolStale(symbol: string): boolean {
+    if (this.symbolFallbackFailed.get(symbol)) return true;
+    const threshold = getSymbolStalenessThresholdMs(symbol);
     if (isGuestMode() && (this.symbolLastTickAt.get(symbol) ?? 0) > 0) {
       const last = this.symbolLastTickAt.get(symbol)!;
-      return Date.now() - last > 4000;
+      return Date.now() - last > threshold;
     }
-    if (!this.connected) return true;
+    if (!this.connected && this.socket !== null) return true;
     const last = this.symbolLastTickAt.get(symbol);
     if (!last) return true;
-    return Date.now() - last > 4000;
+    return Date.now() - last > threshold;
   }
 
   public getSymbolTickAge(symbol: string): number {
     const last = this.symbolLastTickAt.get(symbol);
     if (!last) return Infinity;
     return Date.now() - last;
+  }
+
+  public getSymbolOutOfOrderCount(symbol: string): number {
+    return this.symbolOutOfOrderCounts.get(symbol) ?? 0;
+  }
+
+  public getSymbolDelayedCount(symbol: string): number {
+    return this.symbolDelayedCounts.get(symbol) ?? 0;
+  }
+
+  /**
+   * Perigo 1 (Método 7): Retorna as 5 métricas obrigatórias de saúde do feed por símbolo.
+   */
+  public getSymbolFeedMetrics(symbol: string): SymbolFeedMetrics {
+    const ageMs = this.getSymbolTickAge(symbol);
+    return {
+      symbol,
+      tick_age_seconds: ageMs === Infinity ? -1 : Math.max(0, Number((ageMs / 1000).toFixed(3))),
+      feed_gap_count: this.symbolGapCounts.get(symbol) ?? 0,
+      latency_ms: this.symbolLatencies.get(symbol) ?? 0,
+      staleness_alert: this.isSymbolStale(symbol),
+      reconnect_count: this.symbolReconnectCounts.get(symbol) ?? this.totalReconnectCount,
+    };
   }
 
   private notifyStatus() {
@@ -696,6 +978,8 @@ export class TradingFeedManager {
         this.symbolLastPrices.set(symbol, priceStr);
         this.symbolLastTickAt.set(symbol, now);
         this.symbolStaleStates.set(symbol, false);
+        this.symbolFallbackFailed.set(symbol, false);
+        this.transitionSymbolState(symbol, 'LIVE', 0);
 
         const tick: Tick = {
           type: 'tick',
@@ -728,27 +1012,46 @@ export class TradingFeedManager {
     this.staleInterval = setInterval(() => {
       const now = Date.now();
 
-      // 1. Checagem individual por símbolo para eliminar o ponto cego multi-gráficos
-      for (const [symbol, callbacks] of this.symbolStaleListeners.entries()) {
-        const last = this.symbolLastTickAt.get(symbol);
-        const age = last ? now - last : Infinity;
-        const isStale = isGuestMode()
-          ? (age > 4000)
-          : (!this.connected || age > 4000);
-        const prevStale = this.symbolStaleStates.get(symbol);
+      const trackedSymbols = new Set<string>([
+        ...this.symbolStaleListeners.keys(),
+        ...this.symbolStateListeners.keys(),
+        ...this.symbolSubscribers.keys(),
+        ...this.symbolLastTickAt.keys(),
+      ]);
 
+      // 1. Checagem individual por símbolo (LIVE -> DEGRADED -> STALE -> DEAD)
+      for (const symbol of trackedSymbols) {
+        const last = this.symbolLastTickAt.get(symbol);
+        const age = last ? Math.max(0, now - last) : Infinity;
+        const threshold = getSymbolStalenessThresholdMs(symbol);
+        const isDead = this.symbolFallbackFailed.get(symbol) === true;
+        const isStale = isDead || (isGuestMode()
+          ? (age > threshold)
+          : ((!this.connected && this.socket !== null) || age > threshold));
+
+        const nextState = this.getSymbolState(symbol);
+        this.transitionSymbolState(symbol, nextState, age === Infinity ? 99999 : age);
+
+        const prevStale = this.symbolStaleStates.get(symbol);
         if (prevStale !== isStale) {
           this.symbolStaleStates.set(symbol, isStale);
-          for (const cb of callbacks) {
-            cb(isStale, age === Infinity ? 99999 : age);
-          }
+          this.notifySymbolStalenessListeners(symbol, isStale, age === Infinity ? 99999 : age);
+        }
+
+        if (
+          this.autoRestFallbackEnabled &&
+          nextState === 'STALE' &&
+          !this.symbolStaleFallbackAttempted.get(symbol)
+        ) {
+          this.symbolStaleFallbackAttempted.set(symbol, true);
+          void this.triggerSnapshotRebuild(symbol);
         }
       }
 
       // 2. Conectividade global de fallback
       let anyRecent = false;
-      for (const last of this.symbolLastTickAt.values()) {
-        if (now - last < 4000) {
+      for (const [symbol, last] of this.symbolLastTickAt.entries()) {
+        if (now - last < getSymbolStalenessThresholdMs(symbol) && !this.symbolFallbackFailed.get(symbol)) {
           anyRecent = true;
           break;
         }
@@ -796,6 +1099,49 @@ export class TradingFeedManager {
 
   public getLastPrice(symbol: string): string | null {
     return this.symbolLastPrices.get(symbol) ?? null;
+  }
+
+  // Perigo 6 (Técnica 3): Limite estrito de 4–6 charts simultâneos na mesma aba
+  public static readonly MAX_CONCURRENT_CHARTS = 6;
+  private activeChartInstances = new Set<string>();
+
+  public registerChartInstance(chartId: string): {
+    allowed: boolean;
+    activeCount: number;
+    maxAllowed: number;
+    warning?: string;
+  } {
+    if (this.activeChartInstances.has(chartId)) {
+      return {
+        allowed: true,
+        activeCount: this.activeChartInstances.size,
+        maxAllowed: TradingFeedManager.MAX_CONCURRENT_CHARTS,
+      };
+    }
+
+    if (this.activeChartInstances.size >= TradingFeedManager.MAX_CONCURRENT_CHARTS) {
+      return {
+        allowed: false,
+        activeCount: this.activeChartInstances.size,
+        maxAllowed: TradingFeedManager.MAX_CONCURRENT_CHARTS,
+        warning: `MAX_CHARTS_LIMIT_REACHED: Limite máximo de ${TradingFeedManager.MAX_CONCURRENT_CHARTS} gráficos simultâneos atingido.`,
+      };
+    }
+
+    this.activeChartInstances.add(chartId);
+    return {
+      allowed: true,
+      activeCount: this.activeChartInstances.size,
+      maxAllowed: TradingFeedManager.MAX_CONCURRENT_CHARTS,
+    };
+  }
+
+  public unregisterChartInstance(chartId: string): void {
+    this.activeChartInstances.delete(chartId);
+  }
+
+  public getActiveChartCount(): number {
+    return this.activeChartInstances.size;
   }
 }
 

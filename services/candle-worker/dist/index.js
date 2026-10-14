@@ -72,8 +72,8 @@ async function main() {
                     await repository.upsertCandle(closedCandle, true);
                 }
             }
-            // Para intervalo '1s', persistimos continuamente cada candle finalizado no Postgres
-            if (interval === "1s") {
+            // Para intervalo '1s', persistimos continuamente cada candle finalizado no Postgres (se dentro da sessão)
+            if (interval === "1s" && activeCandle) {
                 await repository.upsertCandle(activeCandle, false);
             }
         }

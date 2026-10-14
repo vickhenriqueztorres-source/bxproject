@@ -49,10 +49,10 @@ describe('Rede de Segurança - Smoke Tests de Base (Etapa 02)', () => {
     }
   });
 
-  it('Tempo de Expiração: garante rigorosamente o piso inviolável de 30 segundos', () => {
+  it('Tempo de Expiração: garante rigorosamente o piso inviolável de 60 segundos', () => {
     const now = 1700000000000;
     const { durationMs, targetEpochMs } = calculateExecutionExpiry('1M_FIXED', now);
-    expect(durationMs).toBeGreaterThanOrEqual(30000);
+    expect(durationMs).toBeGreaterThanOrEqual(60000);
     expect(targetEpochMs).toBe(now + durationMs);
   });
 

@@ -94,7 +94,7 @@ async function runCertificationSuite() {
         symbol: pair.legacy,
         direction: 'UP',
         stake_minor: 1000,
-        duration_seconds: 30
+        duration_seconds: 60
       })
     });
     assert.strictEqual(orderRes.status, 201, `Abertura de contrato com ${pair.legacy} deve retornar 201`);
@@ -106,7 +106,7 @@ async function runCertificationSuite() {
   // -------------------------------------------------------------
   // FASE 3: Teste de Carga e Burst Concorrente (Stress Test)
   // -------------------------------------------------------------
-  console.log('⚡ FASE 3: Teste de Burst Concorrente de Ordens (30 ordens em paralelo)...');
+  console.log('⚡ FASE 3: Teste de Carga e Burst Concorrente de Ordens (30 ordens em paralelo)...');
   const burstPromises = [];
   for (let i = 0; i < 30; i++) {
     const symbol = CANONICAL_INDICES[i % CANONICAL_INDICES.length];
@@ -118,7 +118,7 @@ async function runCertificationSuite() {
           symbol,
           direction: i % 2 === 0 ? 'UP' : 'DOWN',
           stake_minor: 500,
-          duration_seconds: 30
+          duration_seconds: 60
         })
       }).then(async res => {
         assert.strictEqual(res.status, 201, `Burst ordem ${i} para ${symbol} deve retornar 201`);

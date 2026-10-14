@@ -1,8 +1,15 @@
-import { describe, it } from "vitest";
+import { describe, it, afterEach } from "vitest";
 import assert from "node:assert/strict";
 import Fastify from "../../services/api/node_modules/fastify/fastify.js";
 import { geoblockPlugin } from "../../services/api/src/plugins/geoblock.ts";
 import { geoRoutes } from "../../services/api/src/routes/geo.ts";
+import { GeoBlockService } from "../../services/api/src/services/geoblock.ts";
+import { RegionalMetricsService } from "../../services/api/src/services/metrics.ts";
+
+afterEach(() => {
+  GeoBlockService.setSimulatedFailure(false);
+  GeoBlockService.setCustomGeoProvider(null);
+});
 
 // Helper para construir servidor Fastify com plugins de teste
 async function buildTestServer() {
@@ -13,9 +20,35 @@ async function buildTestServer() {
   dbFlags.set("BR:trading_enabled", true);
   dbFlags.set("BR:otc_real_feed", true);
   dbFlags.set("MX:trading_enabled", true);
+  dbFlags.set("AR:trading_enabled", true);
+
+  const systemFlags = new Map<string, boolean>([
+    ["payments_enabled", false],
+    ["kyc_required", false],
+    ["otc_enabled", true],
+    ["synthetic_enabled", true],
+    ["country_br_enabled", true],
+    ["country_mx_enabled", true],
+    ["country_co_enabled", true],
+    ["country_ar_enabled", true],
+    ["country_cl_enabled", true],
+    ["country_pe_enabled", true]
+  ]);
 
   const mockPg: any = {
     query: async (sql: string, params?: any[]) => {
+      if (sql.includes("FROM system_feature_flags")) {
+        const rows = [];
+        for (const [flag_key, enabled] of systemFlags.entries()) {
+          rows.push({ flag_key, enabled });
+        }
+        return { rows };
+      }
+      if (sql.includes("INSERT INTO system_feature_flags")) {
+        const [flagKey, enabled] = params || [];
+        systemFlags.set(flagKey, Boolean(enabled));
+        return { rowCount: 1 };
+      }
       if (sql.includes("FROM countries ORDER BY")) {
         return {
           rows: [
@@ -201,4 +234,88 @@ describe("Subetapa 2 (Integration): Rotas da API de Geoblocking e Feature Flags"
     const checkBody = JSON.parse(checkRes.body);
     assert.strictEqual(checkBody.flags.trading_enabled, false);
   });
+
+  it("7. Teste de Integração HTTP dos 8 Passos: País X ligado, País Y desligado, Inconsistência entre nós e Falha de Geoblocking (Fail-Closed)", async () => {
+    const app = await buildTestServer();
+    const metrics = RegionalMetricsService.getInstance();
+
+    // Desliga todas as flags de países, exceto X = MX e Y = AR inicialmente
+    await app.featureFlagsService.setSystemFlag("country_br_enabled", false);
+    await app.featureFlagsService.setSystemFlag("country_co_enabled", false);
+    await app.featureFlagsService.setSystemFlag("country_cl_enabled", false);
+    await app.featureFlagsService.setSystemFlag("country_pe_enabled", false);
+    await app.featureFlagsService.setSystemFlag("country_ar_enabled", true);
+
+    // PASSO 1: Liga flag de país X (MX)
+    await app.featureFlagsService.setSystemFlag("country_mx_enabled", true);
+
+    // PASSO 2: Verifica se usuários de X (MX) acessam (HTTP 200), enquanto país desligado (CO) ou não-listado (US) é bloqueado (HTTP 403)
+    const resMX = await app.inject({
+      method: "GET",
+      url: "/api/v1/test-protected",
+      headers: { "cf-ipcountry": "MX" }
+    });
+    assert.strictEqual(resMX.statusCode, 200, "Passo 2: Usuários de MX (X) devem acessar");
+
+    const resCO = await app.inject({
+      method: "GET",
+      url: "/api/v1/test-protected",
+      headers: { "cf-ipcountry": "CO" }
+    });
+    assert.strictEqual(resCO.statusCode, 403, "Passo 2: País com flag desligada deve receber HTTP 403");
+
+    // PASSO 3: Desliga flag de país Y (AR)
+    await app.featureFlagsService.setSystemFlag("country_ar_enabled", false);
+
+    // PASSO 4: Verifica se usuários de Y (AR) são bloqueados imediatamente (HTTP 403 COUNTRY_DISABLED)
+    const resAR = await app.inject({
+      method: "GET",
+      url: "/api/v1/test-protected",
+      headers: { "cf-ipcountry": "AR" }
+    });
+    assert.strictEqual(resAR.statusCode, 403, "Passo 4: Usuários de AR (Y) devem ser bloqueados com HTTP 403");
+    assert.strictEqual(JSON.parse(resAR.body).error, "COUNTRY_DISABLED");
+
+    // PASSO 5: Simula flag inconsistente entre 2 nós (node-1 e node-2)
+    app.featureFlagsService.reportNodeFlagState("node-1", { country_mx_enabled: true, country_ar_enabled: false }, 1);
+    app.featureFlagsService.reportNodeFlagState("node-2", { country_mx_enabled: true, country_ar_enabled: true }, 1);
+
+    // PASSO 6: Verifica se alerta dispara
+    const consistencyReport = app.featureFlagsService.checkFleetConsistency();
+    assert.strictEqual(consistencyReport.consistent, false);
+    assert.strictEqual(consistencyReport.alertTriggered, true, "Passo 6: Alerta de inconsistência deve disparar");
+    assert.strictEqual(metrics.isFlagInconsistencyActive(), true);
+
+    // PASSO 7: Simula geoblocking falhando (provedor GeoIP falha / header de erro / IP público externo sem geo header)
+    GeoBlockService.setSimulatedFailure(true);
+    const resGeoFailSimulated = await app.inject({
+      method: "GET",
+      url: "/api/v1/test-protected",
+      headers: { "cf-ipcountry": "MX" }
+    });
+
+    GeoBlockService.setSimulatedFailure(false);
+    const resGeoErrorHeader = await app.inject({
+      method: "GET",
+      url: "/api/v1/test-protected",
+      headers: { "cf-ipcountry": "MX", "x-geo-error": "lookup_timeout" }
+    });
+
+    const resExternalIp = await app.inject({
+      method: "GET",
+      url: "/api/v1/test-protected",
+      headers: { "x-forwarded-for": "8.8.8.8" }
+    });
+
+    // PASSO 8: Verifica se país bloqueado / falha de geoblocking resulta em bloqueio estrito (HTTP 403 GEO_BLOCKED)
+    assert.strictEqual(resGeoFailSimulated.statusCode, 403, "Passo 8: Falha do GeoBlockService deve bloquear com HTTP 403 (Fail-Closed)");
+    assert.strictEqual(JSON.parse(resGeoFailSimulated.body).error, "GEO_BLOCKED");
+
+    assert.strictEqual(resGeoErrorHeader.statusCode, 403, "Passo 8: Header x-geo-error deve bloquear com HTTP 403 (Fail-Closed)");
+    assert.strictEqual(JSON.parse(resGeoErrorHeader.body).error, "GEO_BLOCKED");
+
+    assert.strictEqual(resExternalIp.statusCode, 403, "Passo 8: IP externo sem geo header válido deve bloquear com HTTP 403 (Fail-Closed)");
+    assert.strictEqual(JSON.parse(resExternalIp.body).error, "GEO_BLOCKED");
+  });
 });
+

@@ -4,6 +4,7 @@ import { formatMinor, formatCurrencyBinmax } from '../../lib/money';
 import { isNewTraderoomEnabled } from '../../lib/feature-flags';
 import { getTabDisplayTitle } from '../header/TerminalHeader';
 import { AssetFlagBadge } from '../header/AssetFlagBadge';
+import { useUiLanguage } from '../../i18n';
 
 export interface PortfolioDrawerProps {
   isOpen: boolean;
@@ -30,6 +31,8 @@ export function PortfolioDrawer({
 }: PortfolioDrawerProps) {
   const [tab, setTab] = useState<'ACTIVE' | 'HISTORY'>('ACTIVE');
   const [now, setNow] = useState(Date.now());
+  const uiLang = useUiLanguage('es');
+  const isPt = uiLang === 'pt';
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 500);
@@ -119,19 +122,19 @@ export function PortfolioDrawer({
                   }}
                 />
               )}
-              {`${openContracts.length} ${isBinmax ? 'activas' : 'ativas'}`}
+              {`${openContracts.length} ${isBinmax ? (isPt ? 'ativas' : 'activas') : 'ativas'}`}
             </span>
           </div>
 
           {openContracts.length > 0 && (
             <span style={{ color: isBinmax ? '#22C55E' : '#00e676', fontWeight: 600, fontFamily: isBinmax ? "'Geist Mono', monospace" : 'inherit' }}>
-              {isBinmax ? 'Ganancia potencial' : 'Retorno potencial'}: {`+${isBinmax ? formatCurrencyBinmax(potentialPnlMinor) : formatMinor(potentialPnlMinor)}`}
+              {isBinmax ? (isPt ? 'Lucro potencial' : 'Ganancia potencial') : 'Retorno potencial'}: {`+${isBinmax ? formatCurrencyBinmax(potentialPnlMinor) : formatMinor(potentialPnlMinor)}`}
             </span>
           )}
 
           {isBinmax && openContracts.length === 0 && (
             <span style={{ color: '#596273', fontSize: '10.5px', fontFamily: "'Geist', sans-serif" }}>
-              · Terminal en espera
+              {`· ${isPt ? 'Terminal em espera' : 'Terminal en espera'}`}
             </span>
           )}
         </div>
@@ -160,7 +163,7 @@ export function PortfolioDrawer({
           }}
         >
           {isBinmax
-            ? (isOpen ? 'Mostrar posiciones ⌃' : 'Mostrar posiciones ⌵')
+            ? (isOpen ? (isPt ? 'Mostrar posições ⌃' : 'Mostrar posiciones ⌃') : (isPt ? 'Mostrar posições ⌵' : 'Mostrar posiciones ⌵'))
             : (isOpen ? '▼ Ocultar Painel' : `▲ Expandir (${openContracts.length})`)}
         </button>
       </div>
@@ -214,7 +217,7 @@ export function PortfolioDrawer({
                 transition: 'all 100ms cubic-bezier(0.16, 1, 0.3, 1)',
               }}
             >
-              {isBinmax ? `Operaciones abiertas (${openContracts.length})` : `Operações Abertas (${openContracts.length})`}
+              {isBinmax ? `${isPt ? 'Operações abertas' : 'Operaciones abiertas'} (${openContracts.length})` : `Operações Abertas (${openContracts.length})`}
             </button>
             <button
               type="button"
@@ -241,7 +244,7 @@ export function PortfolioDrawer({
                 transition: 'all 100ms cubic-bezier(0.16, 1, 0.3, 1)',
               }}
             >
-              {isBinmax ? `Historial cerrado (${settledContracts.length})` : `Histórico Finalizado (${settledContracts.length})`}
+              {isBinmax ? `${isPt ? 'Histórico fechado' : 'Historial cerrado'} (${settledContracts.length})` : `Histórico Finalizado (${settledContracts.length})`}
             </button>
           </div>
 
@@ -278,13 +281,13 @@ export function PortfolioDrawer({
                       </svg>
                     </div>
                     <div style={{ fontSize: '13px', fontWeight: 700, color: '#F4F5F7', marginBottom: '3px', fontFamily: "'Geist', sans-serif" }}>
-                      Sin operaciones abiertas
+                      {isPt ? 'Sem operações abertas' : 'Sin operaciones abiertas'}
                     </div>
                     <div style={{ fontSize: '11.5px', color: '#8A92A1', marginBottom: '3px', fontFamily: "'Geist', sans-serif" }}>
-                      Aún no tienes operaciones abiertas. Elige SUBE o BAJA para empezar.
+                      {isPt ? 'Você ainda não tem operações abertas. Escolha ACIMA ou ABAIXO para começar.' : 'Aún no tienes operaciones abiertas. Elige SUBE o BAJA para empezar.'}
                     </div>
                     <div style={{ fontSize: '10px', color: '#596273', fontFamily: "'Geist', sans-serif" }}>
-                      El terminal actualizará este panel en tiempo real al registrar órdenes.
+                      {isPt ? 'O terminal atualizará este painel em tempo real ao registrar ordens.' : 'El terminal actualizará este panel en tiempo real al registrar órdenes.'}
                     </div>
                   </div>
                 ) : (
@@ -296,12 +299,12 @@ export function PortfolioDrawer({
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
                   <thead>
                     <tr style={{ color: '#8A92A1', borderBottom: isBinmax ? '1px solid rgba(244, 245, 247, 0.08)' : '1px solid #1a273e' }}>
-                      <th style={{ padding: '8px 6px', fontSize: isBinmax ? '10px' : '12px', fontWeight: 600, letterSpacing: isBinmax ? '0.05em' : 'normal', textTransform: isBinmax ? 'uppercase' : 'none' }}>{isBinmax ? 'Activo' : 'ID / Ativo'}</th>
-                      <th style={{ padding: '8px 6px', fontSize: isBinmax ? '10px' : '12px', fontWeight: 600, letterSpacing: isBinmax ? '0.05em' : 'normal', textTransform: isBinmax ? 'uppercase' : 'none' }}>{isBinmax ? 'Dirección' : 'Direção'}</th>
-                      <th style={{ padding: '8px 6px', fontSize: isBinmax ? '10px' : '12px', fontWeight: 600, letterSpacing: isBinmax ? '0.05em' : 'normal', textTransform: isBinmax ? 'uppercase' : 'none' }}>{isBinmax ? 'Inversión' : 'Valor'}</th>
-                      <th style={{ padding: '8px 6px', fontSize: isBinmax ? '10px' : '12px', fontWeight: 600, letterSpacing: isBinmax ? '0.05em' : 'normal', textTransform: isBinmax ? 'uppercase' : 'none' }}>{isBinmax ? 'Tiempo restante' : 'Expiração'}</th>
-                      <th style={{ padding: '8px 6px', fontSize: isBinmax ? '10px' : '12px', fontWeight: 600, letterSpacing: isBinmax ? '0.05em' : 'normal', textTransform: isBinmax ? 'uppercase' : 'none' }}>{isBinmax ? 'Estado' : 'Status'}</th>
-                      <th style={{ padding: '8px 6px', fontSize: isBinmax ? '10px' : '12px', fontWeight: 600, letterSpacing: isBinmax ? '0.05em' : 'normal', textTransform: isBinmax ? 'uppercase' : 'none', textAlign: 'right' }}>{isBinmax ? 'Ganancia potencial' : 'Retorno Potencial'}</th>
+                      <th style={{ padding: '8px 6px', fontSize: isBinmax ? '10px' : '12px', fontWeight: 600, letterSpacing: isBinmax ? '0.05em' : 'normal', textTransform: isBinmax ? 'uppercase' : 'none' }}>{isBinmax ? (isPt ? 'Ativo' : 'Activo') : 'ID / Ativo'}</th>
+                      <th style={{ padding: '8px 6px', fontSize: isBinmax ? '10px' : '12px', fontWeight: 600, letterSpacing: isBinmax ? '0.05em' : 'normal', textTransform: isBinmax ? 'uppercase' : 'none' }}>{isBinmax ? (isPt ? 'Direção' : 'Dirección') : 'Direção'}</th>
+                      <th style={{ padding: '8px 6px', fontSize: isBinmax ? '10px' : '12px', fontWeight: 600, letterSpacing: isBinmax ? '0.05em' : 'normal', textTransform: isBinmax ? 'uppercase' : 'none' }}>{isBinmax ? (isPt ? 'Investimento' : 'Inversión') : 'Valor'}</th>
+                      <th style={{ padding: '8px 6px', fontSize: isBinmax ? '10px' : '12px', fontWeight: 600, letterSpacing: isBinmax ? '0.05em' : 'normal', textTransform: isBinmax ? 'uppercase' : 'none' }}>{isBinmax ? (isPt ? 'Tempo restante' : 'Tiempo restante') : 'Expiração'}</th>
+                      <th style={{ padding: '8px 6px', fontSize: isBinmax ? '10px' : '12px', fontWeight: 600, letterSpacing: isBinmax ? '0.05em' : 'normal', textTransform: isBinmax ? 'uppercase' : 'none' }}>{isBinmax ? (isPt ? 'Estado' : 'Estado') : 'Status'}</th>
+                      <th style={{ padding: '8px 6px', fontSize: isBinmax ? '10px' : '12px', fontWeight: 600, letterSpacing: isBinmax ? '0.05em' : 'normal', textTransform: isBinmax ? 'uppercase' : 'none', textAlign: 'right' }}>{isBinmax ? (isPt ? 'Lucro potencial' : 'Ganancia potencial') : 'Retorno Potencial'}</th>
                     </tr>
                   </thead>
                   <tbody>

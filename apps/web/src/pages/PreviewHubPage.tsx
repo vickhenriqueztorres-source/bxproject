@@ -99,6 +99,14 @@ const SCREENS: ScreenItem[] = [
     description: 'Cards con premios y cuenta regresiva, reglas oficiales, posición del usuario fijada #1 y escala de premios.',
   },
   {
+    id: 'arena',
+    name: 'Binmax Arena Blitz (15 min)',
+    category: 'Engajamento',
+    path: '/arena',
+    badge: 'ARENA T$ 1.000',
+    description: 'Arena Blitz con gráfico principal espejado, salas Bronce/Plata/Oro, Top 3/10/20/30, Rebuy y desafío Alpha Quant.',
+  },
+  {
     id: 'analisis',
     name: 'Análisis y Métricas',
     category: 'Engajamento',

@@ -1,6 +1,60 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BlnkClient = void 0;
+exports.BlnkClient = exports.TIER_WEIGHTS_BPS = void 0;
+exports.calculateExactPrizeDistribution = calculateExactPrizeDistribution;
+exports.TIER_WEIGHTS_BPS = {
+    TOP_3: [5000, 3000, 2000],
+    TOP_10: [3500, 2000, 1200, 700, 700, 380, 380, 380, 380, 380],
+    TOP_20: [
+        2500, 1500, 1000, 500, 500,
+        300, 300, 300, 300, 300,
+        250, 250, 250, 250, 250, 250, 250, 250, 250, 250
+    ],
+    TOP_30: [
+        2000, 1200, 800,
+        400, 400, 400, 400, 400, 400, 400,
+        200, 200, 200, 200, 200, 200, 200, 200, 200, 200,
+        120, 120, 120, 120, 120, 120, 120, 120, 120, 120
+    ]
+};
+/**
+ * Distribuição exata de prêmios em centavos inteiros usando algoritmo Hare-Niemeyer (Maior Resto) em BigInt.
+ * Garante matematicamente que a soma dos prêmios é 100% igual a totalPoolCents (saldo final do Escrow = 0).
+ */
+function calculateExactPrizeDistribution(totalPoolCents, tier, eligibleWinnersCount) {
+    if (!Number.isSafeInteger(totalPoolCents) || totalPoolCents < 0) {
+        throw new Error("INVALID_MINOR_AMOUNT: totalPoolCents must be non-negative integer");
+    }
+    if (totalPoolCents === 0 || eligibleWinnersCount <= 0)
+        return [];
+    const rawWeights = exports.TIER_WEIGHTS_BPS[tier];
+    if (!rawWeights) {
+        throw new Error(`INVALID_PAYOUT_TIER: Unsupported tier '${tier}'`);
+    }
+    const activeCount = Math.min(rawWeights.length, Math.trunc(eligibleWinnersCount));
+    const activeWeights = rawWeights.slice(0, activeCount);
+    const weightSum = activeWeights.reduce((acc, w) => acc + w, 0);
+    const poolBig = BigInt(totalPoolCents);
+    const sumBig = BigInt(weightSum);
+    const floors = [];
+    const remainders = [];
+    let distributedSum = 0;
+    for (let i = 0; i < activeCount; i++) {
+        const numerator = poolBig * BigInt(activeWeights[i]);
+        const floorVal = Number(numerator / sumBig);
+        const remVal = numerator % sumBig;
+        floors.push(floorVal);
+        remainders.push({ index: i, rem: remVal });
+        distributedSum += floorVal;
+    }
+    const leftoverCents = totalPoolCents - distributedSum;
+    // Ordena pelo maior resto fracionário; em empate de resto, prioriza o rank mais alto (menor índice)
+    remainders.sort((a, b) => (b.rem > a.rem ? 1 : b.rem < a.rem ? -1 : a.index - b.index));
+    for (let i = 0; i < leftoverCents; i++) {
+        floors[remainders[i].index] += 1;
+    }
+    return floors;
+}
 class BlnkClient {
     baseUrl;
     timeoutMs;
@@ -12,18 +66,53 @@ class BlnkClient {
     HOUSE_REVENUE = "@house_revenue";
     HOUSE_PAYOUT = "@house_payout";
     BROKER_FLOAT = "@broker_float";
+    HOUSE_TOURNAMENT_RAKE = "@house:tournament_rake";
+    HOUSE_TOURNAMENT_OVERLAY = "@house:tournament_overlay";
+    HOUSE_BONUS_RESERVE = "@house:bonus_reserve";
     DEMO_START_BALANCE_MINOR = 1_000_000; // US$ 10.000,00 em centavos (D-11, D-18)
     /**
      * Nomenclatura canônica da Fase 2 (Seção 7.1): user:{id}:demo:{currency}:available | reserved
      */
     static getUserDemoAccount(userId, kind, currency = "USD") {
-        return `user:${userId}:demo:${currency.toUpperCase()}:${kind}`;
+        const normalized = (currency || "").toUpperCase();
+        if (normalized !== "USD") {
+            throw new Error("SILENT_CONVERSION_FORBIDDEN: Demo ledger only supports ISO-4217 'USD'");
+        }
+        return `user:${userId}:demo:${normalized}:${kind}`;
     }
     /**
      * Nomenclatura canônica da Fase 2 (Seção 7.2): platform:demo:{currency}:liability | revenue | payout
      */
     static getPlatformDemoAccount(kind, currency = "USD") {
-        return `platform:demo:${currency.toUpperCase()}:${kind}`;
+        const normalized = (currency || "").toUpperCase();
+        if (normalized !== "USD") {
+            throw new Error("SILENT_CONVERSION_FORBIDDEN: Demo ledger only supports ISO-4217 'USD'");
+        }
+        return `platform:demo:${normalized}:${kind}`;
+    }
+    /**
+     * Contas reais e margem de bônus por usuário (Fase 1 Arena):
+     * @user_{userId}:real:available | @user_{userId}:real:reserved | @user_{userId}:bonus_margin
+     */
+    static getUserRealAccount(userId, kind, currency = "USD") {
+        const normalized = (currency || "").toUpperCase();
+        if (normalized !== "USD") {
+            throw new Error("SILENT_CONVERSION_FORBIDDEN: Real ledger only supports ISO-4217 'USD'");
+        }
+        if (kind === "bonus_margin") {
+            return `@user_${userId}:bonus_margin`;
+        }
+        return `@user_${userId}:real:${kind}`;
+    }
+    /**
+     * Conta Custódia (Escrow) isolada por torneio: @tournament_{tournamentId}:escrow
+     */
+    static getTournamentEscrowAccount(tournamentId, currency = "USD") {
+        const normalized = (currency || "").toUpperCase();
+        if (normalized !== "USD") {
+            throw new Error("SILENT_CONVERSION_FORBIDDEN: Tournament escrow only supports ISO-4217 'USD'");
+        }
+        return `@tournament_${tournamentId}:escrow`;
     }
     constructor(baseUrl = process.env.BLNK_URL || "http://localhost:5001", timeoutMs = 3000) {
         this.baseUrl = baseUrl.replace(/\/$/, "");
@@ -284,12 +373,236 @@ class BlnkClient {
             this.request(`/balances/${availableAcc}`),
             this.request(`/balances/${reservedAcc}`)
         ]);
+        if (availRes?.currency && availRes.currency !== "USD") {
+            throw new Error("SILENT_CONVERSION_FORBIDDEN: Unexpected currency in Blnk balance response");
+        }
+        if (resRes?.currency && resRes.currency !== "USD") {
+            throw new Error("SILENT_CONVERSION_FORBIDDEN: Unexpected currency in Blnk balance response");
+        }
         return {
-            available_minor: availRes.balance,
-            reserved_minor: resRes.balance
+            available_minor: Math.trunc(Number(availRes.balance)),
+            reserved_minor: Math.trunc(Number(resRes.balance))
         };
     }
+    /**
+     * Consulta o saldo real (available, reserved, bonus_margin) do usuário no Blnk
+     */
+    async getRealBalance(userId) {
+        const availAcc = BlnkClient.getUserRealAccount(userId, "available");
+        const resAcc = BlnkClient.getUserRealAccount(userId, "reserved");
+        const bonusAcc = BlnkClient.getUserRealAccount(userId, "bonus_margin");
+        const [availRes, resRes, bonusRes] = await Promise.all([
+            this.request(`/balances/${availAcc}`),
+            this.request(`/balances/${resAcc}`),
+            this.request(`/balances/${bonusAcc}`)
+        ]);
+        for (const r of [availRes, resRes, bonusRes]) {
+            if (r?.currency && r.currency !== "USD") {
+                throw new Error("SILENT_CONVERSION_FORBIDDEN: Unexpected currency in Blnk real balance response");
+            }
+        }
+        return {
+            available_minor: Math.trunc(Number(availRes.balance)),
+            reserved_minor: Math.trunc(Number(resRes.balance)),
+            bonus_margin_minor: Math.trunc(Number(bonusRes.balance))
+        };
+    }
+    /**
+     * Credita depósito real confirmado: @broker_float -> @user_{userId}:real:available (AC-F1-01)
+     */
+    async creditRealDeposit(userId, txId, amountMinor) {
+        await this.recordTransaction({
+            amount: amountMinor,
+            precision: 100,
+            currency: "USD",
+            source: this.BROKER_FLOAT,
+            destination: BlnkClient.getUserRealAccount(userId, "available"),
+            reference: `deposit:${txId}`,
+            description: `Confirmed real deposit ${txId}`,
+            allow_overdraft: true
+        });
+    }
+    /**
+     * Etapa 1 do Saque Real (Hold): @user_{userId}:real:available -> @user_{userId}:real:reserved (AC-F1-01)
+     */
+    async holdRealWithdrawal(userId, txId, amountMinor) {
+        await this.recordTransaction({
+            amount: amountMinor,
+            precision: 100,
+            currency: "USD",
+            source: BlnkClient.getUserRealAccount(userId, "available"),
+            destination: BlnkClient.getUserRealAccount(userId, "reserved"),
+            reference: `withdraw_hold:${txId}`,
+            description: `Real withdrawal hold for tx ${txId}`,
+            allow_overdraft: false
+        });
+    }
+    /**
+     * Etapa 2 do Saque Real (Settle): @user_{userId}:real:reserved -> @broker_float (AC-F1-01)
+     */
+    async settleRealWithdrawal(userId, txId, amountMinor) {
+        await this.recordTransaction({
+            amount: amountMinor,
+            precision: 100,
+            currency: "USD",
+            source: BlnkClient.getUserRealAccount(userId, "reserved"),
+            destination: this.BROKER_FLOAT,
+            reference: `withdraw_settle:${txId}`,
+            description: `Real withdrawal settlement for tx ${txId}`,
+            allow_overdraft: false
+        });
+    }
+    /**
+     * Estorno de Saque Real Cancelado/Rejeitado (Regra I-06): @user_{userId}:real:reserved -> @user_{userId}:real:available
+     */
+    async reverseRealWithdrawal(userId, txId, amountMinor) {
+        await this.recordTransaction({
+            amount: amountMinor,
+            precision: 100,
+            currency: "USD",
+            source: BlnkClient.getUserRealAccount(userId, "reserved"),
+            destination: BlnkClient.getUserRealAccount(userId, "available"),
+            reference: `reversal:withdraw_hold:${txId}`,
+            description: `Reversal of real withdrawal hold for tx ${txId}`,
+            allow_overdraft: false
+        });
+    }
+    /**
+     * Registra Buy-in ou Rebuy de torneio com split atômico 30% Rake / 70% Escrow (AC-F1-02)
+     */
+    async recordTournamentEntryOrRebuy(params) {
+        const { tournamentId, userId, eventType, attemptNumber, grossAmountMinor } = params;
+        if (!Number.isSafeInteger(grossAmountMinor) || grossAmountMinor <= 0) {
+            throw new Error("INVALID_MINOR_AMOUNT: grossAmountMinor must be a positive safe integer");
+        }
+        const rakeBps = params.rakeBps ?? 3000;
+        const rakeMinor = Number((BigInt(grossAmountMinor) * BigInt(rakeBps)) / 10000n);
+        const escrowMinor = grossAmountMinor - rakeMinor;
+        const userRealAvail = BlnkClient.getUserRealAccount(userId, "available");
+        const escrowAcc = BlnkClient.getTournamentEscrowAccount(tournamentId);
+        const rakeRef = `tour_rake:${tournamentId}:${userId}:${eventType}_${attemptNumber}`;
+        const escrowRef = `tour_escrow:${tournamentId}:${userId}:${eventType}_${attemptNumber}`;
+        if (rakeMinor > 0) {
+            await this.recordTransaction({
+                amount: rakeMinor,
+                precision: 100,
+                currency: "USD",
+                source: userRealAvail,
+                destination: this.HOUSE_TOURNAMENT_RAKE,
+                reference: rakeRef,
+                description: `Tournament ${eventType} rake (30%) for ${tournamentId}`,
+                allow_overdraft: false
+            });
+        }
+        if (escrowMinor > 0) {
+            await this.recordTransaction({
+                amount: escrowMinor,
+                precision: 100,
+                currency: "USD",
+                source: userRealAvail,
+                destination: escrowAcc,
+                reference: escrowRef,
+                description: `Tournament ${eventType} prize escrow (70%) for ${tournamentId}`,
+                allow_overdraft: false
+            });
+        }
+        return { rakeMinor, escrowMinor, rakeRef, escrowRef };
+    }
+    /**
+     * Injeta Overlay Garantido da reserva da casa para o Escrow do torneio
+     */
+    async provisionTournamentOverlay(tournamentId, overlayMinor) {
+        await this.recordTransaction({
+            amount: overlayMinor,
+            precision: 100,
+            currency: "USD",
+            source: this.HOUSE_TOURNAMENT_OVERLAY,
+            destination: BlnkClient.getTournamentEscrowAccount(tournamentId),
+            reference: `tour_overlay:${tournamentId}`,
+            description: `Tournament guaranteed prize overlay for ${tournamentId}`,
+            allow_overdraft: true
+        });
+    }
+    /**
+     * Distribui 100% do Escrow do torneio para os vencedores humanos (Top 3, Top 10, Top 20 ou Top 30) via Hare-Niemeyer (AC-F1-03)
+     */
+    async distributeTournamentPrizes(params) {
+        const { tournamentId, totalPoolMinor, tier, winners } = params;
+        const prizes = calculateExactPrizeDistribution(totalPoolMinor, tier, winners.length);
+        const escrowAcc = BlnkClient.getTournamentEscrowAccount(tournamentId);
+        const distributions = [];
+        let totalDistributedMinor = 0;
+        for (let i = 0; i < prizes.length; i++) {
+            const prizeMinor = prizes[i];
+            const winner = winners[i];
+            if (!winner || prizeMinor <= 0)
+                continue;
+            const reference = `tour_prize:${tournamentId}:rank_${winner.rank}:${winner.userId}`;
+            await this.recordTransaction({
+                amount: prizeMinor,
+                precision: 100,
+                currency: "USD",
+                source: escrowAcc,
+                destination: BlnkClient.getUserRealAccount(winner.userId, "available"),
+                reference,
+                description: `Tournament ${tournamentId} Rank #${winner.rank} prize payout`,
+                allow_overdraft: false
+            });
+            totalDistributedMinor += prizeMinor;
+            distributions.push({
+                userId: winner.userId,
+                rank: winner.rank,
+                prizeMinor,
+                reference
+            });
+        }
+        return {
+            distributions,
+            totalDistributedMinor,
+            remainingEscrowMinor: totalPoolMinor - totalDistributedMinor
+        };
+    }
+    /**
+     * Concede margem de bônus (ex: +50% por superar o @Alpha_Quant) bloqueada por Rollover 25x (AC-F1-04)
+     */
+    async grantTournamentBonusMargin(params) {
+        await this.recordTransaction({
+            amount: params.bonusAmountMinor,
+            precision: 100,
+            currency: "USD",
+            source: this.HOUSE_BONUS_RESERVE,
+            destination: BlnkClient.getUserRealAccount(params.userId, "bonus_margin"),
+            reference: `bonus_grant:${params.bonusId}`,
+            description: `Promotional bonus margin grant ${params.bonusId} (25x rollover required)`,
+            allow_overdraft: true
+        });
+    }
     async recordTransaction(payload) {
+        if (!payload || typeof payload !== "object") {
+            throw new Error("INVALID_PAYLOAD: Transaction payload is required");
+        }
+        if ("rate" in payload || "exchange_rate" in payload) {
+            throw new Error("SILENT_CONVERSION_FORBIDDEN: Implicit currency conversion is forbidden");
+        }
+        if (payload.currency !== "USD") {
+            throw new Error("SILENT_CONVERSION_FORBIDDEN: Currency must be strictly ISO-4217 'USD'");
+        }
+        if (payload.precision !== 100) {
+            throw new Error("INVALID_PRECISION: Precision must be strictly 100");
+        }
+        if (typeof payload.amount !== "number" || !Number.isSafeInteger(payload.amount) || payload.amount <= 0) {
+            throw new Error("INVALID_MINOR_AMOUNT: Amount must be a positive safe integer in minor units (cents)");
+        }
+        if (typeof payload.source !== "string" ||
+            payload.source.trim().length === 0 ||
+            typeof payload.destination !== "string" ||
+            payload.destination.trim().length === 0 ||
+            payload.source.trim() === payload.destination.trim()) {
+            throw new Error("DOUBLE_ENTRY_VIOLATION: Source and destination must be distinct valid accounts");
+        }
+        if (typeof payload.reference !== "string" || payload.reference.trim().length === 0) {
+            throw new Error("IDEMPOTENCY_VIOLATION: Reference is required for idempotent ledger transactions");
+        }
         return this.request("/transactions", {
             method: "POST",
             body: JSON.stringify(payload)
