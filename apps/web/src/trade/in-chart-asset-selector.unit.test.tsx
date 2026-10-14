@@ -4,6 +4,10 @@ import { renderToString } from 'react-dom/server';
 import { PriceChart } from '../chart/PriceChart';
 import { setNewTraderoomEnabled } from '../lib/feature-flags';
 import { ASSET_CATALOG } from '../catalog/assets';
+import { setTraderoomPolishEnabled } from '../lib/traderoom-polish';
+
+// Este arquivo cobre o pill anterior (símbolo cru + selo Digital). Ver chart/subetapa-polish-02-asset-header-axes.
+setTraderoomPolishEnabled(false);
 
 describe('SUBETAPA 2: Seletor Interativo In-Chart & Troca Rápida de Ativos', () => {
   beforeEach(() => {

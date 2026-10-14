@@ -179,3 +179,39 @@ export function getAssetBasePrice(symbol: string): number {
   return 100.0;
 }
 
+
+/**
+ * Nome curto de exibição (TRADEROOM_POLISH): "Vol 50", "EUR/USD", "DOGE/USD", "Gold".
+ * Nunca devolve o símbolo técnico com "_" ou "SYNTH_".
+ */
+const DISPLAY_OVERRIDES: Record<string, string> = {
+  CRASH_BOOM_100: 'Crash 100',
+  XAUUSD: 'Gold',
+  XAGUSD: 'Silver',
+  USOIL: 'WTI Oil',
+  UKOIL: 'Brent Oil',
+};
+
+export function getAssetDisplayName(symbol: string): string {
+  if (!symbol) return '';
+  const norm = normalizeSymbol(symbol).replace(/_OTC$/, '');
+  if (DISPLAY_OVERRIDES[norm]) return DISPLAY_OVERRIDES[norm];
+  const vol = norm.match(/^VOL_(\d+)$/);
+  if (vol) return `Vol ${vol[1]}`;
+  if (/^[A-Z]{6}$/.test(norm)) return `${norm.slice(0, 3)}/${norm.slice(3)}`;
+  const pair = norm.match(/^([A-Z]{3,5})(USD|EUR|JPY|GBP)$/);
+  if (pair) return `${pair[1]}/${pair[2]}`;
+  return norm.replace(/_/g, ' ').trim();
+}
+
+/** Locale do gráfico com TRADEROOM_POLISH: espanhol com ponto decimal, como a IQ. */
+export const POLISH_CHART_LOCALE = 'es-MX';
+
+/**
+ * Casas decimais do eixo de preço com TRADEROOM_POLISH.
+ * Índices sintéticos (na casa das centenas) usam 2; os demais seguem o catálogo.
+ */
+export function getAxisPrecision(symbol: string): number {
+  const meta = getAssetMeta(symbol || '');
+  return meta.category === 'Sintéticos' ? 2 : meta.precision;
+}

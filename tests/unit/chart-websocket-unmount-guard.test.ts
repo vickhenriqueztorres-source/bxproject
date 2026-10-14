@@ -315,6 +315,7 @@ describe('[ANTI-ZOMBIE-WEBSOCKET] Certificação Contra WebSocket e Loops de Str
         if (name.includes('ChartDrawingToolbar')) return { ChartDrawingToolbar: () => null };
         if (name.includes('ChartDrawingOverlay')) return { ChartDrawingOverlay: () => null };
         if (name.includes('feature-flags')) return { isNewTraderoomEnabled: () => true };
+        if (name.includes('traderoom-polish')) return { isTraderoomPolishEnabled: () => false };
         if (name.includes('assets')) return { ASSET_CATALOG: [], isSameAsset: (a: string, b: string) => a === b };
         if (name.includes('AssetFlagBadge')) return { AssetFlagBadge: () => null };
         if (name.includes('drawing-types')) return { DEFAULT_INDICATORS: [] };

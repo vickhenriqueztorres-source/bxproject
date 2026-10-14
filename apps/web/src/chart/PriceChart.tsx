@@ -30,7 +30,8 @@ import { RafChartUpdater } from './raf-updater';
 import { ChartDrawingToolbar } from './ChartDrawingToolbar';
 import { ChartDrawingOverlay } from './ChartDrawingOverlay';
 import { isNewTraderoomEnabled } from '../lib/feature-flags';
-import { ASSET_CATALOG, type AssetCategory, isSameAsset } from '../catalog/assets';
+import { isTraderoomPolishEnabled } from '../lib/traderoom-polish';
+import { ASSET_CATALOG, type AssetCategory, isSameAsset, getAssetDisplayName, getAxisPrecision, POLISH_CHART_LOCALE } from '../catalog/assets';
 import { AssetFlagBadge } from '../components/header/AssetFlagBadge';
 import {
   DEFAULT_INDICATORS,
@@ -203,6 +204,8 @@ export function PriceChart({
   }
 
   const isBinmax = isNewTraderoomEnabled();
+  // Acabamento profissional (TRADEROOM_POLISH). Desligada = gráfico idêntico ao anterior.
+  const polish = isBinmax && isTraderoomPolishEnabled();
 
   // Retenção Histórica & Janela Deslizante Macro (Perigo 8 / Subetapas 4 & 6)
   const MAX_LOADED_BARS = 3500;
@@ -1031,12 +1034,12 @@ export function PriceChart({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                background: 'rgba(15, 20, 28, 0.88)',
-                backdropFilter: 'blur(12px)',
-                border: '1px solid rgba(244, 245, 247, 0.1)',
+                background: polish ? 'transparent' : 'rgba(15, 20, 28, 0.88)',
+                backdropFilter: polish ? 'none' : 'blur(12px)',
+                border: polish ? 'none' : '1px solid rgba(244, 245, 247, 0.1)',
                 borderRadius: '7px',
-                padding: '4px 10px',
-                boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)',
+                padding: polish ? '0' : '4px 10px',
+                boxShadow: polish ? 'none' : '0 4px 16px rgba(0, 0, 0, 0.6)',
               }}
             >
               <div
@@ -1051,10 +1054,22 @@ export function PriceChart({
                   userSelect: 'none',
                 }}
               >
-                <AssetFlagBadge symbol={symbol} size={18} />
+                <AssetFlagBadge symbol={symbol} size={polish ? 28 : 18} />
+                {polish ? (
+                  <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                    <span data-testid="chart-asset-display-name" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-ui)', letterSpacing: '-0.01em' }}>
+                      {getAssetDisplayName(symbol)}
+                    </span>
+                    <span data-testid="chart-asset-subtitle" style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)', fontFamily: 'var(--font-ui)' }}>
+                      Digital
+                    </span>
+                  </span>
+                ) : (
                 <span style={{ fontSize: '12px', fontWeight: 700, color: '#F4F5F7' }}>
                   {symbol.replace('_OTC', '').replace(/([A-Z]{3})([A-Z]{3})/, '$1/$2')}
                 </span>
+                )}
+                {!polish && (
                 <span
                   style={{
                     fontSize: '9.5px',
@@ -1068,6 +1083,7 @@ export function PriceChart({
                 >
                   Digital
                 </span>
+                )}
                 <svg
                   data-testid="asset-selector-chevron"
                   width="10"
@@ -1087,17 +1103,19 @@ export function PriceChart({
                 </svg>
               </div>
 
-              <div style={{ width: '1px', height: '14px', background: 'rgba(244, 245, 247, 0.12)' }} />
+              {!polish && <div style={{ width: '1px', height: '14px', background: 'rgba(244, 245, 247, 0.12)' }} />}
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#8A92A1', fontSize: '12px' }}>
                 <span
                   data-testid="asset-action-info"
                   title="Información del activo"
-                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)' }}
+                  style={polish
+                    ? { cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '6px', background: 'var(--bg-2)', transition: 'color var(--t-micro) var(--ease)' }
+                    : { cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)' }}
                   onMouseEnter={(e) => (e.currentTarget.style.color = '#F4F5F7')}
                   onMouseLeave={(e) => (e.currentTarget.style.color = '#8A92A1')}
                 >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg width={polish ? 16 : 13} height={polish ? 16 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <circle cx="12" cy="12" r="10" />
                     <line x1="12" y1="16" x2="12" y2="12" />
                     <line x1="12" y1="8" x2="12.01" y2="8" />
@@ -1106,11 +1124,13 @@ export function PriceChart({
                 <span
                   data-testid="asset-action-alert"
                   title="Crear alerta"
-                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)' }}
+                  style={polish
+                    ? { cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '6px', background: 'var(--bg-2)', transition: 'color var(--t-micro) var(--ease)' }
+                    : { cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)' }}
                   onMouseEnter={(e) => (e.currentTarget.style.color = '#F4F5F7')}
                   onMouseLeave={(e) => (e.currentTarget.style.color = '#8A92A1')}
                 >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg width={polish ? 16 : 13} height={polish ? 16 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                     <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                   </svg>
@@ -1118,11 +1138,13 @@ export function PriceChart({
                 <span
                   data-testid="asset-action-favorite"
                   title="Agregar a favoritos"
-                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)' }}
+                  style={polish
+                    ? { cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '6px', background: 'var(--bg-2)', transition: 'color var(--t-micro) var(--ease)' }
+                    : { cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'color 100ms cubic-bezier(0.16, 1, 0.3, 1)' }}
                   onMouseEnter={(e) => (e.currentTarget.style.color = '#F4F5F7')}
                   onMouseLeave={(e) => (e.currentTarget.style.color = '#8A92A1')}
                 >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg width={polish ? 16 : 13} height={polish ? 16 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
                 </span>
@@ -1474,6 +1496,8 @@ export function PriceChart({
         timeframe={timeframe}
         symbol={symbol}
         isBinmax={isBinmax}
+        pricePrecision={polish ? getAxisPrecision(symbol) : undefined}
+        locale={polish ? POLISH_CHART_LOCALE : undefined}
         onChartReady={handleChartReady}
         onChartDispose={handleChartDispose}
         onDimensionsChange={setDimensions}

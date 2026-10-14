@@ -3,6 +3,10 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { PriceChart } from './PriceChart';
 import { setNewTraderoomEnabled } from '../lib/feature-flags';
+import { setTraderoomPolishEnabled } from '../lib/traderoom-polish';
+
+// Este arquivo cobre o pill anterior (símbolo cru + selo Digital). Ver chart/subetapa-polish-02-asset-header-axes.
+setTraderoomPolishEnabled(false);
 
 describe('[SUBETAPA 03] Desacoplamento de UI e Overlays no PriceChart', () => {
   beforeEach(() => {

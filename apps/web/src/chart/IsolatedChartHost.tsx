@@ -27,6 +27,8 @@ export interface IsolatedChartHostProps {
   symbol?: string;
   locale?: string;
   timezone?: string;
+  /** Casas decimais do eixo; ausente = precisão do catálogo (comportamento anterior). */
+  pricePrecision?: number;
   isBinmax?: boolean;
   onChartReady?: (api: {
     chart: IChartApi;
@@ -90,7 +92,8 @@ export function areChartHostPropsEqual(
     prev.symbol === next.symbol &&
     prev.isBinmax === next.isBinmax &&
     prev.locale === next.locale &&
-    prev.timezone === next.timezone
+    prev.timezone === next.timezone &&
+    prev.pricePrecision === next.pricePrecision
   );
 }
 
@@ -174,6 +177,7 @@ const IsolatedChartHostComponent = forwardRef<IsolatedChartHandle, IsolatedChart
       symbol,
       locale,
       timezone,
+      pricePrecision,
       isBinmax = true,
       onChartReady,
       onChartDispose,
@@ -194,7 +198,10 @@ const IsolatedChartHostComponent = forwardRef<IsolatedChartHandle, IsolatedChart
     const prevSymbolRef = useRef<string | undefined>(symbol);
     const prevTimeframeRef = useRef<Timeframe>(timeframe);
     const lastDimensionsRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
-    const precision = getAssetMeta(symbol ?? 'SYNTH_VOL_50').precision;
+    const catalogPrecision = getAssetMeta(symbol ?? 'SYNTH_VOL_50').precision;
+    const precision = Number.isInteger(pricePrecision) && (pricePrecision as number) >= 0 && (pricePrecision as number) <= 8
+      ? (pricePrecision as number)
+      : catalogPrecision;
     const priceFormat = { type: 'price' as const, precision, minMove: 1 / 10 ** precision };
 
     latestCandlesRef.current = candles;

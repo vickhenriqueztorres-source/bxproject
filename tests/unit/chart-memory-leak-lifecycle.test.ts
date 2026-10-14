@@ -296,6 +296,7 @@ describe('[ANTI-MEMORY-LEAK] Certificação de Ciclo de Vida, Limpeza de Referê
         if (name.endsWith('drawing-sanitizer')) return { loadSafeDrawings: () => [], saveSafeDrawings: () => {} };
         if (name.endsWith('useTickPulse')) return { useTickPulse: () => null };
         if (name.endsWith('feature-flags')) return { isNewTraderoomEnabled: () => true };
+        if (name.endsWith('traderoom-polish')) return { isTraderoomPolishEnabled: () => false };
         if (name.endsWith('api/client')) return { fetchHistoricalCandlesChunk: async () => [] };
         if (name.endsWith('money')) return { formatMinor: () => '$10', formatCurrencyBinmax: () => '$10' };
         if (name.endsWith('indicator-calculator')) {
