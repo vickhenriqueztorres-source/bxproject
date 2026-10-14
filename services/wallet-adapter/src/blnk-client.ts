@@ -30,6 +30,20 @@ export class BlnkClient {
   readonly BROKER_FLOAT = "@broker_float";
   readonly DEMO_START_BALANCE_MINOR = 1_000_000; // US$ 10.000,00 em centavos (D-11, D-18)
 
+  /**
+   * Nomenclatura canônica da Fase 2 (Seção 7.1): user:{id}:demo:{currency}:available | reserved
+   */
+  public static getUserDemoAccount(userId: string, kind: "available" | "reserved", currency = "USD"): string {
+    return `user:${userId}:demo:${currency.toUpperCase()}:${kind}`;
+  }
+
+  /**
+   * Nomenclatura canônica da Fase 2 (Seção 7.2): platform:demo:{currency}:liability | revenue | payout
+   */
+  public static getPlatformDemoAccount(kind: "liability" | "revenue" | "payout", currency = "USD"): string {
+    return `platform:demo:${currency.toUpperCase()}:${kind}`;
+  }
+
   constructor(baseUrl: string = process.env.BLNK_URL || "http://localhost:5001", timeoutMs: number = 3000) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.timeoutMs = timeoutMs;

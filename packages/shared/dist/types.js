@@ -12,12 +12,22 @@ export const PHASE2_COUNTRIES = ["BR", "MX", "CO", "AR", "CL", "PE"];
 export const CountryCodeSchema = z.enum(PHASE2_COUNTRIES);
 export const PHASE2_DISPLAY_CURRENCIES = ["BRL", "MXN", "COP", "ARS", "CLP", "PEN"];
 export const DisplayCurrencyCodeSchema = z.enum(PHASE2_DISPLAY_CURRENCIES);
+export const COUNTRY_STAKE_LIMITS = {
+    BR: { min_stake_minor: 100, max_stake_minor: 10000 },
+    MX: { min_stake_minor: 100, max_stake_minor: 10000 },
+    CO: { min_stake_minor: 100, max_stake_minor: 10000 },
+    AR: { min_stake_minor: 100, max_stake_minor: 10000 },
+    CL: { min_stake_minor: 100, max_stake_minor: 10000 },
+    PE: { min_stake_minor: 100, max_stake_minor: 10000 }
+};
 export const CountrySchema = z.object({
     code: CountryCodeSchema,
     name: z.string().min(1).max(64),
     default_currency: DisplayCurrencyCodeSchema,
     default_locale: z.string().min(2).max(10),
-    is_active: z.boolean()
+    is_active: z.boolean(),
+    min_stake_minor: z.number().int().min(100).optional(),
+    max_stake_minor: z.number().int().min(100).optional()
 });
 export const DisplayCurrencySchema = z.object({
     code: DisplayCurrencyCodeSchema,
@@ -44,13 +54,13 @@ export const SystemFeatureFlagsSchema = z.object({
     country_cl_enabled: z.boolean().default(true),
     country_pe_enabled: z.boolean().default(true)
 }).catchall(z.boolean());
-export const KYCStatusSchema = z.enum(["UNVERIFIED", "PENDING", "APPROVED", "REJECTED"]);
+export const KYCStatusSchema = z.enum(["NOT_STARTED", "UNVERIFIED", "PENDING", "APPROVED", "REJECTED"]);
 export const KYCTierSchema = z.enum(["TIER_0", "TIER_1"]);
 export const KYCProfileSchema = z.object({
     id: z.string().uuid().optional(),
     user_id: z.string().min(1).max(64),
     country_code: CountryCodeSchema,
-    document_type: z.string().min(2).max(32),
+    document_type: z.string().min(2).max(32).optional(),
     document_number: z.string().min(1).max(64).optional(),
     status: KYCStatusSchema,
     tier: KYCTierSchema.default("TIER_0"),
@@ -67,6 +77,24 @@ export const PaymentMethodSchema = z.object({
     type: z.string().min(1).max(32),
     is_active: z.boolean(),
     config: z.record(z.unknown()).optional()
+});
+export const PaymentMethodSpecSchema = z.object({
+    id: z.string().uuid().optional(),
+    country_code: CountryCodeSchema,
+    method: z.enum(["pix", "spei", "pse", "mercado_pago", "khipu", "yape"]),
+    enabled: z.boolean().default(false),
+    created_at: z.string().optional()
+});
+export const PaymentIntentSchema = z.object({
+    id: z.string().uuid().optional(),
+    user_id: z.string().uuid(),
+    country_code: CountryCodeSchema,
+    currency: DisplayCurrencyCodeSchema,
+    amount_minor: z.number().int().positive(),
+    method: z.string().min(1).max(32),
+    status: z.enum(["PENDING", "COMPLETED", "CANCELLED", "REJECTED"]).default("PENDING"),
+    psp_reference: z.string().optional(),
+    created_at: z.string().optional()
 });
 // ==========================================
 // ZONAS REGULATÓRIAS E DOMÍNIOS ESPELHO

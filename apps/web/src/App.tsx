@@ -44,6 +44,8 @@ import { TutorialsPage } from './pages/TutorialsPage';
 import { PromotionsPage } from './pages/PromotionsPage';
 import { LandingPage } from './pages/LandingPage';
 import { PreviewHubPage } from './pages/PreviewHubPage';
+import { GeoblockedPage } from './pages/GeoblockedPage';
+import { useTranslation } from './i18n';
 
 
 
@@ -117,6 +119,22 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
 
   const wallet = useQuery({ queryKey: ['wallet'], queryFn: getWallet,
     retry: false, refetchInterval: 2000 });
+
+  useEffect(() => {
+    if (wallet.data && Number.isSafeInteger(wallet.data.available_minor)) {
+      const session = AuthService.getSession();
+      if (session?.user && session.user.demoBalanceMinor !== wallet.data.available_minor) {
+        AuthService.setSession({
+          ...session,
+          user: {
+            ...session.user,
+            demoBalanceMinor: wallet.data.available_minor,
+          },
+        });
+      }
+    }
+  }, [wallet.data]);
+
   const index = useQuery({ queryKey: ['index', activeSymbol],
     queryFn: () => getIndex(activeSymbol), refetchInterval: 30_000 });
   useQuery({ queryKey: ['candles', activeSymbol],
@@ -125,6 +143,16 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
     if (event.type === 'wallet_balance' && Number.isSafeInteger(event.available_minor)) {
       queryClient.setQueryData<Wallet>(['wallet'], (previous) => previous
         ? { ...previous, available_minor: event.available_minor! } : previous);
+      const session = AuthService.getSession();
+      if (session?.user && session.user.demoBalanceMinor !== event.available_minor) {
+        AuthService.setSession({
+          ...session,
+          user: {
+            ...session.user,
+            demoBalanceMinor: event.available_minor!,
+          },
+        });
+      }
     }
     if (event.type === 'contract_settled') {
       const isBinmax = isNewTraderoomEnabled();
@@ -443,81 +471,74 @@ export function TraderoomShell() {
 
 function MainRouter() {
   const { currentPath } = useRouter();
+  const { geoBlocked, t } = useTranslation();
 
-  // Estados globais dedicados
-  if (currentPath === '/mantenimiento') {
-    return <MaintenancePage />;
-  }
-
-  // Rotas de Autenticação e Entrada
-  if (currentPath === '/login') {
-    return <LoginPage />;
-  }
-  if (currentPath === '/registro') {
-    return <RegisterPage />;
-  }
-  if (currentPath === '/recuperar') {
-    return <PasswordRecoveryPage />;
-  }
-  if (currentPath === '/verificar' || currentPath === '/verificar-email') {
-    return <EmailVerificationPage />;
+  if (geoBlocked || currentPath === '/nao-disponivel' || currentPath === '/geoblocked') {
+    return <GeoblockedPage />;
   }
 
-  // Rotas Financeiras (Billetera / Cajero)
-  if (currentPath === '/deposito') {
-    return <DepositPage />;
-  }
-  if (currentPath === '/retiro') {
-    return <WithdrawPage />;
-  }
-
-  // Rotas de Conta, KYC e Ajustes
-  if (currentPath === '/verificacion') {
-    return <VerificationPage />;
-  }
-  if (currentPath === '/ajustes') {
-    return <SettingsPage />;
-  }
-  if (currentPath === '/historial') {
-    return <HistoryPage />;
-  }
-
-  // Rotas de Engajamento e Retenção
-  if (currentPath === '/torneos') {
-    return <TournamentsPage />;
-  }
-  if (currentPath === '/analisis') {
-    return <AnalysisPage />;
-  }
-  if (currentPath === '/tutoriales') {
-    return <TutorialsPage />;
-  }
-  if (currentPath === '/promociones') {
-    return <PromotionsPage />;
-  }
-
-  // Landing pública oficial
-  if (currentPath === '/landing') {
-    return <LandingPage />;
-  }
-
-  // Hub Central de Previews de todas as telas
-  if (currentPath === '/preview' || currentPath === '/previews') {
-    return <PreviewHubPage />;
-  }
-
-  // Rotas da sala de trading (garantindo compatibilidade retroativa absoluta)
+  // Rotas da sala de trading (já contém banner demo no rodapé operacional sem alterar geometria da sala)
   if (currentPath === '/operar' || currentPath === '/traderoom') {
     return <TraderoomShell />;
   }
 
-  // Rota Raiz oficial: Tela Inicial institucional com direcionamento para Login ou Registro
-  if (currentPath === '/') {
-    return <LandingPage />;
+  let pageContent: JSX.Element;
+  if (currentPath === '/mantenimiento') {
+    pageContent = <MaintenancePage />;
+  } else if (currentPath === '/login') {
+    pageContent = <LoginPage />;
+  } else if (currentPath === '/registro') {
+    pageContent = <RegisterPage />;
+  } else if (currentPath === '/recuperar') {
+    pageContent = <PasswordRecoveryPage />;
+  } else if (currentPath === '/verificar' || currentPath === '/verificar-email') {
+    pageContent = <EmailVerificationPage />;
+  } else if (currentPath === '/deposito') {
+    pageContent = <DepositPage />;
+  } else if (currentPath === '/retiro') {
+    pageContent = <WithdrawPage />;
+  } else if (currentPath === '/verificacion') {
+    pageContent = <VerificationPage />;
+  } else if (currentPath === '/ajustes') {
+    pageContent = <SettingsPage />;
+  } else if (currentPath === '/historial') {
+    pageContent = <HistoryPage />;
+  } else if (currentPath === '/torneos') {
+    pageContent = <TournamentsPage />;
+  } else if (currentPath === '/analisis') {
+    pageContent = <AnalysisPage />;
+  } else if (currentPath === '/tutoriales') {
+    pageContent = <TutorialsPage />;
+  } else if (currentPath === '/promociones') {
+    pageContent = <PromotionsPage />;
+  } else if (currentPath === '/landing' || currentPath === '/') {
+    pageContent = <LandingPage />;
+  } else if (currentPath === '/preview' || currentPath === '/previews') {
+    pageContent = <PreviewHubPage />;
+  } else {
+    pageContent = <NotFoundPage />;
   }
 
-  // Tratamento de páginas não encontradas
-  return <NotFoundPage />;
+  return (
+    <>
+      <div
+        data-testid="global-demo-banner"
+        style={{
+          background: '#101622',
+          borderBottom: '1px solid rgba(246, 195, 68, 0.25)',
+          color: '#F6C344',
+          fontSize: '11px',
+          fontWeight: 700,
+          textAlign: 'center',
+          padding: '4px 12px',
+          letterSpacing: '0.02em',
+        }}
+      >
+        🛡️ {t('common.demo_banner')} — {t('common.risk_warning')}
+      </div>
+      {pageContent}
+    </>
+  );
 }
 
 export function App() {

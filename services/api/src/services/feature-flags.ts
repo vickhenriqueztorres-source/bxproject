@@ -102,12 +102,21 @@ export class FeatureFlagsService {
    * Altera ou insere uma Feature Flag do sistema e invalida o cache
    */
   async setSystemFlag(flagKey: string, enabled: boolean): Promise<void> {
-    await this.pg.query(
-      `INSERT INTO system_feature_flags (flag_key, enabled, updated_at)
-       VALUES ($1, $2, NOW())
-       ON CONFLICT (flag_key) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()`,
-      [flagKey, enabled]
-    );
+    if (this.pg) {
+      await this.pg.query(
+        `INSERT INTO system_feature_flags (flag_key, enabled, updated_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (flag_key) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()`,
+        [flagKey, enabled]
+      );
+    }
+
+    try {
+      const { RegionalMetricsService } = await import("./metrics.js");
+      RegionalMetricsService.getInstance().setFlagStatus("SYSTEM", flagKey, enabled);
+    } catch {
+      // Ignora erro de métrica
+    }
 
     if (this.redis) {
       try {
@@ -145,14 +154,15 @@ export class FeatureFlagsService {
     }
 
     try {
+      if (!this.pg) return code === "BR";
       const result = await this.pg.query<{ is_active: boolean }>(
         "SELECT is_active FROM countries WHERE code = $1 LIMIT 1",
         [code]
       );
-      if (result.rows.length === 0) return false;
+      if (result.rows.length === 0) return code === "BR";
       return result.rows[0].is_active;
     } catch {
-      return false; // Fail-closed em caso de erro severo
+      return code === "BR"; // Fail-safe para BR e fail-closed para demais regiões
     }
   }
 
@@ -232,13 +242,22 @@ export class FeatureFlagsService {
       throw new Error(`País inválido para Fase 2: ${country}`);
     }
 
-    await this.pg.query(
-      `INSERT INTO country_feature_flags (country_code, flag_key, enabled, updated_at)
-       VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (country_code, flag_key)
-       DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()`,
-      [code, flagKey, enabled]
-    );
+    if (this.pg) {
+      await this.pg.query(
+        `INSERT INTO country_feature_flags (country_code, flag_key, enabled, updated_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (country_code, flag_key)
+         DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()`,
+        [code, flagKey, enabled]
+      );
+    }
+
+    try {
+      const { RegionalMetricsService } = await import("./metrics.js");
+      RegionalMetricsService.getInstance().setFlagStatus(code, flagKey, enabled);
+    } catch {
+      // Ignora erro de métrica
+    }
 
     await this.invalidateCache(code);
   }
@@ -252,10 +271,19 @@ export class FeatureFlagsService {
       throw new Error(`País inválido para Fase 2: ${country}`);
     }
 
-    await this.pg.query(
-      "UPDATE countries SET is_active = $1, updated_at = NOW() WHERE code = $2",
-      [active, code]
-    );
+    if (this.pg) {
+      await this.pg.query(
+        "UPDATE countries SET is_active = $1, updated_at = NOW() WHERE code = $2",
+        [active, code]
+      );
+    }
+
+    try {
+      const { RegionalMetricsService } = await import("./metrics.js");
+      RegionalMetricsService.getInstance().setFlagStatus(code, "is_active", active);
+    } catch {
+      // Ignora erro de métrica
+    }
 
     await this.invalidateCache(code);
   }

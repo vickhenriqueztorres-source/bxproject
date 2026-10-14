@@ -15,6 +15,7 @@ export class RafChartUpdater {
   private droppedUpdatesCount = 0;
   private renderedUpdatesCount = 0;
   private symbolSequences: Map<string, bigint> = new Map();
+  private symbolTimestamps: Map<string, number> = new Map();
 
   constructor(
     private rafFn: (cb: FrameRequestCallback) => number = typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
@@ -30,6 +31,25 @@ export class RafChartUpdater {
 
   private lastGlobalSequence: bigint = 0n;
 
+  private parseTickSeconds(rawTs: unknown): number | null {
+    if (typeof rawTs === 'number' && Number.isFinite(rawTs) && rawTs > 0) {
+      return rawTs > 1e11 ? Math.floor(rawTs / 1000) : Math.floor(rawTs);
+    }
+    if (typeof rawTs === 'string') {
+      const trimmed = rawTs.trim();
+      if (!trimmed) return null;
+      const numeric = Number(trimmed);
+      if (Number.isFinite(numeric) && !trimmed.includes('-') && !trimmed.includes(':')) {
+        return numeric > 0 ? (numeric > 1e11 ? Math.floor(numeric / 1000) : Math.floor(numeric)) : null;
+      }
+      const parsed = Date.parse(trimmed);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return Math.floor(parsed / 1000);
+      }
+    }
+    return null;
+  }
+
   public push(tick: Tick, onRender: RafRenderCallback): void {
     if (!tick) return;
 
@@ -41,6 +61,14 @@ export class RafChartUpdater {
     }
 
     const symbolKey = tick.symbol || '__default__';
+
+    // Monotonicidade Temporal por Símbolo (#10 / Issue #1351): descarta ticks que voltam no tempo
+    const tickSec = this.parseTickSeconds(tick.ts);
+    const lastSec = this.symbolTimestamps.get(symbolKey);
+    if (tickSec !== null && lastSec !== undefined && tickSec < lastSec) {
+      this.droppedUpdatesCount++;
+      return;
+    }
 
     // Monotonicidade Sequencial por Símbolo: descarta ticks fora de ordem ou duplicados (F-06 / Subetapa 01)
     if (tick.sequence !== undefined && tick.sequence !== null) {
@@ -56,6 +84,10 @@ export class RafChartUpdater {
       } catch {
         // Se sequence não for conversível para BigInt, processa normalmente
       }
+    }
+
+    if (tickSec !== null) {
+      this.symbolTimestamps.set(symbolKey, tickSec);
     }
 
     if (this.pendingTick !== null) {
@@ -134,11 +166,13 @@ export class RafChartUpdater {
 
     if (symbol) {
       this.symbolSequences.delete(symbol);
+      this.symbolTimestamps.delete(symbol);
       if (this.pendingTick?.symbol === symbol) {
         this.pendingTick = null;
       }
     } else {
       this.symbolSequences.clear();
+      this.symbolTimestamps.clear();
       this.lastGlobalSequence = 0n;
       this.pendingTick = null;
     }
@@ -147,8 +181,10 @@ export class RafChartUpdater {
   public resetSequence(symbol?: string): void {
     if (symbol) {
       this.symbolSequences.delete(symbol);
+      this.symbolTimestamps.delete(symbol);
     } else {
       this.symbolSequences.clear();
+      this.symbolTimestamps.clear();
       this.lastGlobalSequence = 0n;
     }
   }

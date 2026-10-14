@@ -20,11 +20,26 @@ export const COUNTRY_METADATA: Record<CountryCode, { currency: DisplayCurrencyCo
 
 export class GeoBlockService {
   /**
-   * Extrai o código de país a partir dos cabeçalhos da requisição com sanitização
+   * Fallback de geolocalização por faixa de IP regional LatAm (Seções 3.1 e 10.1)
+   */
+  static resolveCountryFromIp(ip?: string): CountryCode | null {
+    if (!ip || typeof ip !== "string") return null;
+    const clean = ip.replace(/^::ffff:/, "").trim();
+    if (clean.startsWith("177.") || clean.startsWith("189.4.") || clean.startsWith("200.160.")) return "BR";
+    if (clean.startsWith("187.188.") || clean.startsWith("201.144.")) return "MX";
+    if (clean.startsWith("181.48.") || clean.startsWith("190.24.")) return "CO";
+    if (clean.startsWith("181.16.") || clean.startsWith("190.19.")) return "AR";
+    if (clean.startsWith("190.45.") || clean.startsWith("200.83.")) return "CL";
+    if (clean.startsWith("190.42.") || clean.startsWith("200.48.")) return "PE";
+    return null;
+  }
+
+  /**
+   * Extrai o código de país a partir dos cabeçalhos da requisição ou fallback GeoIP com sanitização
    */
   static extractCountry(req: FastifyRequest): string {
     // 1. Cloudflare header
-    const cfCountry = req.headers["cf-ipcountry"];
+    const cfCountry = req.headers?.["cf-ipcountry"];
     if (typeof cfCountry === "string") {
       const sanitized = cfCountry.trim().toUpperCase();
       if (/^[A-Z]{2}$/.test(sanitized)) return sanitized;
@@ -32,7 +47,7 @@ export class GeoBlockService {
     }
 
     // 2. Header de borda reverso X-Country-Code
-    const xCountry = req.headers["x-country-code"];
+    const xCountry = req.headers?.["x-country-code"];
     if (typeof xCountry === "string") {
       const sanitized = xCountry.trim().toUpperCase();
       if (/^[A-Z]{2}$/.test(sanitized)) return sanitized;
@@ -40,12 +55,19 @@ export class GeoBlockService {
     }
 
     // 3. Header para testes ou desenvolvimento controlado
-    const testCountry = req.headers["x-test-country"];
+    const testCountry = req.headers?.["x-test-country"];
     if (process.env.NODE_ENV !== "production" && typeof testCountry === "string") {
       const sanitized = testCountry.trim().toUpperCase();
       if (/^[A-Z]{2}$/.test(sanitized)) return sanitized;
       return "UNKNOWN";
     }
+
+    // 4. Fallback GeoIP por endereço IP ou X-Forwarded-For (Seções 3.1 e 10.1)
+    const forwardedIp = typeof req.headers?.["x-forwarded-for"] === "string"
+      ? req.headers["x-forwarded-for"].split(",")[0].trim()
+      : (req as any).ip;
+    const ipCountry = this.resolveCountryFromIp(forwardedIp);
+    if (ipCountry) return ipCountry;
 
     // Default quando ausente ou não determinável: Brasil 100% livre para hospedagem e testes
     return "BR";

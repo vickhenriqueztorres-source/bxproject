@@ -14,23 +14,27 @@ export function useFeed(
   const [stale, setStale] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
     tradingFeedManager.connect();
 
     const unsubscribeStatus = tradingFeedManager.onStatusChange((conn) => {
-      setConnected(conn);
+      if (mounted) setConnected(conn);
     });
 
     const unsubscribeStaleness = tradingFeedManager.onSymbolStaleness(symbol, (isStale) => {
-      setStale(isStale);
+      if (mounted) setStale(isStale);
     });
 
-    const unsubscribePrivate = tradingFeedManager.subscribePrivate(onPrivate);
+    const unsubscribePrivate = tradingFeedManager.subscribePrivate((event) => {
+      if (mounted) onPrivate(event);
+    });
 
     const unsubscribeSymbol = tradingFeedManager.subscribeSymbol(symbol, (incomingTick) => {
-      setTick(incomingTick);
+      if (mounted) setTick(incomingTick);
     });
 
     return () => {
+      mounted = false;
       unsubscribeSymbol();
       unsubscribePrivate();
       unsubscribeStaleness();

@@ -501,11 +501,9 @@ export const openContract = async (
     symbol,
     direction,
     stake_minor: stakeMinor,
-    duration_seconds: durationSeconds,
-    expiry_mode: expiryMode,
   };
-  if (targetExpiresAt) {
-    contractBody.target_expires_at = targetExpiresAt;
+  if (durationSeconds && durationSeconds !== 60 && durationSeconds <= 300) {
+    contractBody.duration_seconds = durationSeconds;
   }
 
   const envelope = await api<{ contract?: unknown }>('/v1/contracts', { method: 'POST',
@@ -527,9 +525,14 @@ export const openContract = async (
       || !Number.isFinite(calendarTime) || !new Date(calendarTime).toISOString().startsWith(iso[1])) {
     throw new ApiError(502, 'INVALID_CONTRACT_RESPONSE');
   }
-  const rawStrike = contract.strike_price ?? contract.entry_price ?? (envelope as any)?.strike_price;
+  const rawStrike = contract.strike_price ?? (envelope as any)?.strike_price;
   const numStrike = typeof rawStrike === 'number' ? rawStrike : (typeof rawStrike === 'string' ? parseFloat(rawStrike) : undefined);
-  return { id, status, expires_at: expiry, strike_price: numStrike, entry_price: numStrike };
+  const resultReceipt: Receipt = { id, status, expires_at: expiry };
+  if (numStrike !== undefined) {
+    resultReceipt.strike_price = numStrike;
+    resultReceipt.entry_price = numStrike;
+  }
+  return resultReceipt;
 };
 
 export const getMarketNews = async (category: string = 'ALL'): Promise<import('../news/news-types').MarketNewsArticle[]> => {

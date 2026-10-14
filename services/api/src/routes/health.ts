@@ -42,25 +42,27 @@ export async function healthRoutes(fastify: FastifyInstance) {
 
     // 1. Métricas de banco (index_state) isoladas
     try {
-      const activePool = (fastify as any).pg || pool;
-      const res = await activePool.query(`
-        SELECT symbol, updated_at, last_sequence 
-        FROM index_state;
-      `);
+      const activePool = (fastify as any).pg || (process.env.DATABASE_URL ? pool : null);
+      if (activePool) {
+        const res = await activePool.query(`
+          SELECT symbol, updated_at, last_sequence 
+          FROM index_state;
+        `);
 
-      const now = Date.now();
-      lines.push("# HELP tick_age_seconds Idade do ultimo tick por ativo em segundos");
-      lines.push("# TYPE tick_age_seconds gauge");
-      for (const row of res.rows) {
-        const ageSec = ((now - new Date(row.updated_at).getTime()) / 1000).toFixed(3);
-        lines.push(`tick_age_seconds{symbol="${row.symbol}"} ${ageSec}`);
-      }
+        const now = Date.now();
+        lines.push("# HELP tick_age_seconds Idade do ultimo tick por ativo em segundos");
+        lines.push("# TYPE tick_age_seconds gauge");
+        for (const row of res.rows) {
+          const ageSec = ((now - new Date(row.updated_at).getTime()) / 1000).toFixed(3);
+          lines.push(`tick_age_seconds{symbol="${row.symbol}"} ${ageSec}`);
+        }
 
-      lines.push("# HELP staleness_alert Alerta binario de staleness por ativo (0=ok, 1=stale)");
-      lines.push("# TYPE staleness_alert gauge");
-      for (const row of res.rows) {
-        const ageSec = (now - new Date(row.updated_at).getTime()) / 1000;
-        lines.push(`staleness_alert{symbol="${row.symbol}"} ${ageSec > 4 ? 1 : 0}`);
+        lines.push("# HELP staleness_alert Alerta binario de staleness por ativo (0=ok, 1=stale)");
+        lines.push("# TYPE staleness_alert gauge");
+        for (const row of res.rows) {
+          const ageSec = (now - new Date(row.updated_at).getTime()) / 1000;
+          lines.push(`staleness_alert{symbol="${row.symbol}"} ${ageSec > 4 ? 1 : 0}`);
+        }
       }
     } catch {
       lines.push("# AVISO: index_state temporariamente inacessivel via pool");

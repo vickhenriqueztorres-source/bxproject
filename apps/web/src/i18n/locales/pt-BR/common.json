@@ -5,6 +5,16 @@
   "offline": "Desconectado",
   "loading": "Carregando...",
   "error": "Ocorreu um erro",
+  "demo_banner": "Modo Demo — sem dinheiro real",
+  "risk_warning": "Aviso de Risco: Operar contratos UP/DOWN e ativos OTC envolve alto risco. Ambiente 100% demonstrativo — nenhum dinheiro real circula.",
+  "legal": {
+    "terms_link": "Termos de Uso (BR)",
+    "privacy_link": "Política de Privacidade (LGPD)",
+    "terms_title": "Termos de Uso — Brasil (Modo Demo Fase 2)",
+    "terms_body": "Estes Termos de Uso regem o acesso de residentes no Brasil à plataforma de simulação educacional e demonstrativa na Fase 2. Nenhum depósito, saque ou valor monetário real é aceito ou liquidado.",
+    "privacy_title": "Política de Privacidade — Brasil (LGPD Lei nº 13.709/2018)",
+    "privacy_body": "Seus dados de sessão e preferências regionais (pt-BR / BRL / America/Sao_Paulo) são tratados em conformidade com a Lei Geral de Proteção de Dados (LGPD)."
+  },
   "buttons": {
     "save": "Salvar",
     "cancel": "Cancelar",

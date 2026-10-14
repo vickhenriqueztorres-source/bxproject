@@ -8,6 +8,8 @@ export interface UserPublic {
   email: string;
   country: string;
   demo_balance_minor: number;
+  phone_code?: string;
+  phone_number?: string;
   email_verified?: boolean;
 }
 
@@ -320,7 +322,7 @@ export class AuthService {
 
   public async getUserById(userId: string): Promise<UserPublic | null> {
     const result = await this.pg.query(
-      "SELECT id, name, email, country_code, demo_balance_minor, email_verified FROM users WHERE id = $1",
+      "SELECT id, name, email, country_code, phone_code, phone_number, demo_balance_minor, email_verified FROM users WHERE id = $1",
       [userId]
     );
 
@@ -331,9 +333,89 @@ export class AuthService {
       name: row.name,
       email: row.email,
       country: row.country_code,
+      phone_code: row.phone_code || "+34",
+      phone_number: row.phone_number || "",
       demo_balance_minor: Number(row.demo_balance_minor),
       email_verified: Boolean(row.email_verified)
     };
+  }
+
+  public async updateProfile(
+    userId: string,
+    data: { name?: string; country?: string; phone_code?: string; phone_number?: string; phoneCode?: string; phoneNumber?: string }
+  ): Promise<UserPublic> {
+    const name = data.name ? data.name.trim() : null;
+    if (name !== null && name.length < 2) {
+      throw new Error("El nombre debe tener al menos 2 caracteres");
+    }
+    const country = data.country ? data.country.trim().toUpperCase().slice(0, 2) : null;
+    const phoneCode = data.phone_code || data.phoneCode ? (data.phone_code || data.phoneCode)!.trim() : null;
+    const phoneNumber = data.phone_number || data.phoneNumber ? (data.phone_number || data.phoneNumber)!.trim() : null;
+
+    const result = await this.pg.query(
+      `UPDATE users
+       SET name = COALESCE($1, name),
+           country_code = COALESCE($2, country_code),
+           phone_code = COALESCE($3, phone_code),
+           phone_number = COALESCE($4, phone_number),
+           updated_at = NOW()
+       WHERE id = $5
+       RETURNING id, name, email, country_code, phone_code, phone_number, demo_balance_minor, email_verified`,
+      [name, country, phoneCode, phoneNumber, userId]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error("USER_NOT_FOUND");
+    }
+
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      country: row.country_code,
+      phone_code: row.phone_code || "+34",
+      phone_number: row.phone_number || "",
+      demo_balance_minor: Number(row.demo_balance_minor),
+      email_verified: Boolean(row.email_verified)
+    };
+  }
+
+  public async updatePassword(
+    userId: string,
+    data: { currentPassword?: string; newPassword?: string; current_password?: string; new_password?: string }
+  ): Promise<{ success: boolean; message: string }> {
+    const currentPassword = data.currentPassword || data.current_password;
+    const newPassword = data.newPassword || data.new_password;
+
+    if (!currentPassword || !newPassword || newPassword.length < 6) {
+      throw new Error("La nueva contraseña debe tener al menos 6 caracteres");
+    }
+
+    const userRes = await this.pg.query(
+      "SELECT id, password_hash, password_salt FROM users WHERE id = $1",
+      [userId]
+    );
+
+    if (userRes.rows.length === 0) {
+      throw new Error("USER_NOT_FOUND");
+    }
+
+    const row = userRes.rows[0];
+    const currentHash = this.hashPassword(currentPassword, row.password_salt);
+    if (currentHash !== row.password_hash) {
+      throw new Error("La contraseña actual no es correcta");
+    }
+
+    const newSalt = this.generateSalt();
+    const newHash = this.hashPassword(newPassword, newSalt);
+
+    await this.pg.query(
+      "UPDATE users SET password_hash = $1, password_salt = $2, updated_at = NOW() WHERE id = $3",
+      [newHash, newSalt, userId]
+    );
+
+    return { success: true, message: "Contraseña actualizada exitosamente" };
   }
 
   public async requestEmailVerification(userId: string): Promise<{ code: string; token: string; expires_at: Date }> {

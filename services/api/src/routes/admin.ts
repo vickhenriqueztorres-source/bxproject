@@ -19,8 +19,9 @@ export async function adminRoutes(fastify: FastifyInstance) {
   const blockedUsers = new Set<string>();
   const pausedIndices = new Set<string>();
 
-  // 1. GET /users - Lista usuários do sistema
-  fastify.get("/users", async (_request: FastifyRequest, reply: FastifyReply) => {
+  // 1. GET /users - Lista usuários do sistema com filtros multi-país (Seção 11.1 e 11.2)
+  fastify.get("/users", async (request: FastifyRequest<{ Querystring: { country?: string; currency?: string; status?: string; date?: string } }>, reply: FastifyReply) => {
+    const { country, currency, status, date } = request.query || {};
     try {
       const db = (fastify as any).pg;
       if (db) {
@@ -36,12 +37,20 @@ export async function adminRoutes(fastify: FastifyInstance) {
       // Fallback em ambiente de teste ou desacoplado
     }
 
-    // Usuários mockados / seed para demonstração caso banco não esteja populado
     const defaultUsers = [
-      { id: "usr_br_001", email: "trader1@broker.test", status: blockedUsers.has("usr_br_001") ? "BLOCKED" : "ACTIVE", country: "BR", createdAt: "2026-10-01T10:00:00Z" },
-      { id: "usr_mx_002", email: "trader2@broker.test", status: blockedUsers.has("usr_mx_002") ? "BLOCKED" : "ACTIVE", country: "MX", createdAt: "2026-10-02T11:30:00Z" },
-      { id: "usr_co_003", email: "trader3@broker.test", status: blockedUsers.has("usr_co_003") ? "BLOCKED" : "ACTIVE", country: "CO", createdAt: "2026-10-03T15:45:00Z" }
-    ];
+      { id: "usr_br_001", email: "trader1@broker.test", status: blockedUsers.has("usr_br_001") ? "BLOCKED" : "ACTIVE", country: "BR", currency: "BRL", createdAt: "2026-10-01T10:00:00Z" },
+      { id: "usr_mx_002", email: "trader2@broker.test", status: blockedUsers.has("usr_mx_002") ? "BLOCKED" : "ACTIVE", country: "MX", currency: "MXN", createdAt: "2026-10-02T11:30:00Z" },
+      { id: "usr_co_003", email: "trader3@broker.test", status: blockedUsers.has("usr_co_003") ? "BLOCKED" : "ACTIVE", country: "CO", currency: "COP", createdAt: "2026-10-03T15:45:00Z" },
+      { id: "usr_ar_004", email: "trader4@broker.test", status: blockedUsers.has("usr_ar_004") ? "BLOCKED" : "ACTIVE", country: "AR", currency: "ARS", createdAt: "2026-10-04T14:20:00Z" },
+      { id: "usr_cl_005", email: "trader5@broker.test", status: blockedUsers.has("usr_cl_005") ? "BLOCKED" : "ACTIVE", country: "CL", currency: "CLP", createdAt: "2026-10-05T16:10:00Z" },
+      { id: "usr_pe_006", email: "trader6@broker.test", status: blockedUsers.has("usr_pe_006") ? "BLOCKED" : "ACTIVE", country: "PE", currency: "PEN", createdAt: "2026-10-06T18:00:00Z" }
+    ].filter((u) => {
+      if (country && country !== "ALL" && u.country !== country.toUpperCase()) return false;
+      if (currency && currency !== "ALL" && u.currency !== currency.toUpperCase()) return false;
+      if (status && status !== "ALL" && u.status !== status.toUpperCase()) return false;
+      if (date && !u.createdAt.startsWith(date)) return false;
+      return true;
+    });
     return reply.send({ users: defaultUsers });
   });
 
@@ -80,8 +89,9 @@ export async function adminRoutes(fastify: FastifyInstance) {
     });
   });
 
-  // 3. GET /contracts - Lista contratos de trading com filtros e status
-  fastify.get("/contracts", async (request: FastifyRequest<{ Querystring: { symbol?: string; status?: string; limit?: string } }>, reply) => {
+  // 3. GET /contracts - Lista contratos de trading com filtros multi-país (País, Moeda, Status, Data - Seção 11.1 e 11.2)
+  fastify.get("/contracts", async (request: FastifyRequest<{ Querystring: { symbol?: string; country?: string; currency?: string; status?: string; date?: string; limit?: string } }>, reply) => {
+    const { symbol, country, currency, status, date } = request.query || {};
     try {
       const db = (fastify as any).pg;
       if (db) {
@@ -97,16 +107,37 @@ export async function adminRoutes(fastify: FastifyInstance) {
       // Fallback
     }
 
-    return reply.send({
-      contracts: [
-        { id: "cnt_901", userId: "usr_br_001", symbol: "SYNTH_VOL_50", direction: "CALL", amountMinor: 1000, payoutPct: 85, status: "SETTLED", result: "WON" },
-        { id: "cnt_902", userId: "usr_mx_002", symbol: "BTCUSD_OTC", direction: "PUT", amountMinor: 2500, payoutPct: 85, status: "OPEN", result: null }
-      ]
+    const allContracts = [
+      { id: "cnt_901", userId: "usr_br_001", country: "BR", currency: "BRL", symbol: "SYNTH_VOL_50", direction: "CALL", amountMinor: 1000, payoutPct: 85, status: "SETTLED", result: "WON", createdAt: "2026-10-08T10:15:00Z" },
+      { id: "cnt_902", userId: "usr_mx_002", country: "MX", currency: "MXN", symbol: "BTCUSD_OTC", direction: "PUT", amountMinor: 2500, payoutPct: 85, status: "OPEN", result: null, createdAt: "2026-10-08T10:16:00Z" },
+      { id: "cnt_903", userId: "usr_co_003", country: "CO", currency: "COP", symbol: "EURUSD_OTC", direction: "CALL", amountMinor: 1500, payoutPct: 85, status: "SETTLED", result: "LOST", createdAt: "2026-10-08T10:12:00Z" },
+      { id: "cnt_904", userId: "usr_ar_004", country: "AR", currency: "ARS", symbol: "ETHUSD_OTC", direction: "CALL", amountMinor: 2000, payoutPct: 85, status: "SETTLED", result: "WON", createdAt: "2026-10-08T10:10:00Z" },
+      { id: "cnt_905", userId: "usr_cl_005", country: "CL", currency: "CLP", symbol: "XAUUSD_OTC", direction: "PUT", amountMinor: 3000, payoutPct: 85, status: "SETTLED", result: "DRAW", createdAt: "2026-10-08T10:05:00Z" },
+      { id: "cnt_906", userId: "usr_pe_006", country: "PE", currency: "PEN", symbol: "BTCUSD_OTC", direction: "CALL", amountMinor: 1200, payoutPct: 85, status: "OPEN", result: null, createdAt: "2026-10-08T10:18:00Z" }
+    ].filter((c) => {
+      if (symbol && c.symbol !== symbol) return false;
+      if (country && country !== "ALL" && c.country !== country.toUpperCase()) return false;
+      if (currency && currency !== "ALL" && c.currency !== currency.toUpperCase()) return false;
+      if (status && status !== "ALL" && c.status !== status.toUpperCase()) return false;
+      if (date && !c.createdAt.startsWith(date)) return false;
+      return true;
     });
+
+    return reply.send({ contracts: allContracts });
   });
 
-  // 4. GET /ledger/summary - Consulta de integridade do ledger Blnk (I-01: Proibida edição direta)
-  fastify.get("/ledger/summary", async (_request, reply) => {
+  // 4. GET /ledger/summary - Consulta de integridade do ledger Blnk e visão por moeda (Seção 7 e 11.1, I-01: Proibida edição direta)
+  fastify.get("/ledger/summary", async (request: FastifyRequest<{ Querystring: { currency?: string } }>, reply) => {
+    const filterCurrency = request.query?.currency?.toUpperCase();
+    const byCurrency = [
+      { currency: "BRL", country: "BR", liabilityAccount: "platform:demo:BRL:liability", revenueAccount: "platform:demo:BRL:revenue", payoutAccount: "platform:demo:BRL:payout", availableMinorUSD: 40000000, reservedMinorUSD: 2500000, status: "BALANCED" },
+      { currency: "MXN", country: "MX", liabilityAccount: "platform:demo:MXN:liability", revenueAccount: "platform:demo:MXN:revenue", payoutAccount: "platform:demo:MXN:payout", availableMinorUSD: 20000000, reservedMinorUSD: 1500000, status: "BALANCED" },
+      { currency: "COP", country: "CO", liabilityAccount: "platform:demo:COP:liability", revenueAccount: "platform:demo:COP:revenue", payoutAccount: "platform:demo:COP:payout", availableMinorUSD: 12000000, reservedMinorUSD: 800000, status: "BALANCED" },
+      { currency: "ARS", country: "AR", liabilityAccount: "platform:demo:ARS:liability", revenueAccount: "platform:demo:ARS:revenue", payoutAccount: "platform:demo:ARS:payout", availableMinorUSD: 10000000, reservedMinorUSD: 600000, status: "BALANCED" },
+      { currency: "CLP", country: "CL", liabilityAccount: "platform:demo:CLP:liability", revenueAccount: "platform:demo:CLP:revenue", payoutAccount: "platform:demo:CLP:payout", availableMinorUSD: 10000000, reservedMinorUSD: 500000, status: "BALANCED" },
+      { currency: "PEN", country: "PE", liabilityAccount: "platform:demo:PEN:liability", revenueAccount: "platform:demo:PEN:revenue", payoutAccount: "platform:demo:PEN:payout", availableMinorUSD: 8000000, reservedMinorUSD: 400000, status: "BALANCED" }
+    ].filter(item => !filterCurrency || filterCurrency === "ALL" || item.currency === filterCurrency);
+
     return reply.send({
       ledger: "blnk_main_ledger",
       currency: "USD_CENT",
@@ -114,7 +145,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
       totalLiabilitiesMinor: 15000000, // US$ 150.000,00
       floatCapPct: 3,
       reconciliationStatus: "BALANCED",
-      canDirectlyEditBalance: false // Garantia estrita I-01
+      canDirectlyEditBalance: false, // Garantia estrita I-01
+      byCurrency
     });
   });
 
@@ -177,12 +209,20 @@ export async function adminRoutes(fastify: FastifyInstance) {
     });
   });
 
-  // 6. GET /alerts - Consulta de alertas operacionais ativos
-  fastify.get("/alerts", async (_request, reply) => {
+  // 6. GET /alerts - Consulta de alertas operacionais ativos por país (Seção 11.1 e 12.2)
+  fastify.get("/alerts", async (request: FastifyRequest<{ Querystring: { country?: string } }>, reply) => {
+    const countryFilter = request.query?.country?.toUpperCase();
+    const allAlerts = [
+      { id: "alt_01", country: "BR", type: "INFO", message: "Sistema e feed OTC operando normalmente no Brasil", createdAt: new Date().toISOString() },
+      { id: "alt_02", country: "MX", type: "INFO", message: "Latência regional dentro do SLA (< 200ms) no México", createdAt: new Date().toISOString() },
+      { id: "alt_03", country: "CO", type: "INFO", message: "Feed OTC real sincronizado na Colômbia", createdAt: new Date().toISOString() },
+      { id: "alt_04", country: "AR", type: "INFO", message: "Carteira Demo ARS ativa sem divergências no Ledger", createdAt: new Date().toISOString() },
+      { id: "alt_05", country: "CL", type: "INFO", message: "Geoblocking e Feature Flags ativos no Chile", createdAt: new Date().toISOString() },
+      { id: "alt_06", country: "PE", type: "INFO", message: "Operações demo UP/DOWN saudáveis no Peru", createdAt: new Date().toISOString() }
+    ].filter(a => !countryFilter || countryFilter === "ALL" || a.country === countryFilter);
+
     return reply.send({
-      alerts: [
-        { id: "alt_01", type: "INFO", message: "Sistema operando normalmente", createdAt: new Date().toISOString() }
-      ],
+      alerts: allAlerts,
       auditLogs
     });
   });

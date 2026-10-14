@@ -40,27 +40,28 @@ export class BiquoteProvider implements IMarketDataProvider {
   async fetchQuote(symbol: CanonicalOTCSymbol): Promise<RawMarketQuote> {
     if (process.env.ENABLE_EXTERNAL_LIVE_HTTP === "true") {
       const endpoint = `https://api.biquote.io/v1/ticker?symbol=${encodeURIComponent(symbol)}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1500);
-
         const response = await fetch(endpoint, { signal: controller.signal });
         clearTimeout(timeoutId);
-
-        if (response.ok) {
-          const data: any = await response.json();
-          const price = parseFloat(data.price || data.last);
-          if (price > 0) {
-            return {
-              provider: this.name,
-              symbol,
-              price,
-              timestampMs: data.timestamp ? new Date(data.timestamp).getTime() : Date.now()
-            };
-          }
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status} from ${this.name}`);
         }
-      } catch {
-        // Fallback para emissão calibrada segura
+        const data: any = await response.json();
+        const price = parseFloat(data.price || data.last);
+        if (price > 0) {
+          return {
+            provider: this.name,
+            symbol,
+            price,
+            timestampMs: data.timestamp ? new Date(data.timestamp).getTime() : Date.now()
+          };
+        }
+        throw new Error(`Invalid price payload from ${this.name}`);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        throw err;
       }
     }
 
@@ -90,29 +91,30 @@ export class RealMarketApiProvider implements IMarketDataProvider {
   }
 
   async fetchQuote(symbol: CanonicalOTCSymbol): Promise<RawMarketQuote> {
-    if (process.env.ENABLE_EXTERNAL_LIVE_HTTP === "true" && process.env.REAL_MARKET_API_KEY) {
+    if (process.env.ENABLE_EXTERNAL_LIVE_HTTP === "true") {
       const endpoint = `https://api.realmarketapi.com/v1/quote?symbol=${symbol}&key=${this.apiKey}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1500);
-
         const response = await fetch(endpoint, { signal: controller.signal });
         clearTimeout(timeoutId);
-
-        if (response.ok) {
-          const data: any = await response.json();
-          const price = parseFloat(data.price);
-          if (price > 0) {
-            return {
-              provider: this.name,
-              symbol,
-              price,
-              timestampMs: data.time ? Number(data.time) : Date.now()
-            };
-          }
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status} from ${this.name}`);
         }
-      } catch {
-        // Fallback
+        const data: any = await response.json();
+        const price = parseFloat(data.price);
+        if (price > 0) {
+          return {
+            provider: this.name,
+            symbol,
+            price,
+            timestampMs: data.time ? Number(data.time) : Date.now()
+          };
+        }
+        throw new Error(`Invalid price payload from ${this.name}`);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        throw err;
       }
     }
 
@@ -140,29 +142,30 @@ export class AllTickProvider implements IMarketDataProvider {
   }
 
   async fetchQuote(symbol: CanonicalOTCSymbol): Promise<RawMarketQuote> {
-    if (process.env.ENABLE_EXTERNAL_LIVE_HTTP === "true" && process.env.ALLTICK_API_KEY) {
+    if (process.env.ENABLE_EXTERNAL_LIVE_HTTP === "true") {
       const endpoint = `https://api.alltick.co/v1/ticks?symbol=${symbol}&token=${this.apiKey}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1500);
-
         const response = await fetch(endpoint, { signal: controller.signal });
         clearTimeout(timeoutId);
-
-        if (response.ok) {
-          const data: any = await response.json();
-          const price = parseFloat(data.last_price);
-          if (price > 0) {
-            return {
-              provider: this.name,
-              symbol,
-              price,
-              timestampMs: data.ts || Date.now()
-            };
-          }
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status} from ${this.name}`);
         }
-      } catch {
-        // Fallback
+        const data: any = await response.json();
+        const price = parseFloat(data.last_price);
+        if (price > 0) {
+          return {
+            provider: this.name,
+            symbol,
+            price,
+            timestampMs: data.ts || Date.now()
+          };
+        }
+        throw new Error(`Invalid price payload from ${this.name}`);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        throw err;
       }
     }
 
@@ -190,29 +193,30 @@ export class FcsApiProvider implements IMarketDataProvider {
   }
 
   async fetchQuote(symbol: CanonicalOTCSymbol): Promise<RawMarketQuote> {
-    if (process.env.ENABLE_EXTERNAL_LIVE_HTTP === "true" && process.env.FCS_API_KEY) {
+    if (process.env.ENABLE_EXTERNAL_LIVE_HTTP === "true") {
       const endpoint = `https://fcsapi.com/api-v3/forex/latest?symbol=${symbol}&access_key=${this.apiKey}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1500);
-
         const response = await fetch(endpoint, { signal: controller.signal });
         clearTimeout(timeoutId);
-
-        if (response.ok) {
-          const data: any = await response.json();
-          const price = parseFloat(data.response?.[0]?.c || data.price);
-          if (price > 0) {
-            return {
-              provider: this.name,
-              symbol,
-              price,
-              timestampMs: Date.now()
-            };
-          }
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status} from ${this.name}`);
         }
-      } catch {
-        // Fallback
+        const data: any = await response.json();
+        const price = parseFloat(data.response?.[0]?.c || data.price);
+        if (price > 0) {
+          return {
+            provider: this.name,
+            symbol,
+            price,
+            timestampMs: Date.now()
+          };
+        }
+        throw new Error(`Invalid price payload from ${this.name}`);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        throw err;
       }
     }
 

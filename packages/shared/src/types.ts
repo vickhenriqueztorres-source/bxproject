@@ -45,12 +45,23 @@ export const PHASE2_DISPLAY_CURRENCIES = ["BRL", "MXN", "COP", "ARS", "CLP", "PE
 export type DisplayCurrencyCode = typeof PHASE2_DISPLAY_CURRENCIES[number];
 export const DisplayCurrencyCodeSchema = z.enum(PHASE2_DISPLAY_CURRENCIES);
 
+export const COUNTRY_STAKE_LIMITS: Record<CountryCode, { min_stake_minor: number; max_stake_minor: number }> = {
+  BR: { min_stake_minor: 100, max_stake_minor: 10000 },
+  MX: { min_stake_minor: 100, max_stake_minor: 10000 },
+  CO: { min_stake_minor: 100, max_stake_minor: 10000 },
+  AR: { min_stake_minor: 100, max_stake_minor: 10000 },
+  CL: { min_stake_minor: 100, max_stake_minor: 10000 },
+  PE: { min_stake_minor: 100, max_stake_minor: 10000 }
+};
+
 export const CountrySchema = z.object({
   code: CountryCodeSchema,
   name: z.string().min(1).max(64),
   default_currency: DisplayCurrencyCodeSchema,
   default_locale: z.string().min(2).max(10),
-  is_active: z.boolean()
+  is_active: z.boolean(),
+  min_stake_minor: z.number().int().min(100).optional(),
+  max_stake_minor: z.number().int().min(100).optional()
 });
 export type CountryDTO = z.infer<typeof CountrySchema>;
 
@@ -86,7 +97,7 @@ export const SystemFeatureFlagsSchema = z.object({
 
 export type SystemFeatureFlags = z.infer<typeof SystemFeatureFlagsSchema>;
 
-export const KYCStatusSchema = z.enum(["UNVERIFIED", "PENDING", "APPROVED", "REJECTED"]);
+export const KYCStatusSchema = z.enum(["NOT_STARTED", "UNVERIFIED", "PENDING", "APPROVED", "REJECTED"]);
 export type KYCStatus = z.infer<typeof KYCStatusSchema>;
 
 export const KYCTierSchema = z.enum(["TIER_0", "TIER_1"]);
@@ -96,7 +107,7 @@ export const KYCProfileSchema = z.object({
   id: z.string().uuid().optional(),
   user_id: z.string().min(1).max(64),
   country_code: CountryCodeSchema,
-  document_type: z.string().min(2).max(32),
+  document_type: z.string().min(2).max(32).optional(),
   document_number: z.string().min(1).max(64).optional(),
   status: KYCStatusSchema,
   tier: KYCTierSchema.default("TIER_0"),
@@ -117,6 +128,28 @@ export const PaymentMethodSchema = z.object({
   config: z.record(z.unknown()).optional()
 });
 export type PaymentMethodDTO = z.infer<typeof PaymentMethodSchema>;
+
+export const PaymentMethodSpecSchema = z.object({
+  id: z.string().uuid().optional(),
+  country_code: CountryCodeSchema,
+  method: z.enum(["pix", "spei", "pse", "mercado_pago", "khipu", "yape"]),
+  enabled: z.boolean().default(false),
+  created_at: z.string().optional()
+});
+export type PaymentMethodSpecDTO = z.infer<typeof PaymentMethodSpecSchema>;
+
+export const PaymentIntentSchema = z.object({
+  id: z.string().uuid().optional(),
+  user_id: z.string().uuid(),
+  country_code: CountryCodeSchema,
+  currency: DisplayCurrencyCodeSchema,
+  amount_minor: z.number().int().positive(),
+  method: z.string().min(1).max(32),
+  status: z.enum(["PENDING", "COMPLETED", "CANCELLED", "REJECTED"]).default("PENDING"),
+  psp_reference: z.string().optional(),
+  created_at: z.string().optional()
+});
+export type PaymentIntentDTO = z.infer<typeof PaymentIntentSchema>;
 
 // ==========================================
 // ZONAS REGULATÓRIAS E DOMÍNIOS ESPELHO

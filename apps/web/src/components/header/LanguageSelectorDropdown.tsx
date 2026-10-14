@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useTranslation, Locale } from "../../i18n";
+import { useTranslation, Locale, ActiveDisplayCurrency } from "../../i18n";
 
 export interface LanguageOption {
   code: Locale;
@@ -17,8 +17,10 @@ export const LANGUAGE_OPTIONS: LanguageOption[] = [
   { code: "es-PE", label: "Español", country: "Perú", flag: "🇵🇪" },
 ];
 
+const CURRENCY_OPTIONS: ActiveDisplayCurrency[] = ["BRL", "MXN", "COP", "ARS", "CLP", "PEN", "USD"];
+
 export const LanguageSelectorDropdown: React.FC = () => {
-  const { locale, setLocale } = useTranslation();
+  const { locale, setLocale, currency, setCurrency, t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -62,11 +64,24 @@ export const LanguageSelectorDropdown: React.FC = () => {
         }}
         onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(34, 197, 94, 0.4)")}
         onMouseLeave={(e) => (e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.08)")}
-        title={`Idioma: ${currentOption.label} (${currentOption.country})`}
+        title={`Idioma: ${currentOption.label} (${currentOption.country}) · ${currency}`}
       >
         <span style={{ fontSize: "14px", lineHeight: 1 }}>{currentOption.flag}</span>
         <span style={{ fontFamily: "'Geist', sans-serif" }}>
           {currentOption.code.startsWith("pt") ? "PT" : "ES"}
+        </span>
+        <span
+          data-testid="active-display-currency-badge"
+          style={{
+            fontSize: "10px",
+            color: "#22C55E",
+            background: "rgba(34, 197, 94, 0.12)",
+            padding: "1px 4px",
+            borderRadius: "3px",
+            fontFamily: "'Geist Mono', monospace",
+          }}
+        >
+          {currency}
         </span>
         <svg
           width="10"
@@ -97,8 +112,8 @@ export const LanguageSelectorDropdown: React.FC = () => {
             backgroundColor: "#151D2B",
             border: "1px solid rgba(255, 255, 255, 0.1)",
             borderRadius: "8px",
-            padding: "4px",
-            minWidth: "170px",
+            padding: "6px",
+            minWidth: "205px",
             zIndex: 1000,
             boxShadow: "0 10px 30px rgba(0, 0, 0, 0.6)",
             backdropFilter: "blur(8px)",
@@ -120,7 +135,7 @@ export const LanguageSelectorDropdown: React.FC = () => {
                   alignItems: "center",
                   justifyContent: "space-between",
                   width: "100%",
-                  padding: "8px 10px",
+                  padding: "7px 10px",
                   background: isSelected ? "rgba(34, 197, 94, 0.12)" : "transparent",
                   border: "none",
                   borderRadius: "5px",
@@ -149,6 +164,49 @@ export const LanguageSelectorDropdown: React.FC = () => {
               </button>
             );
           })}
+
+          <div
+            style={{
+              height: "1px",
+              background: "rgba(255, 255, 255, 0.08)",
+              margin: "6px 0",
+            }}
+          />
+          <div style={{ padding: "2px 6px 4px", fontSize: "10px", color: "#8A92A1", fontWeight: 700 }}>
+            {t("common.currencies.select_currency")}
+          </div>
+          <div
+            data-testid="currency-selector-group"
+            style={{ display: "flex", flexWrap: "wrap", gap: "4px", padding: "0 4px 4px" }}
+          >
+            {CURRENCY_OPTIONS.map((curr) => {
+              const isCurrSelected = currency === curr;
+              return (
+                <button
+                  key={curr}
+                  type="button"
+                  data-testid={`currency-option-${curr}`}
+                  onClick={() => {
+                    setCurrency(curr);
+                    setIsOpen(false);
+                  }}
+                  style={{
+                    padding: "3px 7px",
+                    borderRadius: "4px",
+                    border: isCurrSelected ? "1px solid #22C55E" : "1px solid rgba(255, 255, 255, 0.1)",
+                    background: isCurrSelected ? "rgba(34, 197, 94, 0.18)" : "rgba(11, 14, 20, 0.6)",
+                    color: isCurrSelected ? "#22C55E" : "#DCE1EA",
+                    fontSize: "10.5px",
+                    fontWeight: isCurrSelected ? 700 : 500,
+                    fontFamily: "'Geist Mono', monospace",
+                    cursor: "pointer",
+                  }}
+                >
+                  {curr}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

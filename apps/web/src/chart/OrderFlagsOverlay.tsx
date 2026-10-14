@@ -38,15 +38,16 @@ export function OrderFlagsOverlay({
   useEffect(() => {
     if (!chartInstance) return;
     try {
-      const timeScale = chartInstance.timeScale();
+      let timeScale: any = chartInstance.timeScale();
       const handleRangeChange = () => {
         setRedrawKey((k) => k + 1);
       };
       timeScale.subscribeVisibleTimeRangeChange(handleRangeChange);
       return () => {
         try {
-          timeScale.unsubscribeVisibleTimeRangeChange(handleRangeChange);
+          timeScale?.unsubscribeVisibleTimeRangeChange(handleRangeChange);
         } catch { /* ignore */ }
+        timeScale = null;
       };
     } catch {
       return undefined;

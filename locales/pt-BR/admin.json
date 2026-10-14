@@ -1,0 +1,18 @@
+{
+  "title": "Painel de Administração Multi-País",
+  "country_status": "Status dos Países",
+  "active": "Ativo",
+  "inactive": "Inativo",
+  "toggle_flag": "Alternar Recurso",
+  "flags": {
+    "payments_enabled": "Pagamentos Reais",
+    "kyc_required": "KYC Obrigatório",
+    "otc_enabled": "Mercado OTC Demo",
+    "synthetic_enabled": "Índices Sintéticos"
+  },
+  "metrics": {
+    "requests": "Requisições",
+    "geoblocked": "Bloqueios Geográficos",
+    "latency_p95": "Latência p95"
+  }
+}

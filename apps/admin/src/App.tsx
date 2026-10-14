@@ -35,11 +35,48 @@ export const App: React.FC = () => {
   const [indexStatus, setIndexStatus] = useState<"ACTIVE" | "PAUSED">("ACTIVE");
   const [showModal, setShowModal] = useState<boolean>(false);
   const [justification, setJustification] = useState<string>("");
+
+  // Filtros Globais Multi-País da Seção 11.2 (País, Moeda, Status, Data)
+  const [filterCountry, setFilterCountry] = useState<string>("ALL");
+  const [filterCurrency, setFilterCurrency] = useState<string>("ALL");
+  const [filterStatus, setFilterStatus] = useState<string>("ALL");
+  const [filterDate, setFilterDate] = useState<string>("");
+
   const [usersList, setUsersList] = useState([
-    { id: "usr_br_001", email: "trader1@broker.test", status: "ACTIVE", country: "BR", demoBalance: "US$ 10.000,00" },
-    { id: "usr_mx_002", email: "trader2@broker.test", status: "ACTIVE", country: "MX", demoBalance: "US$ 10.000,00" },
-    { id: "usr_co_003", email: "trader3@broker.test", status: "BLOCKED", country: "CO", demoBalance: "US$ 10.000,00" }
+    { id: "usr_br_001", email: "trader1@broker.test", status: "ACTIVE", country: "BR", currency: "BRL", createdAt: "2026-10-08", demoBalance: "US$ 10.000,00 (R$ 55.000,00)" },
+    { id: "usr_mx_002", email: "trader2@broker.test", status: "ACTIVE", country: "MX", currency: "MXN", createdAt: "2026-10-08", demoBalance: "US$ 10.000,00 (Mex$ 195.000,00)" },
+    { id: "usr_co_003", email: "trader3@broker.test", status: "BLOCKED", country: "CO", currency: "COP", createdAt: "2026-10-08", demoBalance: "US$ 10.000,00 (Col$ 41.500.000)" },
+    { id: "usr_ar_004", email: "trader4@broker.test", status: "ACTIVE", country: "AR", currency: "ARS", createdAt: "2026-10-08", demoBalance: "US$ 10.000,00 ($ 9.800.000,00)" },
+    { id: "usr_cl_005", email: "trader5@broker.test", status: "ACTIVE", country: "CL", currency: "CLP", createdAt: "2026-10-08", demoBalance: "US$ 10.000,00 (CLP$ 9.400.000)" },
+    { id: "usr_pe_006", email: "trader6@broker.test", status: "ACTIVE", country: "PE", currency: "PEN", createdAt: "2026-10-08", demoBalance: "US$ 10.000,00 (S/. 37.500,00)" }
   ]);
+
+  const contractsByCountry = [
+    { id: "cnt_901", userId: "usr_br_001", country: "BR", currency: "BRL", symbol: "SYNTH_VOL_50", direction: "UP", stakeMinor: 1000, payoutPct: 85, status: "SETTLED", result: "WIN", date: "2026-10-08" },
+    { id: "cnt_902", userId: "usr_mx_002", country: "MX", currency: "MXN", symbol: "BTCUSD_OTC", direction: "DOWN", stakeMinor: 2500, payoutPct: 85, status: "OPEN", result: "PENDING", date: "2026-10-08" },
+    { id: "cnt_903", userId: "usr_co_003", country: "CO", currency: "COP", symbol: "EURUSD_OTC", direction: "UP", stakeMinor: 1500, payoutPct: 85, status: "SETTLED", result: "LOSS", date: "2026-10-08" },
+    { id: "cnt_904", userId: "usr_ar_004", country: "AR", currency: "ARS", symbol: "ETHUSD_OTC", direction: "UP", stakeMinor: 2000, payoutPct: 85, status: "SETTLED", result: "WIN", date: "2026-10-08" },
+    { id: "cnt_905", userId: "usr_cl_005", country: "CL", currency: "CLP", symbol: "XAUUSD_OTC", direction: "DOWN", stakeMinor: 3000, payoutPct: 85, status: "SETTLED", result: "DRAW", date: "2026-10-08" },
+    { id: "cnt_906", userId: "usr_pe_006", country: "PE", currency: "PEN", symbol: "BTCUSD_OTC", direction: "UP", stakeMinor: 1200, payoutPct: 85, status: "OPEN", result: "PENDING", date: "2026-10-08" }
+  ];
+
+  const ledgerByCurrency = [
+    { currency: "BRL", country: "BR", liabilityAccount: "platform:demo:BRL:liability", revenueAccount: "platform:demo:BRL:revenue", payoutAccount: "platform:demo:BRL:payout", balanceFormatted: "R$ 2.200.000,00 (Demo)" },
+    { currency: "MXN", country: "MX", liabilityAccount: "platform:demo:MXN:liability", revenueAccount: "platform:demo:MXN:revenue", payoutAccount: "platform:demo:MXN:payout", balanceFormatted: "Mex$ 3.900.000,00 (Demo)" },
+    { currency: "COP", country: "CO", liabilityAccount: "platform:demo:COP:liability", revenueAccount: "platform:demo:COP:revenue", payoutAccount: "platform:demo:COP:payout", balanceFormatted: "Col$ 498.000.000 (Demo)" },
+    { currency: "ARS", country: "AR", liabilityAccount: "platform:demo:ARS:liability", revenueAccount: "platform:demo:ARS:revenue", payoutAccount: "platform:demo:ARS:payout", balanceFormatted: "$ 98.000.000,00 (Demo)" },
+    { currency: "CLP", country: "CL", liabilityAccount: "platform:demo:CLP:liability", revenueAccount: "platform:demo:CLP:revenue", payoutAccount: "platform:demo:CLP:payout", balanceFormatted: "CLP$ 94.000.000 (Demo)" },
+    { currency: "PEN", country: "PE", liabilityAccount: "platform:demo:PEN:liability", revenueAccount: "platform:demo:PEN:revenue", payoutAccount: "platform:demo:PEN:payout", balanceFormatted: "S/. 300.000,00 (Demo)" }
+  ];
+
+  const alertsByCountry = [
+    { id: "alt_br", country: "BR", currency: "BRL", severity: "OK", message: "Feed OTC e Sintético operando nominalmente (18ms p95)", date: "2026-10-08" },
+    { id: "alt_mx", country: "MX", currency: "MXN", severity: "OK", message: "Feed OTC e Sintético operando nominalmente (34ms p95)", date: "2026-10-08" },
+    { id: "alt_co", country: "CO", currency: "COP", severity: "OK", message: "Feed OTC e Sintético operando nominalmente (29ms p95)", date: "2026-10-08" },
+    { id: "alt_ar", country: "AR", currency: "ARS", severity: "OK", message: "Feed OTC e Sintético operando nominalmente (24ms p95)", date: "2026-10-08" },
+    { id: "alt_cl", country: "CL", currency: "CLP", severity: "OK", message: "Feed OTC e Sintético operando nominalmente (27ms p95)", date: "2026-10-08" },
+    { id: "alt_pe", country: "PE", currency: "PEN", severity: "OK", message: "Feed OTC e Sintético operando nominalmente (31ms p95)", date: "2026-10-08" }
+  ];
 
   // Estado dos 6 Países e suas Feature Flags em Runtime (Fase 2)
   const [countries, setCountries] = useState<CountryAdminItem[]>([
@@ -52,7 +89,7 @@ export const App: React.FC = () => {
   ]);
 
   // Logs de Geoblocking em tempo real (Fase 2)
-  const [geoblockLogs, setGeoblockLogs] = useState<GeoblockLogItem[]>([
+  const [geoblockLogs] = useState<GeoblockLogItem[]>([
     { id: "1", timestamp: "10:42:01", country: "US", maskedIp: "198.51.***.45", reason: "Origem não autorizada na Fase 2", status: 403 },
     { id: "2", timestamp: "10:41:30", country: "FR", maskedIp: "185.12.***.89", reason: "Origem não autorizada na Fase 2", status: 403 },
     { id: "3", timestamp: "10:40:15", country: "DE", maskedIp: "194.88.***.12", reason: "Origem não autorizada na Fase 2", status: 403 },
@@ -149,8 +186,52 @@ export const App: React.FC = () => {
     }));
   };
 
+  const filteredUsers = usersList.filter(u => {
+    if (filterCountry !== "ALL" && u.country !== filterCountry) return false;
+    if (filterCurrency !== "ALL" && u.currency !== filterCurrency) return false;
+    if (filterStatus !== "ALL" && u.status !== filterStatus) return false;
+    if (filterDate && !u.createdAt.startsWith(filterDate)) return false;
+    return true;
+  });
+
+  const filteredContracts = contractsByCountry.filter(c => {
+    if (filterCountry !== "ALL" && c.country !== filterCountry) return false;
+    if (filterCurrency !== "ALL" && c.currency !== filterCurrency) return false;
+    if (filterStatus !== "ALL" && c.status !== filterStatus) return false;
+    if (filterDate && !c.date.startsWith(filterDate)) return false;
+    return true;
+  });
+
+  const filteredLedger = ledgerByCurrency.filter(l => {
+    if (filterCountry !== "ALL" && l.country !== filterCountry) return false;
+    if (filterCurrency !== "ALL" && l.currency !== filterCurrency) return false;
+    return true;
+  });
+
+  const filteredAlerts = alertsByCountry.filter(a => {
+    if (filterCountry !== "ALL" && a.country !== filterCountry) return false;
+    if (filterCurrency !== "ALL" && a.currency !== filterCurrency) return false;
+    if (filterDate && !a.date.startsWith(filterDate)) return false;
+    return true;
+  });
+
   return (
     <div style={{ minHeight: "100vh", background: "#0B0E14", color: "#FFFFFF", display: "flex", flexDirection: "column", fontFamily: "sans-serif" }}>
+      {/* Banner Global Modo Demo Obrigatório (Seção 4.4, 9.2, 16) */}
+      <div
+        data-testid="admin-demo-banner"
+        style={{
+          background: "#101622",
+          borderBottom: "1px solid rgba(246, 195, 68, 0.3)",
+          color: "#F6C344",
+          fontSize: "11px",
+          fontWeight: "bold",
+          textAlign: "center",
+          padding: "5px 16px"
+        }}
+      >
+        🛡️ Modo Demo — sem dinheiro real · Ledger 100% Demo em minor units · payments_enabled: false
+      </div>
       {/* Header */}
       <header style={{
         height: "60px",
@@ -274,13 +355,120 @@ export const App: React.FC = () => {
 
       {/* Main Content */}
       <main style={{ padding: "24px", flex: 1, maxWidth: "1280px", width: "100%", margin: "0 auto" }}>
+        {/* Barra Global de Filtros Multi-País (Seção 11.2: País, Moeda, Status, Data) */}
+        <div
+          data-testid="admin-multicountry-filters"
+          style={{
+            background: "#161A25",
+            borderRadius: "8px",
+            padding: "12px 16px",
+            border: "1px solid #2B2F3A",
+            marginBottom: "20px",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "12px",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: "12px", fontWeight: "bold", color: "#F6C344" }}>Filtros Multi-País:</span>
+            <label style={{ fontSize: "12px", color: "#9B9FA4", display: "flex", alignItems: "center", gap: "6px" }}>
+              País:
+              <select
+                data-testid="admin-filter-country"
+                value={filterCountry}
+                onChange={(e) => setFilterCountry(e.target.value)}
+                style={{ background: "#0B0E14", color: "#FFFFFF", border: "1px solid #2B2F3A", borderRadius: "4px", padding: "4px 8px", fontSize: "12px" }}
+              >
+                <option value="ALL">Todos (6 Países)</option>
+                <option value="BR">Brasil (BR)</option>
+                <option value="MX">México (MX)</option>
+                <option value="CO">Colômbia (CO)</option>
+                <option value="AR">Argentina (AR)</option>
+                <option value="CL">Chile (CL)</option>
+                <option value="PE">Peru (PE)</option>
+              </select>
+            </label>
+
+            <label style={{ fontSize: "12px", color: "#9B9FA4", display: "flex", alignItems: "center", gap: "6px" }}>
+              Moeda:
+              <select
+                data-testid="admin-filter-currency"
+                value={filterCurrency}
+                onChange={(e) => setFilterCurrency(e.target.value)}
+                style={{ background: "#0B0E14", color: "#FFFFFF", border: "1px solid #2B2F3A", borderRadius: "4px", padding: "4px 8px", fontSize: "12px" }}
+              >
+                <option value="ALL">Todas (6 Moedas)</option>
+                <option value="BRL">BRL (R$)</option>
+                <option value="MXN">MXN ($)</option>
+                <option value="COP">COP ($)</option>
+                <option value="ARS">ARS ($)</option>
+                <option value="CLP">CLP ($)</option>
+                <option value="PEN">PEN (S/)</option>
+              </select>
+            </label>
+
+            <label style={{ fontSize: "12px", color: "#9B9FA4", display: "flex", alignItems: "center", gap: "6px" }}>
+              Status:
+              <select
+                data-testid="admin-filter-status"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                style={{ background: "#0B0E14", color: "#FFFFFF", border: "1px solid #2B2F3A", borderRadius: "4px", padding: "4px 8px", fontSize: "12px" }}
+              >
+                <option value="ALL">Todos</option>
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="BLOCKED">BLOCKED</option>
+                <option value="OPEN">OPEN</option>
+                <option value="SETTLED_WIN">SETTLED_WIN</option>
+                <option value="SETTLED_LOSS">SETTLED_LOSS</option>
+                <option value="PENDING">PENDING</option>
+                <option value="UNDER_REVIEW">UNDER_REVIEW</option>
+                <option value="APPROVED">APPROVED</option>
+                <option value="FIRING">FIRING</option>
+              </select>
+            </label>
+
+            <label style={{ fontSize: "12px", color: "#9B9FA4", display: "flex", alignItems: "center", gap: "6px" }}>
+              Data:
+              <input
+                data-testid="admin-filter-date"
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                style={{ background: "#0B0E14", color: "#FFFFFF", border: "1px solid #2B2F3A", borderRadius: "4px", padding: "3px 8px", fontSize: "12px" }}
+              />
+            </label>
+          </div>
+
+          <button
+            onClick={() => {
+              setFilterCountry("ALL");
+              setFilterCurrency("ALL");
+              setFilterStatus("ALL");
+              setFilterDate("");
+            }}
+            style={{
+              background: "#2B2F3A",
+              color: "#FFFFFF",
+              border: "none",
+              padding: "4px 10px",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "11px",
+            }}
+          >
+            Limpar Filtros
+          </button>
+        </div>
         
         {/* ABA 0: USUÁRIOS E BLOQUEIO (T14) */}
         {activeTab === "users" && (
           <div style={{ background: "#161A25", borderRadius: "8px", padding: "20px", border: "1px solid #2B2F3A" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <div>
-                <h3 style={{ fontSize: "16px", fontWeight: "bold" }}>Gestão e Bloqueio de Usuários (T14)</h3>
+                <h3 style={{ fontSize: "16px", fontWeight: "bold" }}>Gestão e Bloqueio de Usuários por País (T14 / Fase 2)</h3>
                 <p style={{ fontSize: "12px", color: "#9B9FA4", marginTop: "4px" }}>
                   Auditoria B-14 ativa: toda suspensão exige justificativa técnica registrada no log forense.
                 </p>
@@ -296,17 +484,19 @@ export const App: React.FC = () => {
                   <th style={{ padding: "12px 8px" }}>ID do Usuário</th>
                   <th style={{ padding: "12px 8px" }}>Email</th>
                   <th style={{ padding: "12px 8px" }}>País</th>
+                  <th style={{ padding: "12px 8px" }}>Moeda</th>
                   <th style={{ padding: "12px 8px" }}>Saldo Demo (Blnk)</th>
                   <th style={{ padding: "12px 8px", textAlign: "center" }}>Status</th>
                   <th style={{ padding: "12px 8px", textAlign: "center" }}>Ação Administrativa</th>
                 </tr>
               </thead>
               <tbody>
-                {usersList.map(u => (
+                {filteredUsers.map(u => (
                   <tr key={u.id} style={{ borderBottom: "1px solid #1E222D" }}>
                     <td style={{ padding: "12px 8px", fontFamily: "monospace", color: "#F6C344" }}>{u.id}</td>
                     <td style={{ padding: "12px 8px" }}>{u.email}</td>
                     <td style={{ padding: "12px 8px" }}>{u.country}</td>
+                    <td style={{ padding: "12px 8px", color: "#9B9FA4" }}>{u.currency}</td>
                     <td style={{ padding: "12px 8px", fontWeight: "bold", color: "#089981" }}>{u.demoBalance}</td>
                     <td style={{ padding: "12px 8px", textAlign: "center" }}>
                       <span style={{
@@ -540,7 +730,13 @@ export const App: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {kycProfiles.map(item => (
+                {kycProfiles
+                  .filter(item => {
+                    if (filterCountry !== "ALL" && item.country !== filterCountry) return false;
+                    if (filterStatus !== "ALL" && item.status !== filterStatus) return false;
+                    return true;
+                  })
+                  .map(item => (
                   <tr key={item.id} style={{ borderBottom: "1px solid #1E222D" }}>
                     <td style={{ padding: "8px", fontFamily: "monospace" }}>{item.userId}</td>
                     <td style={{ padding: "8px", fontWeight: "bold" }}>{item.country}</td>
@@ -668,45 +864,139 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* ABA 5: CONTRATOS & RISCO */}
+        {/* ABA 5: CONTRATOS POR PAÍS, LEDGER POR MOEDA & RISCO (Seção 11.1) */}
         {activeTab === "contracts" && (
-          <div style={{ background: "#161A25", borderRadius: "8px", padding: "20px" }}>
-            <h3 style={{ fontSize: "16px", marginBottom: "16px" }}>Visão Geral de Ordens e Exposição de Risco Regional</h3>
-            <p style={{ fontSize: "13px", color: "#9B9FA4", marginBottom: "20px" }}>
-              Monitoramento do Float Cap de solvência (3% máximo) compartilhado entre os 6 países.
-            </p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
-              <div style={{ background: "#0B0E14", padding: "16px", borderRadius: "6px", border: "1px solid #2B2F3A" }}>
-                <span style={{ fontSize: "12px", color: "#9B9FA4" }}>Capital Float da Plataforma</span>
-                <h4 style={{ fontSize: "20px", fontWeight: "bold", color: "#FFFFFF", marginTop: "4px" }}>US$ 1.000.000,00</h4>
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div style={{ background: "#161A25", borderRadius: "8px", padding: "20px" }}>
+              <h3 style={{ fontSize: "16px", marginBottom: "16px" }}>Visão Geral de Ordens e Exposição de Risco Regional</h3>
+              <p style={{ fontSize: "13px", color: "#9B9FA4", marginBottom: "20px" }}>
+                Monitoramento do Float Cap de solvência (3% máximo) compartilhado entre os 6 países.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
+                <div style={{ background: "#0B0E14", padding: "16px", borderRadius: "6px", border: "1px solid #2B2F3A" }}>
+                  <span style={{ fontSize: "12px", color: "#9B9FA4" }}>Capital Float da Plataforma</span>
+                  <h4 style={{ fontSize: "20px", fontWeight: "bold", color: "#FFFFFF", marginTop: "4px" }}>US$ 1.000.000,00</h4>
+                </div>
+                <div style={{ background: "#0B0E14", padding: "16px", borderRadius: "6px", border: "1px solid #2B2F3A" }}>
+                  <span style={{ fontSize: "12px", color: "#9B9FA4" }}>Teto de Risco por Vela (3%)</span>
+                  <h4 style={{ fontSize: "20px", fontWeight: "bold", color: "#F6C344", marginTop: "4px" }}>US$ 30.000,00</h4>
+                </div>
+                <div style={{ background: "#0B0E14", padding: "16px", borderRadius: "6px", border: "1px solid #2B2F3A" }}>
+                  <span style={{ fontSize: "12px", color: "#9B9FA4" }}>Payout Fixo Demo</span>
+                  <h4 style={{ fontSize: "20px", fontWeight: "bold", color: "#089981", marginTop: "4px" }}>85%</h4>
+                </div>
               </div>
-              <div style={{ background: "#0B0E14", padding: "16px", borderRadius: "6px", border: "1px solid #2B2F3A" }}>
-                <span style={{ fontSize: "12px", color: "#9B9FA4" }}>Teto de Risco por Vela (3%)</span>
-                <h4 style={{ fontSize: "20px", fontWeight: "bold", color: "#F6C344", marginTop: "4px" }}>US$ 30.000,00</h4>
-              </div>
-              <div style={{ background: "#0B0E14", padding: "16px", borderRadius: "6px", border: "1px solid #2B2F3A" }}>
-                <span style={{ fontSize: "12px", color: "#9B9FA4" }}>Payout Fixo Demo</span>
-                <h4 style={{ fontSize: "20px", fontWeight: "bold", color: "#089981", marginTop: "4px" }}>85%</h4>
-              </div>
+            </div>
+
+            {/* Contratos por País (Seção 11.1) */}
+            <div style={{ background: "#161A25", borderRadius: "8px", padding: "20px", border: "1px solid #2B2F3A" }}>
+              <h4 style={{ fontSize: "15px", fontWeight: "bold", marginBottom: "12px" }}>Contratos UP/DOWN por País (60s / Payout 85%)</h4>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                <thead>
+                  <tr style={{ color: "#9B9FA4", borderBottom: "1px solid #2B2F3A", textAlign: "left" }}>
+                    <th style={{ padding: "8px" }}>ID Contrato</th>
+                    <th style={{ padding: "8px" }}>País</th>
+                    <th style={{ padding: "8px" }}>Moeda</th>
+                    <th style={{ padding: "8px" }}>Ativo</th>
+                    <th style={{ padding: "8px" }}>Direção</th>
+                    <th style={{ padding: "8px" }}>Stake (Minor)</th>
+                    <th style={{ padding: "8px" }}>Status</th>
+                    <th style={{ padding: "8px" }}>Data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredContracts.map((ct) => (
+                    <tr key={ct.id} style={{ borderBottom: "1px solid #1E222D" }}>
+                      <td style={{ padding: "8px", fontFamily: "monospace", color: "#F6C344" }}>{ct.id}</td>
+                      <td style={{ padding: "8px", fontWeight: "bold" }}>{ct.country}</td>
+                      <td style={{ padding: "8px" }}>{ct.currency}</td>
+                      <td style={{ padding: "8px" }}>{ct.symbol}</td>
+                      <td style={{ padding: "8px", color: ct.direction === "UP" ? "#089981" : "#F23645", fontWeight: "bold" }}>{ct.direction}</td>
+                      <td style={{ padding: "8px", fontFamily: "monospace" }}>{ct.stakeMinor}</td>
+                      <td style={{ padding: "8px" }}>{ct.status} ({ct.result})</td>
+                      <td style={{ padding: "8px", color: "#9B9FA4" }}>{ct.date}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Ledger Demo por Moeda (Seção 7 & 11.1) */}
+            <div style={{ background: "#161A25", borderRadius: "8px", padding: "20px", border: "1px solid #2B2F3A" }}>
+              <h4 style={{ fontSize: "15px", fontWeight: "bold", marginBottom: "12px" }}>Ledger de Dupla Entrada Demo por Moeda (Blnk)</h4>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                <thead>
+                  <tr style={{ color: "#9B9FA4", borderBottom: "1px solid #2B2F3A", textAlign: "left" }}>
+                    <th style={{ padding: "8px" }}>País</th>
+                    <th style={{ padding: "8px" }}>Moeda</th>
+                    <th style={{ padding: "8px" }}>Saldo Consolidado</th>
+                    <th style={{ padding: "8px" }}>Platform Liability</th>
+                    <th style={{ padding: "8px" }}>Platform Revenue</th>
+                    <th style={{ padding: "8px" }}>Platform Payout</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLedger.map((lg) => (
+                    <tr key={lg.currency} style={{ borderBottom: "1px solid #1E222D" }}>
+                      <td style={{ padding: "8px", fontWeight: "bold" }}>{lg.country}</td>
+                      <td style={{ padding: "8px", color: "#F6C344", fontWeight: "bold" }}>{lg.currency}</td>
+                      <td style={{ padding: "8px", fontFamily: "monospace", color: "#089981" }}>{lg.balanceFormatted}</td>
+                      <td style={{ padding: "8px", fontFamily: "monospace" }}>{lg.liabilityAccount}</td>
+                      <td style={{ padding: "8px", fontFamily: "monospace", color: "#089981" }}>{lg.revenueAccount}</td>
+                      <td style={{ padding: "8px", fontFamily: "monospace", color: "#F23645" }}>{lg.payoutAccount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
 
-        {/* ABA 6: AUDITORIA FORENSE */}
+        {/* ABA 6: AUDITORIA FORENSE & ALERTAS POR PAÍS (Seção 11.1 & 12.2) */}
         {activeTab === "audit" && (
-          <div style={{ background: "#161A25", borderRadius: "8px", padding: "20px" }}>
-            <h3 style={{ fontSize: "16px", marginBottom: "16px" }}>Auditoria Forense & Invariantes Invioláveis</h3>
-            <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px" }}>
-              <li style={{ padding: "10px", background: "#0B0E14", borderRadius: "6px", border: "1px solid #089981", color: "#089981" }}>
-                ✓ [I-01 / I-02] Partidas Dobradas: Moedas de exibição não afetam o ledger (100% USD minor).
-              </li>
-              <li style={{ padding: "10px", background: "#0B0E14", borderRadius: "6px", border: "1px solid #089981", color: "#089981" }}>
-                ✓ [S-04] Geoblocking Inviolável: 100% de conexões fora de BR, MX, CO, AR, CL, PE interceptadas.
-              </li>
-              <li style={{ padding: "10px", background: "#0B0E14", borderRadius: "6px", border: "1px solid #089981", color: "#089981" }}>
-                ✓ [D-09] Conexão Única & Feeds Reais: Circuit Breaker impede congelamento de ativos OTC demo.
-              </li>
-            </ul>
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div style={{ background: "#161A25", borderRadius: "8px", padding: "20px", border: "1px solid #2B2F3A" }}>
+              <h3 style={{ fontSize: "16px", marginBottom: "16px" }}>Alertas Operacionais por País (Seção 11.1 & 12.2)</h3>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                <thead>
+                  <tr style={{ color: "#9B9FA4", borderBottom: "1px solid #2B2F3A", textAlign: "left" }}>
+                    <th style={{ padding: "8px" }}>ID Alerta</th>
+                    <th style={{ padding: "8px" }}>País</th>
+                    <th style={{ padding: "8px" }}>Moeda</th>
+                    <th style={{ padding: "8px" }}>Severidade</th>
+                    <th style={{ padding: "8px" }}>Mensagem / Regra</th>
+                    <th style={{ padding: "8px" }}>Data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAlerts.map((al) => (
+                    <tr key={al.id} style={{ borderBottom: "1px solid #1E222D" }}>
+                      <td style={{ padding: "8px", fontFamily: "monospace" }}>{al.id}</td>
+                      <td style={{ padding: "8px", fontWeight: "bold", color: "#F6C344" }}>{al.country}</td>
+                      <td style={{ padding: "8px" }}>{al.currency}</td>
+                      <td style={{ padding: "8px", color: al.severity === "CRITICAL" ? "#F23645" : "#F6C344", fontWeight: "bold" }}>{al.severity}</td>
+                      <td style={{ padding: "8px" }}>{al.message}</td>
+                      <td style={{ padding: "8px", color: "#9B9FA4" }}>{al.date}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ background: "#161A25", borderRadius: "8px", padding: "20px" }}>
+              <h3 style={{ fontSize: "16px", marginBottom: "16px" }}>Auditoria Forense & Invariantes Invioláveis</h3>
+              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px" }}>
+                <li style={{ padding: "10px", background: "#0B0E14", borderRadius: "6px", border: "1px solid #089981", color: "#089981" }}>
+                  ✓ [I-01 / I-02] Partidas Dobradas: Moedas de exibição não afetam o ledger (100% minor units).
+                </li>
+                <li style={{ padding: "10px", background: "#0B0E14", borderRadius: "6px", border: "1px solid #089981", color: "#089981" }}>
+                  ✓ [S-04] Geoblocking Inviolável: 100% de conexões fora de BR, MX, CO, AR, CL, PE interceptadas.
+                </li>
+                <li style={{ padding: "10px", background: "#0B0E14", borderRadius: "6px", border: "1px solid #089981", color: "#089981" }}>
+                  ✓ [D-09] Conexão Única & Feeds Reais: Circuit Breaker impede congelamento de ativos OTC demo.
+                </li>
+              </ul>
+            </div>
           </div>
         )}
       </main>

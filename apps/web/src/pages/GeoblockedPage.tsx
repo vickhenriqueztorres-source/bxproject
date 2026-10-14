@@ -1,168 +1,83 @@
 import React from 'react';
-import { SecondaryLayout } from '../components/layout/SecondaryLayout';
 import { useTranslation } from '../i18n';
+import { LanguageSelectorDropdown } from '../components/header/LanguageSelectorDropdown';
 
-export function GeoblockedPage() {
+export const GeoblockedPage: React.FC = () => {
   const { t } = useTranslation();
 
   return (
-    <SecondaryLayout showRiskDisclaimer={true}>
+    <div
+      data-testid="geoblocked-page"
+      style={{
+        minHeight: '100vh',
+        background: '#0B0E14',
+        color: '#F4F5F7',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+        fontFamily: "'Geist', sans-serif",
+      }}
+    >
       <div
-        data-testid="geoblocked-page"
         style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '65vh',
+          background: '#101622',
+          border: '1px solid rgba(229, 72, 77, 0.35)',
+          borderRadius: '12px',
+          padding: '32px',
+          maxWidth: '520px',
+          width: '100%',
           textAlign: 'center',
-          padding: '24px 16px',
         }}
       >
-        {/* Ícone de Borda / Escudo Geográfico */}
-        <div
-          style={{
-            width: '260px',
-            height: '140px',
-            backgroundColor: '#111A2B',
-            border: '1px solid #1F2A3A',
-            borderRadius: '10px',
-            position: 'relative',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '32px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-          }}
-        >
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: '24px',
-              borderBottom: '1px solid #1F2A3A',
-              display: 'flex',
-              alignItems: 'center',
-              padding: '0 10px',
-              gap: '6px',
-            }}
-          >
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#EF4444' }} />
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#8A96A8' }} />
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#22C55E' }} />
-          </div>
-
-          <div
-            style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '50%',
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              border: '2px solid rgba(239, 68, 68, 0.4)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '30px',
-              color: '#EF4444',
-            }}
-          >
-            🌐
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+          <LanguageSelectorDropdown />
         </div>
-
-        {/* Eyebrow */}
         <div
           style={{
-            fontSize: '12px',
-            letterSpacing: '0.15em',
-            color: '#8A96A8',
+            display: 'inline-block',
+            padding: '4px 10px',
+            borderRadius: '4px',
+            background: 'rgba(246, 195, 68, 0.14)',
+            color: '#F6C344',
+            fontSize: '11px',
             fontWeight: 700,
-            textTransform: 'uppercase',
-            marginBottom: '10px',
+            marginBottom: '16px',
           }}
         >
-          {t("geoblock.title")}
+          {t('common.demo_banner')}
         </div>
-
-        {/* Título Principal */}
-        <h1
-          style={{
-            fontSize: '36px',
-            fontWeight: 800,
-            margin: '0 0 16px',
-            color: '#E6EDF5',
-            letterSpacing: '-0.02em',
-          }}
-        >
-          {t("geoblock.title")}
+        <h1 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '12px', color: '#F4F5F7' }}>
+          {t('geoblock.title')}
         </h1>
-
-        {/* Mensagem explicativa */}
-        <p
-          style={{
-            fontSize: '15px',
-            lineHeight: 1.6,
-            color: '#8A96A8',
-            maxWidth: '560px',
-            margin: '0 0 24px',
-          }}
-        >
-          {t("geoblock.message")}
+        <p style={{ fontSize: '13.5px', color: '#8A92A1', lineHeight: 1.5, marginBottom: '12px' }}>
+          {t('geoblock.message')}
         </p>
-
-        {/* Lista dos 6 Países */}
-        <div
-          style={{
-            backgroundColor: '#111A2B',
-            border: '1px solid #1F2A3A',
-            borderRadius: '8px',
-            padding: '16px 24px',
-            marginBottom: '24px',
-            color: '#22C55E',
-            fontWeight: 600,
-            fontSize: '15px',
-            letterSpacing: '0.02em',
-          }}
-        >
-          {t("geoblock.countries")}
-        </div>
-
-        {/* Aviso de VPN / Suporte */}
-        <div
-          style={{
-            fontSize: '13px',
-            color: '#64748B',
-            maxWidth: '480px',
-            lineHeight: 1.5,
-            marginBottom: '28px',
-          }}
-        >
-          {t("geoblock.support")}
-        </div>
-
-        {/* Botão de Tentar Novamente */}
+        <p style={{ fontSize: '14px', fontWeight: 700, color: '#22C55E', marginBottom: '16px' }}>
+          🇧🇷 🇲🇽 🇨🇴 🇦🇷 🇨🇱 🇵🇪 {t('geoblock.countries')}
+        </p>
+        <p style={{ fontSize: '12px', color: '#8A92A1', marginBottom: '24px' }}>
+          {t('geoblock.support')}
+        </p>
         <button
           type="button"
+          data-testid="geoblock-retry-btn"
           onClick={() => window.location.reload()}
           style={{
-            backgroundColor: '#22C55E',
+            background: '#22C55E',
             color: '#0B0E14',
             border: 'none',
             borderRadius: '6px',
-            padding: '12px 28px',
-            fontSize: '14px',
+            padding: '10px 20px',
+            fontSize: '13px',
             fontWeight: 700,
             cursor: 'pointer',
-            transition: 'background-color 0.2s',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#16A34A')}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#22C55E')}
         >
-          {t("geoblock.button_retry")}
+          {t('geoblock.button_retry')}
         </button>
       </div>
-    </SecondaryLayout>
+    </div>
   );
-}
+};

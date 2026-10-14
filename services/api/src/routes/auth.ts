@@ -239,6 +239,70 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (server, 
         return reply.status(200).send(fullUser);
       }
     );
+
+    // 8. Atualização de perfil PUT /me
+    server.put(
+      `${prefix}/me`,
+      {
+        preHandler: [(server as any).authenticate]
+      },
+      async (request, reply) => {
+        const user = request.user;
+        if (!user) {
+          return reply.status(401).send({ error: "UNAUTHORIZED", message: "Usuario no autenticado" });
+        }
+
+        const body = (request.body || {}) as any;
+        try {
+          const updatedUser = await authService.updateProfile(user.id, {
+            name: body.name,
+            country: body.country,
+            phone_code: body.phone_code || body.phoneCode,
+            phone_number: body.phone_number || body.phoneNumber
+          });
+
+          const token = await authService.createToken(updatedUser);
+          return reply.status(200).send({
+            success: true,
+            message: "Perfil guardado con éxito",
+            user: updatedUser,
+            token
+          });
+        } catch (err: any) {
+          server.log.error(err, "Failed to update profile");
+          const msg = err.message || "Error al actualizar perfil";
+          return reply.status(400).send({ error: "BAD_REQUEST", message: msg });
+        }
+      }
+    );
+
+    // 9. Alteração de senha PUT /password
+    server.put(
+      `${prefix}/password`,
+      {
+        preHandler: [(server as any).authenticate]
+      },
+      async (request, reply) => {
+        const user = request.user;
+        if (!user) {
+          return reply.status(401).send({ error: "UNAUTHORIZED", message: "Usuario no autenticado" });
+        }
+
+        const body = (request.body || {}) as any;
+        try {
+          const res = await authService.updatePassword(user.id, {
+            current_password: body.current_password || body.currentPassword,
+            new_password: body.new_password || body.newPassword
+          });
+
+          return reply.status(200).send(res);
+        } catch (err: any) {
+          server.log.error(err, "Failed to update password");
+          const msg = err.message || "Error al actualizar contraseña";
+          return reply.status(400).send({ error: "BAD_REQUEST", message: msg });
+        }
+      }
+    );
   };
 
   registerAuthRoutes("/api/v1/auth");

@@ -12,6 +12,7 @@ import { GridLayoutPopover, type GridLayout } from '../../chart/GridLayoutPopove
 import { LanguageSelectorDropdown } from './LanguageSelectorDropdown';
 import type { Contract } from '../../api/client';
 import { tradingFeedManager } from '../../feed/TradingFeedManager';
+import { AuthService } from '../../auth/auth-service';
 
 export type SymbolOption = AssetOption;
 const AVAILABLE_SYMBOLS = ASSET_CATALOG;
@@ -927,9 +928,7 @@ export function TerminalHeader({
               </div>
               <strong style={{ fontSize: '14px', color: '#fff', fontFamily: "'Space Grotesk', sans-serif" }}>
                 {accountType === 'DEMO'
-                  ? balanceMinor !== null
-                    ? formatMinor(balanceMinor)
-                    : '$10.000,00'
+                  ? formatMinor(balanceMinor ?? (AuthService.getSession()?.user?.demoBalanceMinor ?? 1000000))
                   : '$0,00'}
               </strong>
             </div>

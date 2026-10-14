@@ -117,9 +117,20 @@ export function setLocaleCookie(locale: string, days = 365): void {
   document.cookie = `broker_locale=${encodeURIComponent(locale)}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 
+const COUNTRY_TO_CURRENCY: Record<CountryCode, DisplayCurrencyCode> = {
+  BR: "BRL",
+  MX: "MXN",
+  CO: "COP",
+  AR: "ARS",
+  CL: "CLP",
+  PE: "PEN"
+};
+
 interface I18nContextType {
   locale: Locale;
   setLocale: (loc: Locale) => void;
+  country: CountryCode;
+  geoBlocked: boolean;
   currency: ActiveDisplayCurrency;
   setCurrency: (curr: ActiveDisplayCurrency) => void;
   timezone: string;
@@ -131,6 +142,8 @@ interface I18nContextType {
 const I18nContext = createContext<I18nContextType | null>(null);
 
 export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [geoBlocked, setGeoBlocked] = useState<boolean>(false);
+
   const [locale, setLocaleState] = useState<Locale>(() => {
     // 1. Tenta recuperar do cookie
     const cookieLocale = getLocaleCookie() as Locale;
@@ -174,6 +187,9 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return detected;
   });
 
+  const country = LOCALE_TO_COUNTRY[locale] || "BR";
+  const timezone = getTimezoneForCountry(country);
+
   const [currency, setCurrencyState] = useState<ActiveDisplayCurrency>(() => {
     try {
       if (typeof localStorage !== "undefined") {
@@ -183,32 +199,42 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     } catch {}
-    return "USD";
+    return COUNTRY_TO_CURRENCY[LOCALE_TO_COUNTRY[locale] || "BR"] || "BRL";
   });
 
-  const country = LOCALE_TO_COUNTRY[locale] || "BR";
-  const timezone = getTimezoneForCountry(country);
-
-  // Consulta assíncrona ao Region Router caso o usuário não tenha definido explicitamente
+  // Consulta assíncrona ao Region Router (Seções 3.1 e 10.1)
   useEffect(() => {
     let isExplicit = false;
+    let isCurrencyExplicit = false;
     try {
       isExplicit = Boolean(localStorage.getItem("broker_locale_explicit"));
+      isCurrencyExplicit = Boolean(localStorage.getItem("broker_currency_explicit"));
     } catch {}
 
-    if (!isExplicit && typeof fetch !== "undefined") {
+    if (typeof fetch !== "undefined") {
       fetch("/api/v1/geo/resolve")
         .then((res) => {
           if (!res.ok) throw new Error("geo resolve failed");
           return res.json();
         })
         .then((data) => {
-          if (data && data.defaultLocale && catalogs[data.defaultLocale]) {
+          if (data && data.allowed === false) {
+            setGeoBlocked(true);
+            return;
+          }
+          setGeoBlocked(false);
+          if (!isExplicit && data && data.defaultLocale && catalogs[data.defaultLocale]) {
             setLocaleState(data.defaultLocale);
             try {
               localStorage.setItem("broker_locale", data.defaultLocale);
             } catch {}
             setLocaleCookie(data.defaultLocale);
+          }
+          if (!isCurrencyExplicit && data && data.defaultCurrency && CURRENCY_CONFIGS[data.defaultCurrency as DisplayCurrencyCode]) {
+            setCurrencyState(data.defaultCurrency as ActiveDisplayCurrency);
+            try {
+              localStorage.setItem("broker_currency", data.defaultCurrency);
+            } catch {}
           }
         })
         .catch(() => {
@@ -219,9 +245,15 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const setLocale = (loc: Locale) => {
     setLocaleState(loc);
+    const nextCountry = LOCALE_TO_COUNTRY[loc] || "BR";
+    const autoCurr = COUNTRY_TO_CURRENCY[nextCountry];
     try {
       localStorage.setItem("broker_locale", loc);
       localStorage.setItem("broker_locale_explicit", "true");
+      if (!localStorage.getItem("broker_currency_explicit") && autoCurr) {
+        setCurrencyState(autoCurr);
+        localStorage.setItem("broker_currency", autoCurr);
+      }
     } catch {}
     setLocaleCookie(loc);
   };
@@ -231,6 +263,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       if (typeof localStorage !== "undefined") {
         localStorage.setItem("broker_currency", curr);
+        localStorage.setItem("broker_currency_explicit", "true");
       }
     } catch {}
   };
@@ -315,6 +348,8 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         locale,
         setLocale,
+        country,
+        geoBlocked,
         currency,
         setCurrency,
         timezone,
@@ -334,6 +369,8 @@ export function useTranslation(): I18nContextType {
     return {
       locale: "es-ES",
       setLocale: () => {},
+      country: "MX",
+      geoBlocked: false,
       currency: "USD",
       setCurrency: () => {},
       timezone: "America/Mexico_City",

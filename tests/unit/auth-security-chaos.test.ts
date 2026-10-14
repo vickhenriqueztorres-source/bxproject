@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { AuthService as BackendAuthService } from '../../services/api/src/services/auth-service';
 
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'unit-test-jwt-secret-min-32-chars-long-valid!';
+
 describe('Audit: Auth Security, Chaos & Financial Invariants (S-01 a S-06, I-01)', () => {
   function createMockPg() {
     const users: any[] = [];

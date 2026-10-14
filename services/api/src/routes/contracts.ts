@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from "fastify";
-import { OpenContractSchema } from "@broker/shared";
+import { OpenContractSchema, COUNTRY_STAKE_LIMITS } from "@broker/shared";
 import { ContractService } from "../services/contract-service.js";
 
 export const contractRoutes: FastifyPluginAsync = async (server) => {
@@ -39,12 +39,35 @@ export const contractRoutes: FastifyPluginAsync = async (server) => {
         });
       }
 
+      // Validação de Stake Mínimo e Máximo por País (Seção 6.1)
+      const countryCode = (request.geoContext?.country || "BR") as keyof typeof COUNTRY_STAKE_LIMITS;
+      const limits = COUNTRY_STAKE_LIMITS[countryCode] || { min_stake_minor: 100, max_stake_minor: 10000 };
+      if (parseResult.data.stake_minor < limits.min_stake_minor || parseResult.data.stake_minor > limits.max_stake_minor) {
+        return reply.status(400).send({
+          error: "STAKE_OUT_OF_BOUNDS",
+          message: `Stake fora dos limites permitidos para o país ${countryCode} (${limits.min_stake_minor} a ${limits.max_stake_minor} minor units)`
+        });
+      }
+
       try {
         const { contract, isDuplicate } = await contractService.openContract(
           user.id,
           idempotencyKey,
           parseResult.data
         );
+
+        if (!isDuplicate) {
+          try {
+            const { RegionalMetricsService } = await import("../services/metrics.js");
+            RegionalMetricsService.getInstance().incrementContractCreated(
+              parseResult.data.symbol,
+              parseResult.data.direction,
+              request.geoContext?.country || "BR"
+            );
+          } catch {
+            // Ignora erro de métrica
+          }
+        }
 
         const statusCode = isDuplicate ? 200 : 201;
         return reply.status(statusCode).send({

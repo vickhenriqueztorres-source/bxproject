@@ -2,6 +2,46 @@ import type { CandlestickData, UTCTimestamp } from 'lightweight-charts';
 import type { Candle } from '../api/client';
 import type { Tick } from '../feed/protocol';
 
+export function normalizeTimeSeconds(raw: unknown): UTCTimestamp | null {
+  if (raw === null || raw === undefined || typeof raw === 'boolean') return null;
+
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw) || raw <= 0) return null;
+    const sec = raw > 1e11 ? Math.floor(raw / 1000) : Math.floor(raw);
+    return sec > 0 ? (sec as UTCTimestamp) : null;
+  }
+
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric) && !trimmed.includes('-') && !trimmed.includes(':')) {
+      if (numeric <= 0) return null;
+      const sec = numeric > 1e11 ? Math.floor(numeric / 1000) : Math.floor(numeric);
+      return sec > 0 ? (sec as UTCTimestamp) : null;
+    }
+
+    let isoCandidate = trimmed;
+    if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(isoCandidate)) {
+      isoCandidate = isoCandidate.replace(/\s+/, 'T');
+    }
+    if (
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(isoCandidate) &&
+      !/([Zz]|[+-]\d{2}:?\d{2})$/.test(isoCandidate)
+    ) {
+      isoCandidate = `${isoCandidate}Z`;
+    }
+
+    const parsedMs = Date.parse(isoCandidate);
+    if (!Number.isFinite(parsedMs) || parsedMs <= 0) return null;
+    const sec = Math.floor(parsedMs / 1000);
+    return sec > 0 ? (sec as UTCTimestamp) : null;
+  }
+
+  return null;
+}
+
 export type Timeframe = '5s' | '15s' | '30s' | '1m' | '5m';
 
 export function timeframeSeconds(tf: Timeframe): number {
@@ -26,11 +66,8 @@ export function isSubMinuteTimeframe(tf: Timeframe): boolean {
 }
 
 export function candleData(row: Candle): CandlestickData<UTCTimestamp> {
-  const t = typeof row.time === 'number'
-    ? row.time
-    : Number.isFinite(Number(row.time))
-    ? Number(row.time)
-    : Math.floor(Date.parse(String(row.time)) / 1000);
+  const normalizedSec = normalizeTimeSeconds(row.time);
+  const t = normalizedSec ?? 0;
 
   const open = Number(row.open);
   const close = Number(row.close);
@@ -41,7 +78,7 @@ export function candleData(row: Candle): CandlestickData<UTCTimestamp> {
   const low = Math.min(open, close, Number.isFinite(rawLow) ? rawLow : close);
 
   return {
-    time: (t > 10000000000 ? Math.floor(t / 1000) : t) as UTCTimestamp,
+    time: t as UTCTimestamp,
     open,
     high,
     low,
@@ -51,7 +88,7 @@ export function candleData(row: Candle): CandlestickData<UTCTimestamp> {
 
 /**
  * Converte velas base (1m) para qualquer timeframe suportado ('5s', '15s', '30s', '1m', '5m').
- * Mantém os invariantes de OHLC e ordenação estritamente crescente de UTCTimestamp.
+ * Mantém os invariantes de OHLC, fusão de duplicatas e ordenação estritamente crescente de UTCTimestamp (#1344).
  */
 export function resampleCandles(
   candles: Candle[],
@@ -59,21 +96,55 @@ export function resampleCandles(
 ): CandlestickData<UTCTimestamp>[] {
   if (!candles || candles.length === 0) return [];
 
-  // Ordenar e sanitizar dados de entrada
-  const baseData = candles.map(candleData).sort((a, b) => a.time - b.time);
-  const unique = baseData.filter(
-    (row, idx) => idx === 0 || row.time > baseData[idx - 1].time
-  );
+  // Ordenar, validar e mesclar duplicatas nos dados de entrada (#1344)
+  const validBase: CandlestickData<UTCTimestamp>[] = [];
+  for (let i = 0; i < candles.length; i++) {
+    const c = candleData(candles[i]);
+    if (
+      c.time > 0 &&
+      Number.isFinite(c.open) &&
+      Number.isFinite(c.high) &&
+      Number.isFinite(c.low) &&
+      Number.isFinite(c.close) &&
+      c.open > 0 &&
+      c.high > 0 &&
+      c.low > 0 &&
+      c.close > 0
+    ) {
+      validBase.push(c);
+    }
+  }
+
+  if (validBase.length === 0) return [];
+
+  validBase.sort((a, b) => a.time - b.time);
+
+  const unique: CandlestickData<UTCTimestamp>[] = [validBase[0]];
+  let hasSubMinuteInput = false;
+
+  for (let i = 1; i < validBase.length; i++) {
+    const cur = validBase[i];
+    const prev = unique[unique.length - 1];
+    if (cur.time === prev.time) {
+      prev.high = Math.max(prev.high, cur.high, prev.open, cur.close);
+      prev.low = Math.min(prev.low, cur.low, prev.open, cur.close);
+      prev.close = cur.close;
+    } else if (cur.time > prev.time) {
+      if (cur.time - prev.time < 60) {
+        hasSubMinuteInput = true;
+      }
+      unique.push(cur);
+    }
+  }
 
   const stepSec = timeframeSeconds(timeframe);
 
-  // Caso 1: 1m (idêntico à base canônica de 1 minuto)
-  if (timeframe === '1m') {
+  // Caso 1: 1m ou 5m (agregação por bucket temporal se for 5m ou se a entrada contiver barras sub-minuto)
+  if (timeframe === '1m' && !hasSubMinuteInput) {
     return unique;
   }
 
-  // Caso 2: 5m (agregação de blocos de 300 segundos)
-  if (timeframe === '5m') {
+  if (timeframe === '1m' || timeframe === '5m') {
     const bucketsMap = new Map<number, CandlestickData<UTCTimestamp>>();
     for (const c of unique) {
       const bucketTime = (Math.floor(c.time / stepSec) * stepSec) as UTCTimestamp;
@@ -87,8 +158,8 @@ export function resampleCandles(
           close: c.close,
         });
       } else {
-        existing.high = Math.max(existing.high, c.high);
-        existing.low = Math.min(existing.low, c.low);
+        existing.high = Math.max(existing.high, c.high, existing.open, c.close);
+        existing.low = Math.min(existing.low, c.low, existing.open, c.close);
         existing.close = c.close; // Fechamento é o da última vela do período
       }
     }
@@ -203,14 +274,13 @@ export function candleFromTick(
   previous: CandlestickData<UTCTimestamp> | null,
   timeframe: Timeframe = '1m'
 ): CandlestickData<UTCTimestamp> | null {
-  const epoch = Date.parse(tick.ts);
-  if (!Number.isFinite(epoch)) return null;
+  const tsSeconds = normalizeTimeSeconds(tick.ts);
+  if (tsSeconds === null) return null;
 
   const stepSec = timeframeSeconds(timeframe);
-  const tsSeconds = Math.floor(epoch / 1000);
   const bucket = (Math.floor(tsSeconds / stepSec) * stepSec) as UTCTimestamp;
   const price = Number(tick.price);
-  if (!Number.isFinite(price)) return null;
+  if (!Number.isFinite(price) || price <= 0) return null;
 
   if (!previous || bucket > previous.time) {
     return {

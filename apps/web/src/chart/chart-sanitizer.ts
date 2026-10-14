@@ -21,14 +21,24 @@ export function normalizeTimeSeconds(time: unknown): number | null {
   if (typeof time === 'number') {
     num = time;
   } else if (typeof time === 'string') {
-    num = Number(time);
+    const trimmed = time.trim();
+    if (!trimmed) return null;
+    num = Number(trimmed);
     if (isNaN(num)) {
-      // Tentar parse de data ISO (ex: "2026-10-08T22:00:00Z")
-      const parsed = Date.parse(time);
-      if (!isNaN(parsed)) {
-        num = parsed;
+      // Tentar parse de data ISO em UTC estrito (ex: "2026-10-08T22:00:00Z" ou "2026-10-08 22:00:00")
+      // Se não possuir sufixo de fuso ('Z' ou ±HH:MM), força 'Z' para evitar buracos por fuso local (#1344)
+      const isoCandidate = trimmed.includes('T') ? trimmed : trimmed.replace(' ', 'T');
+      const hasExplicitTz = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(isoCandidate);
+      const parsedUtc = Date.parse(hasExplicitTz ? isoCandidate : `${isoCandidate}Z`);
+      if (!isNaN(parsedUtc)) {
+        num = parsedUtc;
       } else {
-        return null;
+        const parsedFallback = Date.parse(trimmed);
+        if (!isNaN(parsedFallback)) {
+          num = parsedFallback;
+        } else {
+          return null;
+        }
       }
     }
   } else {

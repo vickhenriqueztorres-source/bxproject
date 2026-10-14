@@ -232,8 +232,8 @@ const GridCell = React.memo(function GridCell({
       )}
 
       {/* Chart Canvas Area + Cell Order Ticket */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', position: 'relative' }}>
-        <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+      <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', position: 'relative' }}>
+        <div style={{ flex: 1, height: '100%', minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
           <ReconnectingOverlay isReconnecting={isStale} symbol={symbol} />
           <StalenessOverlay isStale={isStale} symbol={symbol} tickAgeMs={tickAgeMs} />
           <ChartSandbox
@@ -381,9 +381,18 @@ export function MultiChartGrid({
     });
   }, [layout, activeSymbol, openTabs, availableSymbols, visibleCellsCount]);
 
-  const handleCellTickUpdate = (sym: string, eventTime: number) => {
+  const cellsRef = useRef(cells);
+  cellsRef.current = cells;
+  const visibleCellsCountRef = useRef(visibleCellsCount);
+  visibleCellsCountRef.current = visibleCellsCount;
+  const isBinmax = isNewTraderoomEnabled();
+  const isBinmaxRef = useRef(isBinmax);
+  isBinmaxRef.current = isBinmax;
+
+  const handleCellTickUpdate = useCallback((sym: string, eventTime: number) => {
     cellEventTimes.current.set(sym, eventTime);
-    const visibleSyms = cells.slice(0, visibleCellsCount).map((c) => c.symbol);
+    if (isBinmaxRef.current || visibleCellsCountRef.current <= 1) return;
+    const visibleSyms = cellsRef.current.slice(0, visibleCellsCountRef.current).map((c) => c.symbol);
     if (visibleSyms.length > 1) {
       let minT = Infinity;
       let maxT = -Infinity;
@@ -397,10 +406,10 @@ export function MultiChartGrid({
       if (minT !== Infinity && maxT !== -Infinity) {
         setMaxSkewMs(Math.max(0, maxT - minT));
       }
-    } else {
-      setMaxSkewMs(0);
     }
-  };
+  }, []);
+
+  const noopFocus = useCallback(() => {}, []);
 
   const handleCellSymbolChange = useCallback((cellIndex: number, newSymbol: string) => {
     setCells((prev) => {
@@ -421,12 +430,10 @@ export function MultiChartGrid({
     }
   }, [cells, activeSymbol, onActiveSymbolChange]);
 
-  const isBinmax = isNewTraderoomEnabled();
-
   return (
     <div
       data-testid="multi-chart-grid"
-      style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', position: 'relative' }}
+      style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0, width: '100%', height: '100%', position: 'relative' }}
     >
       {/* Grid Layout Switcher Bar (Removido completamente no modo Binmax / Turbo Prata) */}
       {!isBinmax && (
@@ -574,11 +581,11 @@ export function MultiChartGrid({
       >
         {layout === '1x1' ? (
           <GridCell
-            key={`cell-1x1-${activeSymbol}`}
+            key="cell-0"
             symbol={activeSymbol}
             isActive={true}
-            onFocus={() => {}}
-            onSymbolChange={(sym) => onActiveSymbolChange(sym)}
+            onFocus={noopFocus}
+            onSymbolChange={onActiveSymbolChange}
             contracts={allContracts}
             availableSymbols={availableSymbols}
             onTickUpdate={handleCellTickUpdate}

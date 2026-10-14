@@ -14,6 +14,7 @@ import { formatMinor, formatCurrencyBinmax } from '../lib/money';
 import {
   candleData,
   candleFromTick,
+  normalizeTimeSeconds,
   resampleCandles,
   timeframeSeconds,
   isSubMinuteTimeframe,
@@ -82,7 +83,7 @@ export function PriceChart({
   const areaSeries = useRef<ISeriesApi<'Area'> | null>(null);
   const currentPriceLine = useRef<IPriceLine | null>(null);
   const currentPriceLineSeries = useRef<ISeriesApi<any> | null>(null);
-  const strikeLinesMap = useRef<Map<string, IPriceLine>>(new Map());
+  const strikeLinesMap = useRef<Map<string, { line: IPriceLine; series: ISeriesApi<any> }>>(new Map());
 
   const safeRemoveCurrentPriceLine = useCallback(() => {
     if (currentPriceLine.current) {
@@ -97,6 +98,20 @@ export function PriceChart({
       currentPriceLine.current = null;
       currentPriceLineSeries.current = null;
     }
+  }, []);
+
+  const safeRemoveStrikeLine = useCallback((entry: { line: IPriceLine; series: ISeriesApi<any> }) => {
+    try { entry.series.removePriceLine(entry.line); } catch { /* ignore */ }
+    try {
+      if (candleSeries.current && candleSeries.current !== entry.series) {
+        candleSeries.current.removePriceLine(entry.line);
+      }
+    } catch { /* ignore */ }
+    try {
+      if (areaSeries.current && areaSeries.current !== entry.series) {
+        areaSeries.current.removePriceLine(entry.line);
+      }
+    } catch { /* ignore */ }
   }, []);
   const indicatorSeriesMap = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
   const latestCandle = useRef<CandlestickData<UTCTimestamp> | null>(null);
@@ -127,16 +142,20 @@ export function PriceChart({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showAssetSelector]);
 
-  // Telemetria em Tempo Real In-Chart (Subetapa 03 / IQ Option Fidelity)
-  const [telemetryNow, setTelemetryNow] = useState(Date.now());
-  useEffect(() => {
-    const interval = setInterval(() => setTelemetryNow(Date.now()), 250);
-    return () => clearInterval(interval);
-  }, []);
-
   const openChartContracts = effectiveContracts.filter(
     (c) => (isSameAsset(c.symbol, symbol) || !c.symbol) && c.status === 'OPEN'
   );
+  const hasOpenChartContracts = openChartContracts.length > 0;
+
+  // Telemetria em Tempo Real In-Chart (Subetapa 03 / IQ Option Fidelity):
+  // Ativa o timer de 250ms APENAS quando há contratos abertos no gráfico, evitando 4 re-renders/s ociosos (#1345)
+  const [telemetryNow, setTelemetryNow] = useState(Date.now());
+  useEffect(() => {
+    if (!hasOpenChartContracts) return;
+    setTelemetryNow(Date.now());
+    const interval = setInterval(() => setTelemetryNow(Date.now()), 250);
+    return () => clearInterval(interval);
+  }, [hasOpenChartContracts]);
 
   let timeFormatted = '00:00';
   let totalStakeMinor = 0;
@@ -183,30 +202,73 @@ export function PriceChart({
     timeFormatted = `${mins}:${secs}`;
   }
 
+  const isBinmax = isNewTraderoomEnabled();
+
   // Retenção Histórica & Janela Deslizante Macro (Perigo 8 / Subetapas 4 & 6)
   const MAX_LOADED_BARS = 3500;
   const [internalCandles, setInternalCandles] = useState<Candle[]>(candles);
+  const internalCandlesRef = useRef<Candle[]>(internalCandles);
+  internalCandlesRef.current = internalCandles;
   const [internalSymbol, setInternalSymbol] = useState(symbol);
-  const observed = useRef({ symbol, sequence: 0, bars: new Map<UTCTimestamp, CandlestickData<UTCTimestamp>>(), pending: new Set<UTCTimestamp>() });
-  const renderContext = useRef({ symbol, timeframe, chartType });
-  renderContext.current = { symbol, timeframe, chartType };
+  const observed = useRef({
+    symbol,
+    sequence: 0,
+    lastTickTime: 0,
+    bars: new Map<UTCTimestamp, CandlestickData<UTCTimestamp>>(),
+    pending: new Set<UTCTimestamp>(),
+  });
+  const renderContext = useRef({ symbol, timeframe, chartType, priceDirection, isBinmax });
+  renderContext.current = { symbol, timeframe, chartType, priceDirection, isBinmax };
   const isLoadingHistoryRef = useRef(false);
   const hasMoreHistoryRef = useRef(true);
   const oldestLoadedTimeRef = useRef<number | null>(null);
   const shouldScrollToRealTimeRef = useRef(true);
+  const prevCandlesSigRef = useRef<{
+    symbol: string;
+    len: number;
+    firstTime: unknown;
+    lastTime: unknown;
+    lastClose: unknown;
+  } | null>(null);
 
-  // Sincronizar quando a prop inicial de candles ou o símbolo mudar (Subetapa 01)
+  // Sincronizar quando a prop inicial de candles ou o símbolo mudar sem perder estado em re-renders (#1345 / #1346)
   useEffect(() => {
+    const firstBar = candles[0];
+    const lastBar = candles.length > 0 ? candles[candles.length - 1] : undefined;
+    const prevSig = prevCandlesSigRef.current;
+    const symbolChanged = !prevSig || prevSig.symbol !== symbol;
+    const candlesIdentical =
+      !symbolChanged &&
+      prevSig.len === candles.length &&
+      prevSig.firstTime === firstBar?.time &&
+      prevSig.lastTime === lastBar?.time &&
+      prevSig.lastClose === lastBar?.close;
+
+    if (candlesIdentical) {
+      return;
+    }
+
+    prevCandlesSigRef.current = {
+      symbol,
+      len: candles.length,
+      firstTime: firstBar?.time,
+      lastTime: lastBar?.time,
+      lastClose: lastBar?.close,
+    };
+
     setInternalCandles(candles);
     setInternalSymbol(symbol);
-    if (observed.current.symbol !== symbol) {
-      observed.current = { symbol, sequence: 0, bars: new Map(), pending: new Set() };
+
+    if (symbolChanged) {
+      if (observed.current.symbol !== symbol) {
+        observed.current = { symbol, sequence: 0, lastTickTime: 0, bars: new Map(), pending: new Set() };
+      }
+      hasMoreHistoryRef.current = true;
+      isLoadingHistoryRef.current = false;
+      oldestLoadedTimeRef.current = null;
+      shouldScrollToRealTimeRef.current = true;
+      rafUpdaterRef.current.reset(symbol);
     }
-    hasMoreHistoryRef.current = true;
-    isLoadingHistoryRef.current = false;
-    oldestLoadedTimeRef.current = null;
-    shouldScrollToRealTimeRef.current = true;
-    rafUpdaterRef.current.reset(symbol);
   }, [candles, symbol]);
 
   // Ferramentas Gráficas e Indicadores Técnicos
@@ -224,9 +286,24 @@ export function PriceChart({
     setDrawings(loadSafeDrawings(symbol));
   }, [symbol]);
 
+  // Reset de referência de preço e sequência ao alternar ativo
+  useEffect(() => {
+    lastPrice.current = null;
+    rafUpdaterRef.current.resetSequence();
+    shouldScrollToRealTimeRef.current = true;
+  }, [symbol]);
+
   // Monitorar direção do preço e atualizar levemente o sentimento da comunidade
   useEffect(() => {
     if (!tick) return;
+    if (tick.symbol && tick.symbol !== symbol) return;
+    const tickSec =
+      typeof normalizeTimeSeconds === 'function'
+        ? normalizeTimeSeconds(tick.ts)
+        : typeof tick.ts === 'string' && Number.isFinite(Date.parse(tick.ts))
+          ? Math.floor(Date.parse(tick.ts) / 1000)
+          : null;
+    if (tickSec !== null && tickSec < observed.current.lastTickTime) return;
     const currentPrice = Number(tick.price);
     if (Number.isFinite(currentPrice)) {
       if (lastPrice.current !== null) {
@@ -240,16 +317,7 @@ export function PriceChart({
       }
       lastPrice.current = currentPrice;
     }
-  }, [tick]);
-
-  // Reset de referência de preço e sequência ao alternar ativo
-  useEffect(() => {
-    lastPrice.current = null;
-    rafUpdaterRef.current.resetSequence();
-    shouldScrollToRealTimeRef.current = true;
-  }, [symbol]);
-
-  const isBinmax = isNewTraderoomEnabled();
+  }, [tick, symbol]);
 
   // Callback de inicialização do canvas vindo do componente ilhado IsolatedChartHost
   const handleChartReady = useCallback(
@@ -260,18 +328,57 @@ export function PriceChart({
       areaSeries: ISeriesApi<'Area'>;
       timeScale: any;
     }) => {
+      if (chartInstance.current && chartInstance.current !== api.chart) {
+        safeRemoveCurrentPriceLine();
+        for (const [, entry] of strikeLinesMap.current.entries()) {
+          safeRemoveStrikeLine(entry);
+        }
+        strikeLinesMap.current.clear();
+        for (const [, series] of indicatorSeriesMap.current.entries()) {
+          try {
+            chartInstance.current.removeSeries(series);
+          } catch { /* ignore */ }
+        }
+        indicatorSeriesMap.current.clear();
+      }
       chartInstance.current = api.chart;
       candleSeries.current = api.candleSeries;
       areaSeries.current = api.areaSeries;
       setIsChartReady(true);
 
       if (shouldScrollToRealTimeRef.current) {
-        api.timeScale.scrollToRealTime();
+        try {
+          api.timeScale.scrollToRealTime();
+        } catch { /* ignore */ }
         shouldScrollToRealTimeRef.current = false;
       }
     },
-    []
+    [safeRemoveCurrentPriceLine, safeRemoveStrikeLine]
   );
+
+  const handleChartDispose = useCallback(() => {
+    rafUpdaterRef.current.cancel();
+    rafUpdaterRef.current.reset();
+    safeRemoveCurrentPriceLine();
+    for (const [, entry] of strikeLinesMap.current.entries()) {
+      safeRemoveStrikeLine(entry);
+    }
+    strikeLinesMap.current.clear();
+    if (chartInstance.current) {
+      for (const [, series] of indicatorSeriesMap.current.entries()) {
+        try {
+          chartInstance.current.removeSeries(series);
+        } catch { /* ignore */ }
+      }
+    }
+    indicatorSeriesMap.current.clear();
+    chartInstance.current = null;
+    candleSeries.current = null;
+    areaSeries.current = null;
+    latestCandle.current = null;
+    shouldScrollToRealTimeRef.current = true;
+    setIsChartReady(false);
+  }, [safeRemoveCurrentPriceLine, safeRemoveStrikeLine]);
 
   const effectiveCandles = internalSymbol === symbol ? internalCandles : [];
 
@@ -280,9 +387,8 @@ export function PriceChart({
       observed.current.symbol === symbol ? [...observed.current.bars.values()] : [], timeframe);
   }, [effectiveCandles, timeframe, chartType, symbol]);
 
-  // Atualiza referência da vela mais recente quando as velas reamostradas mudam
+  // Atualiza referência da vela mais recente quando as velas reamostradas mudam (sem resetar sequências do rAF)
   useEffect(() => {
-    rafUpdaterRef.current.reset();
     latestCandle.current = resampledCandles.at(-1) ?? null;
   }, [resampledCandles, isChartReady]);
 
@@ -298,43 +404,65 @@ export function PriceChart({
     const color = isBinmax ? '#DCE1EA' : (isUp ? '#00e676' : '#ff3d71');
     const title = isBinmax ? '' : (isUp ? '▲ Cotação' : '▼ Cotação');
 
-    currentPriceLine.current = activeSeries.createPriceLine({
-      price,
-      color,
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      axisLabelVisible: true,
-      title,
-    });
-    currentPriceLineSeries.current = activeSeries;
+    try {
+      currentPriceLine.current = activeSeries.createPriceLine({
+        price,
+        color,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title,
+      });
+      currentPriceLineSeries.current = activeSeries;
+    } catch { /* ignore if series is disposed */ }
   }, [chartType, isBinmax, safeRemoveCurrentPriceLine]);
 
-  // Cleanup geral ao desmontar o componente
+  // Cleanup geral ao desmontar o componente (#8 StrictMode & #9 Zombies)
   useEffect(() => {
     return () => {
       safeRemoveCurrentPriceLine();
+      for (const [, entry] of strikeLinesMap.current.entries()) {
+        safeRemoveStrikeLine(entry);
+      }
+      strikeLinesMap.current.clear();
+
+      if (chartInstance.current) {
+        for (const [, series] of indicatorSeriesMap.current.entries()) {
+          try {
+            chartInstance.current.removeSeries(series);
+          } catch { /* ignore */ }
+        }
+      }
+      indicatorSeriesMap.current.clear();
+
+      observed.current.bars.clear();
+      observed.current.pending.clear();
+      observed.current.sequence = 0;
+      observed.current.lastTickTime = 0;
+      prevCandlesSigRef.current = null;
+      lastPrice.current = null;
+      shouldScrollToRealTimeRef.current = true;
+      rafUpdaterRef.current.cancel();
+      rafUpdaterRef.current.reset();
       chartInstance.current = null;
       candleSeries.current = null;
       areaSeries.current = null;
       currentPriceLineSeries.current = null;
       latestCandle.current = null;
-      lastPrice.current = null;
-      strikeLinesMap.current.clear();
-      indicatorSeriesMap.current.clear();
-      rafUpdaterRef.current.cancel();
     };
-  }, [safeRemoveCurrentPriceLine]);
+  }, [safeRemoveCurrentPriceLine, safeRemoveStrikeLine]);
 
   // Limpeza de overlays, linhas de preço e strikes na troca de ativo (Subetapa 02)
+  const prevSymbolCleanupRef = useRef(symbol);
   useEffect(() => {
+    if (prevSymbolCleanupRef.current === symbol) return;
+    prevSymbolCleanupRef.current = symbol;
+
     safeRemoveCurrentPriceLine();
     lastPrice.current = null;
 
-    for (const [, line] of strikeLinesMap.current.entries()) {
-      try {
-        if (candleSeries.current) candleSeries.current.removePriceLine(line);
-        if (areaSeries.current) areaSeries.current.removePriceLine(line);
-      } catch { /* ignore */ }
+    for (const [, entry] of strikeLinesMap.current.entries()) {
+      safeRemoveStrikeLine(entry);
     }
     strikeLinesMap.current.clear();
 
@@ -345,25 +473,26 @@ export function PriceChart({
         chartInstance.current.timeScale().scrollToRealTime();
       } catch { /* ignore */ }
     }
-  }, [symbol, safeRemoveCurrentPriceLine]);
+  }, [symbol, safeRemoveCurrentPriceLine, safeRemoveStrikeLine]);
 
   // Lazy Loading Retroativo no Scroll para a Esquerda (Subetapa 4 & 6)
   useEffect(() => {
-    const chart = chartInstance.current;
+    let chart: IChartApi | null = chartInstance.current;
     if (!chart) return;
 
     let debounceTimer: any = null;
+    let cancelled = false;
 
     const onVisibleLogicalRangeChanged = (logicalRange: any) => {
-      if (!logicalRange || isLoadingHistoryRef.current || !hasMoreHistoryRef.current) return;
+      if (cancelled || !logicalRange || isLoadingHistoryRef.current || !hasMoreHistoryRef.current) return;
 
       // Se o usuário rolou até perto da borda esquerda (menos de 60 barras visíveis - Prefetch Preditivo)
       if (logicalRange.from < 60) {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(async () => {
-          if (isLoadingHistoryRef.current || !hasMoreHistoryRef.current) return;
+          if (cancelled || isLoadingHistoryRef.current || !hasMoreHistoryRef.current) return;
 
-          const sorted = [...internalCandles].sort((a, b) => (Number(a.time) || 0) - (Number(b.time) || 0));
+          const sorted = [...internalCandlesRef.current].sort((a, b) => (Number(a.time) || 0) - (Number(b.time) || 0));
           const oldest = sorted[0];
           if (!oldest) return;
 
@@ -377,7 +506,7 @@ export function PriceChart({
           isLoadingHistoryRef.current = true;
           try {
             const olderBars = await fetchHistoricalCandlesChunk(symbol, oldestEpoch, 1000);
-            if (renderContext.current.symbol !== symbol) return;
+            if (cancelled || renderContext.current.symbol !== symbol) return;
             if (!olderBars || olderBars.length === 0) {
               hasMoreHistoryRef.current = false;
               return;
@@ -407,7 +536,7 @@ export function PriceChart({
               }
 
               const addedCount = merged.length - prev.length;
-              if (addedCount > 0 && chartInstance.current) {
+              if (addedCount > 0 && chartInstance.current && !cancelled) {
                 const currentRange = chartInstance.current.timeScale().getVisibleLogicalRange();
                 if (currentRange) {
                   chartInstance.current.timeScale().setVisibleLogicalRange({
@@ -428,15 +557,19 @@ export function PriceChart({
       }
     };
 
-    chart.timeScale().subscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
+    try {
+      chart.timeScale().subscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
+    } catch { /* ignore */ }
 
     return () => {
+      cancelled = true;
       if (debounceTimer) clearTimeout(debounceTimer);
       try {
-        chart.timeScale().unsubscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
+        chart?.timeScale().unsubscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
       } catch { /* ignore */ }
+      chart = null;
     };
-  }, [isChartReady, internalCandles, symbol]);
+  }, [isChartReady, symbol]);
 
   // Sincronização dos 10 Indicadores Técnicos Nativos
   useEffect(() => {
@@ -444,6 +577,7 @@ export function PriceChart({
     if (!chart || resampledCandles.length === 0) return;
 
     for (const ind of indicators) {
+      try {
       if (ind.enabled) {
         if (ind.type === 'SMA') {
           let series = indicatorSeriesMap.current.get(ind.id);
@@ -658,10 +792,11 @@ export function PriceChart({
           }
         }
       }
+      } catch { /* ignore if chart/series is disposed */ }
     }
   }, [isChartReady, indicators, resampledCandles]);
 
-  // Atualização em tempo real de novos ticks com Throttling rAF a 60fps
+  // Atualização em tempo real de novos ticks com Throttling rAF a 60fps (#10 / Issue #1351)
   useEffect(() => {
     if (!tick) return;
 
@@ -671,62 +806,108 @@ export function PriceChart({
     }
 
     const sample = safeCandleFromTick(tick, null, '5s');
-    if (sample && tick.sequence > observed.current.sequence) {
-      observed.current.bars.set(sample.time, safeCandleFromTick(tick, observed.current.bars.get(sample.time) ?? null, '5s')!);
+    const tickTimeSec =
+      typeof normalizeTimeSeconds === 'function'
+        ? normalizeTimeSeconds(tick.ts)
+        : sample
+          ? Number(sample.time)
+          : typeof tick.ts === 'string' && Number.isFinite(Date.parse(tick.ts))
+            ? Math.floor(Date.parse(tick.ts) / 1000)
+            : null;
+    const hasValidSeq = typeof tick.sequence === 'number' && Number.isFinite(tick.sequence);
+    const isSeqMonotonic = !hasValidSeq || tick.sequence > observed.current.sequence;
+    const isTimeMonotonic = tickTimeSec !== null && tickTimeSec >= observed.current.lastTickTime;
+    const stepSec = timeframeSeconds(renderContext.current.timeframe);
+    const targetBucketTime =
+      tickTimeSec !== null ? Math.floor(tickTimeSec / stepSec) * stepSec : -Infinity;
+    const isBucketNotInPast =
+      !latestCandle.current ||
+      targetBucketTime >= Number(latestCandle.current.time) ||
+      (tickTimeSec !== null && tickTimeSec >= Number(latestCandle.current.time));
+
+    if (sample && isSeqMonotonic && isTimeMonotonic && isBucketNotInPast) {
+      observed.current.bars.set(
+        sample.time,
+        safeCandleFromTick(tick, observed.current.bars.get(sample.time) ?? null, '5s')!
+      );
       observed.current.pending.add(sample.time);
-      observed.current.sequence = tick.sequence;
+      if (hasValidSeq) {
+        observed.current.sequence = tick.sequence;
+      }
+      if (tickTimeSec !== null) {
+        observed.current.lastTickTime = tickTimeSec;
+      }
       if (observed.current.bars.size > MAX_LOADED_BARS * 12) {
         const oldest = observed.current.bars.keys().next().value;
-        if (oldest !== undefined) { observed.current.bars.delete(oldest); observed.current.pending.delete(oldest); }
+        if (oldest !== undefined) {
+          observed.current.bars.delete(oldest);
+          observed.current.pending.delete(oldest);
+        }
       }
+    } else if (!isTimeMonotonic || !isBucketNotInPast) {
+      return;
     }
+
     rafUpdaterRef.current.push(tick, (targetTick) => {
-      if (renderContext.current.symbol !== symbol || renderContext.current.timeframe !== timeframe || renderContext.current.chartType !== chartType) return;
+      if (!chartInstance.current) return;
+      const ctx = renderContext.current;
+      if (ctx.symbol !== symbol) return;
       // Re-valida dentro do callback rAF caso o ativo tenha mudado enquanto o frame aguardava
-      if (targetTick.symbol && targetTick.symbol !== symbol) {
+      if (targetTick.symbol && targetTick.symbol !== ctx.symbol) {
         return;
       }
       const price = Number(targetTick.price);
 
-      const updates = mergeObservedCandles(latestCandle.current ? [latestCandle.current] : [],
-        [...observed.current.pending].map((time) => observed.current.bars.get(time)!), timeframe, false);
-      for (const next of updates) {
-        if (chartType === 'candles' && candleSeries.current) {
-          candleSeries.current.update(next);
-        } else if (chartType === 'line' && areaSeries.current) {
-          areaSeries.current.update({ time: next.time, value: next.close });
-        }
-        latestCandle.current = next;
+      if (observed.current.pending.size > 0) {
+        const updates = mergeObservedCandles(
+          latestCandle.current ? [latestCandle.current] : [],
+          [...observed.current.pending].map((time) => observed.current.bars.get(time)!),
+          ctx.timeframe,
+          false
+        );
+        try {
+          for (const next of updates) {
+            if (latestCandle.current && Number(next.time) < Number(latestCandle.current.time)) {
+              continue;
+            }
+            // Sincroniza ambas as séries em memória para que a troca candles <-> line seja instantânea sem perda de ticks
+            candleSeries.current?.update(next);
+            areaSeries.current?.update({ time: next.time, value: next.close });
+            latestCandle.current = next;
+          }
+        } catch { /* ignore if series is disposed */ }
+        observed.current.pending.clear();
       }
-      observed.current.pending.clear();
 
       // Atualizar Linha de Preço Atual
-      const activeSeries = chartType === 'candles' ? candleSeries.current : areaSeries.current;
+      const activeSeries = ctx.chartType === 'candles' ? candleSeries.current : areaSeries.current;
       if (activeSeries && Number.isFinite(price)) {
-        const isUp = priceDirection === 'UP' || priceDirection === 'NEUTRAL';
-        const color = isBinmax ? '#DCE1EA' : (isUp ? '#00e676' : '#ff3d71');
-        const title = isBinmax ? '' : (isUp ? '▲ Cotação' : '▼ Cotação');
+        const isUp = ctx.priceDirection === 'UP' || ctx.priceDirection === 'NEUTRAL';
+        const color = ctx.isBinmax ? '#DCE1EA' : (isUp ? '#00e676' : '#ff3d71');
+        const title = ctx.isBinmax ? '' : (isUp ? '▲ Cotação' : '▼ Cotação');
 
-        if (currentPriceLine.current) {
-          currentPriceLine.current.applyOptions({
-            price,
-            color,
-            title,
-          });
-        } else {
-          currentPriceLine.current = activeSeries.createPriceLine({
-            price,
-            color,
-            lineWidth: 1,
-            lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
-            title,
-          });
-          currentPriceLineSeries.current = activeSeries;
-        }
+        try {
+          if (currentPriceLine.current) {
+            currentPriceLine.current.applyOptions({
+              price,
+              color,
+              title,
+            });
+          } else {
+            currentPriceLine.current = activeSeries.createPriceLine({
+              price,
+              color,
+              lineWidth: 1,
+              lineStyle: LineStyle.Dashed,
+              axisLabelVisible: true,
+              title,
+            });
+            currentPriceLineSeries.current = activeSeries;
+          }
+        } catch { /* ignore if series is disposed */ }
       }
     });
-  }, [tick, chartType, priceDirection, timeframe, isBinmax, symbol, resampledCandles, isChartReady]);
+  }, [tick, symbol]);
 
   // Pausa e Retomada de Renderização sob Segundo Plano
   useEffect(() => {
@@ -740,7 +921,7 @@ export function PriceChart({
   // Sincronizar linhas de strike para ordens ativas
   useEffect(() => {
     const activeSeries = chartType === 'candles' ? candleSeries.current : areaSeries.current;
-    if (!activeSeries) return;
+    if (!activeSeries || !chartInstance.current) return;
 
     const currentOpenIds = new Set(
       effectiveContracts
@@ -748,12 +929,10 @@ export function PriceChart({
         .map((c) => c.id)
     );
 
-    // Remover linhas de contratos liquidados ou removidos
-    for (const [id, line] of strikeLinesMap.current.entries()) {
-      if (!currentOpenIds.has(id)) {
-        try {
-          activeSeries.removePriceLine(line);
-        } catch { /* ignore */ }
+    // Remover linhas de contratos liquidados, removidos ou que mudaram de série (candles <-> line)
+    for (const [id, entry] of strikeLinesMap.current.entries()) {
+      if (!currentOpenIds.has(id) || entry.series !== activeSeries) {
+        safeRemoveStrikeLine(entry);
         strikeLinesMap.current.delete(id);
       }
     }
@@ -775,17 +954,19 @@ export function PriceChart({
         ? `${isUp ? '▲ SUBE' : '▼ BAJA'} ${Number.isFinite(stakeNum) ? formatCurrencyBinmax(stakeNum) : ''}`
         : `${isUp ? '▲ COMPRA' : '▼ VENDA'} ${Number.isFinite(stakeNum) ? formatMinor(stakeNum) : ''}`;
 
-      const line = activeSeries.createPriceLine({
-        price: strike,
-        color,
-        lineWidth: 2,
-        lineStyle: LineStyle.Solid,
-        axisLabelVisible: true,
-        title,
-      });
-      strikeLinesMap.current.set(contract.id, line);
+      try {
+        const line = activeSeries.createPriceLine({
+          price: strike,
+          color,
+          lineWidth: 2,
+          lineStyle: LineStyle.Solid,
+          axisLabelVisible: true,
+          title,
+        });
+        strikeLinesMap.current.set(contract.id, { line, series: activeSeries });
+      } catch { /* ignore if series is disposed */ }
     }
-  }, [effectiveContracts, chartType, tick?.price, isBinmax, isChartReady, symbol]);
+  }, [effectiveContracts, chartType, tick?.price, isBinmax, isChartReady, symbol, safeRemoveStrikeLine]);
 
   const handleToggleIndicator = (id: string) => {
     setIndicators((prev) =>
@@ -1294,6 +1475,7 @@ export function PriceChart({
         symbol={symbol}
         isBinmax={isBinmax}
         onChartReady={handleChartReady}
+        onChartDispose={handleChartDispose}
         onDimensionsChange={setDimensions}
       />
     </div>

@@ -59,14 +59,23 @@ export function ChartDrawingOverlay({
   // Forçar redraw do SVG em zoom/pan da escala do Lightweight Charts
   useEffect(() => {
     if (!chartInstance) return;
-    const timeScale = chartInstance.timeScale();
-    const handleRangeChange = () => {
-      setRedrawKey((k) => k + 1);
-    };
-    timeScale.subscribeVisibleTimeRangeChange(handleRangeChange);
-    return () => {
-      timeScale.unsubscribeVisibleTimeRangeChange(handleRangeChange);
-    };
+    try {
+      let timeScale: any = chartInstance.timeScale();
+      const handleRangeChange = () => {
+        setRedrawKey((k) => k + 1);
+      };
+      timeScale.subscribeVisibleTimeRangeChange(handleRangeChange);
+      return () => {
+        try {
+          timeScale?.unsubscribeVisibleTimeRangeChange(handleRangeChange);
+        } catch {
+          /* ignore if chart already disposed */
+        }
+        timeScale = null;
+      };
+    } catch {
+      return undefined;
+    }
   }, [chartInstance]);
 
   // Reset de desenho em andamento se ferramenta for cancelada

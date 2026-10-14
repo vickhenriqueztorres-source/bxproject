@@ -1,0 +1,48 @@
+{
+  "title": "Binmax Option — Trading Room (Argentina)",
+  "latency": "Latencia",
+  "online": "Conectado",
+  "offline": "Desconectado",
+  "loading": "Cargando...",
+  "error": "Ha ocurrido un error",
+  "demo_banner": "Modo Demo — sin dinero real",
+  "risk_warning": "Aviso de Riesgo: Operar contratos UP/DOWN y activos OTC conlleva un alto riesgo. Entorno 100% demostrativo — ningún dinero real circula.",
+  "legal": {
+    "terms_link": "Términos de Uso (AR)",
+    "privacy_link": "Política de Privacidad (Ley 25.326)",
+    "terms_title": "Términos de Uso — Argentina (Modo Demo Fase 2)",
+    "terms_body": "Estos Términos de Uso rigen el uso del entorno demostrativo en la República Argentina. No existe captación de fondos ni circulación de dinero real (ARS sólo para visualización).",
+    "privacy_title": "Política de Privacidad — Argentina (Ley Nº 25.326)",
+    "privacy_body": "Sus datos y preferencias regionales (es-AR / ARS / America/Argentina/Buenos_Aires) son tratados en cumplimiento de la Ley 25.326 de Protección de los Datos Personales."
+  },
+  "buttons": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "confirm": "Confirmar"
+  },
+  "currencies": {
+    "select_currency": "Moneda de Visualización",
+    "brl": "Real Brasileño (BRL)",
+    "mxn": "Peso Mexicano (MXN)",
+    "cop": "Peso Colombiano (COP)",
+    "ars": "Peso Argentino (ARS)",
+    "clp": "Peso Chileno (CLP)",
+    "pen": "Sol Peruano (PEN)",
+    "usd": "Dólar Estadounidense (USD - Base)"
+  },
+  "tabs": {
+    "forex": "Forex",
+    "crypto": "Cripto",
+    "commodities": "Materias Primas",
+    "synthetics": "Sintéticos",
+    "all": "Todos"
+  },
+  "geoblock": {
+    "title": "Acceso no disponible en tu región",
+    "message": "Nuestra plataforma opera actualmente en la Fase 2 exclusivamente en los siguientes 6 países de América Latina:",
+    "countries": "Brasil, México, Colombia, Argentina, Chile y Perú.",
+    "support": "Si resides en uno de estos países y estás usando VPN, por favor desactívala para acceder.",
+    "button_retry": "Verificar nuevamente"
+  }
+}

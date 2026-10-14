@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { formatMinor, formatCurrencyBinmax } from '../../lib/money';
 import { useRouter } from '../../router/RouterContext';
+import { AuthService } from '../../auth/auth-service';
 
 export interface AccountSelectorDropdownProps {
   balanceMinor: number | null;
@@ -50,11 +51,14 @@ export const AccountSelectorDropdown: React.FC<AccountSelectorDropdownProps> = (
       ? formatCurrencyBinmax(realBalanceMinor)
       : '$0.00';
 
+  const sessionUser = typeof window !== 'undefined' ? AuthService.getSession()?.user : null;
+  const initialSessionBalance = sessionUser?.demoBalanceMinor ?? 1000000;
+
   const demoBalanceDisplay =
     accountType === 'DEMO'
       ? balanceMinor !== null && balanceMinor !== undefined
         ? formatCurrencyBinmax(balanceMinor)
-        : '$10,000.00'
+        : formatCurrencyBinmax(initialSessionBalance)
       : '$10,000.00';
 
   const displayBalance = accountType === 'REAL' ? realBalanceDisplay : demoBalanceDisplay;

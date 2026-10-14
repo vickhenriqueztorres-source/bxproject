@@ -10,7 +10,7 @@ const ou_generator_js_1 = require("./engine/ou-generator.js");
 const hash_chain_js_1 = require("./engine/hash-chain.js");
 const leader_elector_js_1 = require("./cluster/leader-elector.js");
 const tick_repository_js_1 = require("./persistence/tick-repository.js");
-const symbol = process.env.INDEX_SYMBOL || "SYNTH_VOL_50";
+const symbol = process.env.INDEX_SYMBOL || "VOL_50";
 const instanceId = `tick_worker_${(0, node_crypto_1.randomUUID)()}`;
 const pool = new pg_1.default.Pool({
     connectionString: process.env.DATABASE_URL || "postgres://app_tick:app_tick_dev_pass@postgres:5432/broker_platform",

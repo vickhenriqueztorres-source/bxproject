@@ -12,38 +12,62 @@ const authPluginCallback = async (fastify, opts) => {
         }
         const token = authHeader.substring(7);
         // 1. Tenta validação de token nativo Binmax (HS256)
-        const secret = process.env.JWT_SECRET || "binmax-platform-master-key-32-chars-long!";
-        try {
-            const { payload } = await jwtVerify(token, new TextEncoder().encode(secret), {
-                algorithms: ["HS256"]
-            });
-            const roles = payload.roles || ["trader"];
-            request.user = {
-                id: payload.sub,
-                roles,
-                email: payload.email
-            };
-            return;
+        const secret = process.env.JWT_SECRET;
+        if (secret) {
+            try {
+                const { payload } = await jwtVerify(token, new TextEncoder().encode(secret), {
+                    algorithms: ["HS256"], issuer: "binmax-native", audience: "broker-api", typ: "Bearer"
+                });
+                if (typeof payload.sub !== "string" || !payload.sub)
+                    throw new Error("Missing subject");
+                const roles = Array.isArray(payload.roles) ? payload.roles.filter((role) => typeof role === "string") : [];
+                request.user = {
+                    id: payload.sub,
+                    roles,
+                    email: typeof payload.email === "string" ? payload.email : undefined
+                };
+                return;
+            }
+            catch {
+                // Token não é nativo válido; tenta Keycloak JWKS RS256 abaixo.
+            }
         }
-        catch {
-            // Token não é nativo HS256, tenta Keycloak JWKS RS256 abaixo
-        }
-        // 2. Fallback para Keycloak OIDC JWKS (RS256)
+        // 2. Keycloak OIDC: never treat its subject as the financial principal.
+        let oidcPayload;
         try {
             const { payload } = await jwtVerify(token, JWKS, {
                 issuer: `${keycloakUrl}/realms/${realm}`,
+                audience: process.env.KEYCLOAK_AUDIENCE || "broker-api",
+                typ: "Bearer",
                 algorithms: ["RS256"] // S-02: Algoritmo fixo RS256
             });
-            const roles = payload.realm_access?.roles || [];
-            request.user = {
-                id: payload.sub,
-                roles,
-                email: payload.email
-            };
+            if (typeof payload.sub !== "string" || !payload.sub)
+                throw new Error("Missing subject");
+            oidcPayload = payload;
         }
         catch {
             return reply.status(401).send({ error: "UNAUTHORIZED", message: "Token validation failed or expired" });
         }
+        let principalId;
+        try {
+            const result = await fastify.pg.query(`SELECT principal_id FROM identity_subject_links WHERE issuer = $1 AND sub = $2`, [`${keycloakUrl}/realms/${realm}`, oidcPayload.sub]);
+            principalId = result.rows[0]?.principal_id;
+        }
+        catch {
+            return reply.status(503).send({ error: "IDENTITY_UNAVAILABLE" });
+        }
+        if (!principalId) {
+            return reply.status(401).send({ error: "IDENTITY_NOT_LINKED" });
+        }
+        const realmAccess = oidcPayload.realm_access;
+        const roles = Array.isArray(realmAccess?.roles)
+            ? realmAccess.roles.filter((role) => typeof role === "string")
+            : [];
+        request.user = {
+            id: principalId,
+            roles,
+            email: typeof oidcPayload.email === "string" ? oidcPayload.email : undefined
+        };
     });
     // S-03: Decorator RBAC - Negar por padrão
     fastify.decorate("requireRole", (requiredRole) => {

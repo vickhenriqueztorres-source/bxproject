@@ -43,24 +43,34 @@ export declare const CountryCodeSchema: z.ZodEnum<["BR", "MX", "CO", "AR", "CL",
 export declare const PHASE2_DISPLAY_CURRENCIES: readonly ["BRL", "MXN", "COP", "ARS", "CLP", "PEN"];
 export type DisplayCurrencyCode = typeof PHASE2_DISPLAY_CURRENCIES[number];
 export declare const DisplayCurrencyCodeSchema: z.ZodEnum<["BRL", "MXN", "COP", "ARS", "CLP", "PEN"]>;
+export declare const COUNTRY_STAKE_LIMITS: Record<CountryCode, {
+    min_stake_minor: number;
+    max_stake_minor: number;
+}>;
 export declare const CountrySchema: z.ZodObject<{
     code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE"]>;
     name: z.ZodString;
     default_currency: z.ZodEnum<["BRL", "MXN", "COP", "ARS", "CLP", "PEN"]>;
     default_locale: z.ZodString;
     is_active: z.ZodBoolean;
+    min_stake_minor: z.ZodOptional<z.ZodNumber>;
+    max_stake_minor: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
     name: string;
     default_currency: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN";
     default_locale: string;
     is_active: boolean;
+    min_stake_minor?: number | undefined;
+    max_stake_minor?: number | undefined;
 }, {
     code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
     name: string;
     default_currency: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN";
     default_locale: string;
     is_active: boolean;
+    min_stake_minor?: number | undefined;
+    max_stake_minor?: number | undefined;
 }>;
 export type CountryDTO = z.infer<typeof CountrySchema>;
 export declare const DisplayCurrencySchema: z.ZodObject<{
@@ -135,7 +145,7 @@ export declare const SystemFeatureFlagsSchema: z.ZodObject<{
     country_pe_enabled: z.ZodDefault<z.ZodBoolean>;
 }, z.ZodBoolean, "strip">>;
 export type SystemFeatureFlags = z.infer<typeof SystemFeatureFlagsSchema>;
-export declare const KYCStatusSchema: z.ZodEnum<["UNVERIFIED", "PENDING", "APPROVED", "REJECTED"]>;
+export declare const KYCStatusSchema: z.ZodEnum<["NOT_STARTED", "UNVERIFIED", "PENDING", "APPROVED", "REJECTED"]>;
 export type KYCStatus = z.infer<typeof KYCStatusSchema>;
 export declare const KYCTierSchema: z.ZodEnum<["TIER_0", "TIER_1"]>;
 export type KYCTier = z.infer<typeof KYCTierSchema>;
@@ -143,33 +153,33 @@ export declare const KYCProfileSchema: z.ZodObject<{
     id: z.ZodOptional<z.ZodString>;
     user_id: z.ZodString;
     country_code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE"]>;
-    document_type: z.ZodString;
+    document_type: z.ZodOptional<z.ZodString>;
     document_number: z.ZodOptional<z.ZodString>;
-    status: z.ZodEnum<["UNVERIFIED", "PENDING", "APPROVED", "REJECTED"]>;
+    status: z.ZodEnum<["NOT_STARTED", "UNVERIFIED", "PENDING", "APPROVED", "REJECTED"]>;
     tier: z.ZodDefault<z.ZodEnum<["TIER_0", "TIER_1"]>>;
     deposit_limit_minor: z.ZodDefault<z.ZodNumber>;
     nationality_country_code: z.ZodOptional<z.ZodString>;
     rejection_reason: z.ZodOptional<z.ZodString>;
     metadata: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
 }, "strip", z.ZodTypeAny, {
-    status: "UNVERIFIED" | "PENDING" | "APPROVED" | "REJECTED";
+    status: "NOT_STARTED" | "UNVERIFIED" | "PENDING" | "APPROVED" | "REJECTED";
     country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
     user_id: string;
-    document_type: string;
     tier: "TIER_0" | "TIER_1";
     deposit_limit_minor: number;
     metadata?: Record<string, unknown> | undefined;
     id?: string | undefined;
+    document_type?: string | undefined;
     document_number?: string | undefined;
     nationality_country_code?: string | undefined;
     rejection_reason?: string | undefined;
 }, {
-    status: "UNVERIFIED" | "PENDING" | "APPROVED" | "REJECTED";
+    status: "NOT_STARTED" | "UNVERIFIED" | "PENDING" | "APPROVED" | "REJECTED";
     country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
     user_id: string;
-    document_type: string;
     metadata?: Record<string, unknown> | undefined;
     id?: string | undefined;
+    document_type?: string | undefined;
     document_number?: string | undefined;
     tier?: "TIER_0" | "TIER_1" | undefined;
     deposit_limit_minor?: number | undefined;
@@ -203,6 +213,58 @@ export declare const PaymentMethodSchema: z.ZodObject<{
     config?: Record<string, unknown> | undefined;
 }>;
 export type PaymentMethodDTO = z.infer<typeof PaymentMethodSchema>;
+export declare const PaymentMethodSpecSchema: z.ZodObject<{
+    id: z.ZodOptional<z.ZodString>;
+    country_code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE"]>;
+    method: z.ZodEnum<["pix", "spei", "pse", "mercado_pago", "khipu", "yape"]>;
+    enabled: z.ZodDefault<z.ZodBoolean>;
+    created_at: z.ZodOptional<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    enabled: boolean;
+    method: "pix" | "spei" | "pse" | "mercado_pago" | "khipu" | "yape";
+    id?: string | undefined;
+    created_at?: string | undefined;
+}, {
+    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    method: "pix" | "spei" | "pse" | "mercado_pago" | "khipu" | "yape";
+    enabled?: boolean | undefined;
+    id?: string | undefined;
+    created_at?: string | undefined;
+}>;
+export type PaymentMethodSpecDTO = z.infer<typeof PaymentMethodSpecSchema>;
+export declare const PaymentIntentSchema: z.ZodObject<{
+    id: z.ZodOptional<z.ZodString>;
+    user_id: z.ZodString;
+    country_code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE"]>;
+    currency: z.ZodEnum<["BRL", "MXN", "COP", "ARS", "CLP", "PEN"]>;
+    amount_minor: z.ZodNumber;
+    method: z.ZodString;
+    status: z.ZodDefault<z.ZodEnum<["PENDING", "COMPLETED", "CANCELLED", "REJECTED"]>>;
+    psp_reference: z.ZodOptional<z.ZodString>;
+    created_at: z.ZodOptional<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    status: "CANCELLED" | "PENDING" | "REJECTED" | "COMPLETED";
+    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    user_id: string;
+    method: string;
+    currency: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN";
+    amount_minor: number;
+    id?: string | undefined;
+    created_at?: string | undefined;
+    psp_reference?: string | undefined;
+}, {
+    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    user_id: string;
+    method: string;
+    currency: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN";
+    amount_minor: number;
+    status?: "CANCELLED" | "PENDING" | "REJECTED" | "COMPLETED" | undefined;
+    id?: string | undefined;
+    created_at?: string | undefined;
+    psp_reference?: string | undefined;
+}>;
+export type PaymentIntentDTO = z.infer<typeof PaymentIntentSchema>;
 export declare const RegulatoryZoneSchema: z.ZodEnum<["RED", "YELLOW", "GREEN"]>;
 export type RegulatoryZone = z.infer<typeof RegulatoryZoneSchema>;
 export declare const RED_ZONE_COUNTRIES: readonly ["US", "CA", "GB", "AU", "IL", "JP", "DE", "FR", "IT", "ES", "NL", "BE", "AT", "SE", "PL", "IE", "PT", "GR"];

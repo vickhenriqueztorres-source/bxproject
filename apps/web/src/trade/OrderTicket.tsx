@@ -4,7 +4,8 @@ import { ApiError, getContract, openContract, type Receipt, type Contract } from
 import { formatMinor, formatCurrencyBinmax, parseStakeInput } from '../lib/money';
 export { formatCurrencyBinmax } from '../lib/money';
 import { soundEngine } from '../lib/sound-engine';
-import { getAssetMeta } from '../catalog/assets';
+import { getAssetMeta, normalizeSymbol } from '../catalog/assets';
+import { tradingFeedManager } from '../feed/TradingFeedManager';
 import { safeRandomUUID } from '../lib/uuid';
 import { ExpiryDropdown } from './ExpiryDropdown';
 import { calculateExecutionExpiry, calculateExpirySlots, formatSecondsToMmSs, type ExpirySlot, type ExpiryMode } from './expiry-calculator';
@@ -98,10 +99,10 @@ export function OrderTicket({
       else if (value.result === 'DRAW') soundEngine.playDraw();
       onChanged();
 
-      // Auto-reset: mostra resultado por 3s, depois libera para nova operação
+      // Auto-reset ágil: mostra resultado por 800ms, depois libera para nova operação sem travar o usuário
       const timer = setTimeout(() => {
         setReceipt(null);
-      }, 3000);
+      }, 800);
       return () => clearTimeout(timer);
     }
   }, [contract.data, onChanged]);
@@ -150,17 +151,53 @@ export function OrderTicket({
     executingRef.current = true;
     setBusy(true);
     setError('');
+
+    const key = safeRandomUUID();
+    const current = { key, direction, stakeMinor };
+    intent.current = current;
+
+    // Resolução de modo corrigida: honra o slot ativo (CANDLE_1M) se selectedSlot for null (Subetapa 9.1)
+    const mode: ExpiryMode = (selectedSlot ?? activeSlot).mode;
+    const { durationMs, targetEpochMs } = calculateExecutionExpiry(mode, Date.now());
+    const durationSeconds = Math.max(30, Math.round(durationMs / 1000));
+    const targetExpiresAt = new Date(targetEpochMs).toISOString();
+
+    // Captura da cotação instantânea no milissegundo exato do clique (< 16ms)
+    const norm = normalizeSymbol(symbol);
+    const lastStr = tradingFeedManager.getLastPrice(norm) ?? tradingFeedManager.getLastPrice(symbol);
+    const instantPrice = lastStr ? parseFloat(lastStr) : undefined;
+
+    // Feedback sonoro e injeção otimista IMEDIATA no cache (< 16ms)
     soundEngine.playOrderOpen();
 
-    try {
-      const key = safeRandomUUID();
-      const current = { key, direction, stakeMinor };
-      intent.current = current;
-      const mode: ExpiryMode = selectedSlot?.mode ?? '1M_FIXED';
-      const { durationMs, targetEpochMs } = calculateExecutionExpiry(mode, Date.now());
-      const durationSeconds = Math.max(30, Math.round(durationMs / 1000));
-      const targetExpiresAt = new Date(targetEpochMs).toISOString();
+    const optimisticContract: Contract = {
+      id: key,
+      symbol,
+      direction: current.direction,
+      stake_minor: current.stakeMinor,
+      status: 'OPEN',
+      result: null,
+      payout_minor: null,
+      expires_at: targetExpiresAt,
+      created_at: new Date().toISOString(),
+      entry_price: instantPrice,
+      strike_price: instantPrice,
+    };
 
+    // 1. Injeta imediatamente o contrato para desenhar a linha de strike no gráfico (< 16ms)
+    queryClient.setQueryData<Contract[]>(['contracts'], (old = []) => [optimisticContract, ...old]);
+
+    // 2. Reserva otimista imediata no saldo da carteira para atualizar o header
+    queryClient.setQueryData<{ available_minor: number; reserved_minor?: number }>(['wallet'], (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        available_minor: Math.max(0, old.available_minor - current.stakeMinor),
+        reserved_minor: (old.reserved_minor ?? 0) + current.stakeMinor,
+      };
+    });
+
+    try {
       const opened = await openContract(
         symbol,
         current.direction,
@@ -170,30 +207,39 @@ export function OrderTicket({
         targetExpiresAt,
         mode
       );
+
       setReceipt(opened);
       intent.current = null;
 
-      // Injeção otimista imediata no cache de contratos abertos (< 16ms)
+      // Reconciliação atômica: substitui o contrato provisório com os dados oficiais do servidor
       queryClient.setQueryData<Contract[]>(['contracts'], (old = []) => {
-        if (old.some((c) => c.id === opened.id)) return old;
-        const optimisticContract: Contract = {
-          id: opened.id,
-          symbol,
-          direction: current.direction,
-          stake_minor: current.stakeMinor,
-          status: 'OPEN',
-          result: null,
-          payout_minor: null,
-          expires_at: opened.expires_at,
-          created_at: new Date().toISOString(),
-          entry_price: opened.strike_price ?? opened.entry_price ?? undefined,
-          strike_price: opened.strike_price ?? opened.entry_price ?? undefined,
-        };
-        return [optimisticContract, ...old];
+        return old.map((c) => {
+          if (c.id === key) {
+            return {
+              ...c,
+              id: opened.id,
+              strike_price: opened.strike_price ?? c.strike_price,
+              entry_price: opened.strike_price ?? opened.entry_price ?? c.entry_price,
+              expires_at: opened.expires_at ?? c.expires_at,
+            };
+          }
+          return c;
+        });
       });
 
       onChanged();
     } catch (cause) {
+      // Rollback otimista em caso de erro
+      queryClient.setQueryData<Contract[]>(['contracts'], (old = []) => old.filter((c) => c.id !== key));
+      queryClient.setQueryData<{ available_minor: number; reserved_minor?: number }>(['wallet'], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          available_minor: old.available_minor + current.stakeMinor,
+          reserved_minor: Math.max(0, (old.reserved_minor ?? current.stakeMinor) - current.stakeMinor),
+        };
+      });
+
       if (cause instanceof ApiError) {
         setError(messages[cause.code] ?? 'Não foi possível enviar a ordem.');
         if (cause.status < 500 && cause.status !== 429) intent.current = null;

@@ -74,7 +74,9 @@ export class TradingFeedManager {
       this.initialConnectDone = true;
       const initialDelay = getStaggeredDelay(10000, forceImmediate);
       if (initialDelay > 0) {
-        setTimeout(() => {
+        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = setTimeout(() => {
+          this.reconnectTimer = null;
           this.doConnect();
         }, initialDelay);
         return;
@@ -215,12 +217,15 @@ export class TradingFeedManager {
         const incoming = data as Tick;
         const lastSeq = this.symbolLastSequences.get(incoming.symbol) ?? 0;
 
-        // Se o ativo está no meio de um processo de resync/rebuild, enfileira no buffer
+        // Se o ativo está no meio de um processo de resync/rebuild, enfileira no buffer com teto estrito de memória
         if (this.symbolResyncing.get(incoming.symbol)) {
           let buffer = this.symbolTickBuffers.get(incoming.symbol);
           if (!buffer) {
             buffer = [];
             this.symbolTickBuffers.set(incoming.symbol, buffer);
+          }
+          if (buffer.length >= 500) {
+            buffer.shift();
           }
           buffer.push(incoming);
           return;
@@ -331,6 +336,7 @@ export class TradingFeedManager {
   }
 
   private applyTick(incoming: Tick) {
+    if (this.closed) return;
     const arrivalTime = Date.now();
     const eventTime = typeof incoming.event_time === 'number'
       ? incoming.event_time
@@ -351,18 +357,26 @@ export class TradingFeedManager {
       this.stale = false;
       const staleCbs = this.symbolStaleListeners.get(incoming.symbol);
       if (staleCbs) {
-        for (const cb of staleCbs) cb(false, 0);
+        for (const cb of Array.from(staleCbs)) {
+          if (staleCbs.has(cb)) {
+            try { cb(false, 0); } catch { /* ignore */ }
+          }
+        }
       }
     }
 
     const callbacks = this.symbolSubscribers.get(incoming.symbol);
     if (callbacks) {
-      for (const cb of callbacks) cb(incoming);
+      for (const cb of Array.from(callbacks)) {
+        if (callbacks.has(cb)) {
+          try { cb(incoming); } catch { /* ignore */ }
+        }
+      }
     }
   }
 
   public async triggerSnapshotRebuild(symbol: string, initialGapTick?: Tick) {
-    if (this.symbolResyncing.get(symbol)) return;
+    if (this.closed || this.symbolResyncing.get(symbol)) return;
     this.symbolResyncing.set(symbol, true);
 
     let buffer = this.symbolTickBuffers.get(symbol);
@@ -380,8 +394,18 @@ export class TradingFeedManager {
         typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost:3001'
       );
       const res = await fetch(`${restBase}/api/v1/snapshot?symbol=${encodeURIComponent(symbol)}`);
+      if (this.closed || !this.symbolSubscribers.has(symbol)) {
+        this.symbolResyncing.delete(symbol);
+        this.symbolTickBuffers.delete(symbol);
+        return;
+      }
       if (res.ok) {
         const snap = await res.json();
+        if (this.closed || !this.symbolSubscribers.has(symbol)) {
+          this.symbolResyncing.delete(symbol);
+          this.symbolTickBuffers.delete(symbol);
+          return;
+        }
         if (snap && Number.isSafeInteger(snap.sequence)) {
           this.applySnapshotAndDrainBuffer(symbol, snap);
           return;
@@ -391,11 +415,18 @@ export class TradingFeedManager {
       // Fallback para WS catch-up se REST falhar
     }
 
+    if (this.closed || !this.symbolSubscribers.has(symbol)) {
+      this.symbolResyncing.delete(symbol);
+      this.symbolTickBuffers.delete(symbol);
+      return;
+    }
+
     // Se REST falhou, pede catch-up / resubscribe via WS
     this.sendSubscribe(symbol, true);
   }
 
   private applySnapshotAndDrainBuffer(symbol: string, snap: { sequence: number; price: string; ts: string; event_time?: number }) {
+    if (this.closed) return;
     const arrivalTime = Date.now();
     const eventTime = typeof snap.event_time === 'number'
       ? snap.event_time
@@ -413,24 +444,32 @@ export class TradingFeedManager {
       this.stale = false;
       const staleCbs = this.symbolStaleListeners.get(symbol);
       if (staleCbs) {
-        for (const cb of staleCbs) cb(false, 0);
+        for (const cb of Array.from(staleCbs)) {
+          if (staleCbs.has(cb)) {
+            try { cb(false, 0); } catch { /* ignore */ }
+          }
+        }
       }
     }
 
     // Notifica gráficos do snapshot com tick sintético
     const callbacks = this.symbolSubscribers.get(symbol);
     if (callbacks) {
-      for (const cb of callbacks) {
-        cb({
-          type: 'tick',
-          symbol,
-          sequence: snap.sequence,
-          price: snap.price,
-          ts: snap.ts,
-          event_time: eventTime,
-          arrival_time: arrivalTime,
-          latency_ms: latencyMs,
-        });
+      for (const cb of Array.from(callbacks)) {
+        if (callbacks.has(cb)) {
+          try {
+            cb({
+              type: 'tick',
+              symbol,
+              sequence: snap.sequence,
+              price: snap.price,
+              ts: snap.ts,
+              event_time: eventTime,
+              arrival_time: arrivalTime,
+              latency_ms: latencyMs,
+            });
+          } catch { /* ignore */ }
+        }
       }
     }
 
@@ -492,6 +531,8 @@ export class TradingFeedManager {
 
     callbacks.add(callback);
 
+    let initialTickTimer: ReturnType<typeof setTimeout> | null = null;
+
     // Se o WS ainda não conectou no modo convidado, emite o tick inicial imediatamente
     if (import.meta.env.VITE_DEMO_OFFLINE_FEED === '1' &&
       (!this.connected || !this.socket || this.socket.readyState !== WebSocket.OPEN) && isGuestMode()) {
@@ -504,7 +545,9 @@ export class TradingFeedManager {
       this.symbolStaleStates.set(symbol, false);
       for (const listener of this.symbolStaleListeners.get(symbol) ?? []) listener(false, 0);
       const seq = this.symbolLastSequences.get(symbol) ?? 1000;
-      setTimeout(() => {
+      initialTickTimer = setTimeout(() => {
+        initialTickTimer = null;
+        if (this.closed || !this.symbolSubscribers.get(symbol)?.has(callback)) return;
         try {
           callback({
             type: 'tick',
@@ -524,6 +567,10 @@ export class TradingFeedManager {
 
     // Return cleanup function for this specific chart
     return () => {
+      if (initialTickTimer !== null) {
+        clearTimeout(initialTickTimer);
+        initialTickTimer = null;
+      }
       const set = this.symbolSubscribers.get(symbol);
       if (set) {
         set.delete(callback);

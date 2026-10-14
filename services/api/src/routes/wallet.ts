@@ -39,7 +39,23 @@ export const walletRoutes: FastifyPluginAsync = async (server) => {
           };
         }
       } catch (err: any) {
-        server.log.error(err, "Failed to retrieve wallet balance");
+        server.log.error(err, "Failed to retrieve wallet balance from Blnk, attempting PostgreSQL fallback");
+        try {
+          const pgRes = await server.pg.query(
+            "SELECT demo_balance_minor FROM users WHERE id = $1",
+            [user.id]
+          );
+          if (pgRes.rows.length > 0) {
+            return {
+              user_id: user.id,
+              currency: "USD",
+              available_minor: Number(pgRes.rows[0].demo_balance_minor),
+              reserved_minor: 0
+            };
+          }
+        } catch (dbErr) {
+          server.log.error(dbErr, "PostgreSQL wallet fallback query failed");
+        }
         return reply.status(503).send({ error: "WALLET_UNAVAILABLE" });
       }
     }

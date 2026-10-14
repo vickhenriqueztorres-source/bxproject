@@ -1,7 +1,7 @@
 import type { CandlestickData, UTCTimestamp } from 'lightweight-charts';
 import type { Candle } from '../api/client';
 import type { Tick } from '../feed/protocol';
-import { timeframeSeconds, type Timeframe } from './candle-adapter';
+import { normalizeTimeSeconds, timeframeSeconds, type Timeframe } from './candle-adapter';
 
 /**
  * Bounds de validação e métricas de integridade de uma vela OHLC.
@@ -54,19 +54,18 @@ export function detectPriceScaleAnomaly(lastPrice: number, nextPrice: number): b
 
 /**
  * Normaliza velas semente para ancorarem perfeitamente no primeiro tick de mercado disponível.
- * Elimina completamente o problema de vela gigante e gaps temporais na abertura do gráfico.
+ * Elimina completamente o problema de vela gigante e gaps temporais na abertura do gráfico (#1344).
  */
 export function normalizeSeedWithTick(candles: Candle[], tick: Tick | null): Candle[] {
   if (!candles || candles.length === 0) return [];
   if (!tick) return candles;
 
   const tickPrice = Number(tick.price);
-  const tickEpoch = Date.parse(tick.ts);
-  if (!Number.isFinite(tickPrice) || tickPrice <= 0 || !Number.isFinite(tickEpoch)) {
+  const tickSeconds = normalizeTimeSeconds(tick.ts);
+  if (!Number.isFinite(tickPrice) || tickPrice <= 0 || tickSeconds === null) {
     return candles;
   }
 
-  const tickSeconds = Math.floor(tickEpoch / 1000);
   const result: Candle[] = candles.map((c) => ({ ...c }));
   const lastIndex = result.length - 1;
   const lastCandle = result[lastIndex];
@@ -111,13 +110,13 @@ export function normalizeSeedWithTick(candles: Candle[], tick: Tick | null): Can
     low: Math.min(currentOpen, tickPrice, currentLow).toFixed(5),
   };
 
-  // Caso 3: Alinhamento de gap temporal se o tick for posterior ao último candle
-  const lastTime = typeof updatedLast.time === 'number'
-    ? updatedLast.time
-    : Math.floor(Date.parse(String(updatedLast.time)) / 1000);
+  // Caso 3: Alinhamento de gap temporal estritamente em múltiplos de 60s (#1344)
+  // Nunca atribui segundo quebrado (ex: :23s) à vela de 1m para não desalinhar mergeObservedCandles
+  const lastTime = normalizeTimeSeconds(updatedLast.time) ?? 0;
 
-  if (tickSeconds > lastTime) {
-    result[lastIndex].time = tickSeconds;
+  if (lastTime > 0 && tickSeconds >= lastTime + 60) {
+    const minutesDelta = Math.floor((tickSeconds - lastTime) / 60);
+    result[lastIndex].time = lastTime + minutesDelta * 60;
   }
 
   return result;
@@ -133,14 +132,13 @@ export function safeCandleFromTick(
 ): CandlestickData<UTCTimestamp> | null {
   if (!tick) return null;
 
-  const epoch = Date.parse(tick.ts);
-  if (!Number.isFinite(epoch)) return null;
+  const tsSeconds = normalizeTimeSeconds(tick.ts);
+  if (tsSeconds === null) return null;
 
   const price = Number(tick.price);
   if (!Number.isFinite(price) || price <= 0) return null;
 
   const stepSec = timeframeSeconds(timeframe);
-  const tsSeconds = Math.floor(epoch / 1000);
   const bucket = (Math.floor(tsSeconds / stepSec) * stepSec) as UTCTimestamp;
 
   if (!previous) {
@@ -180,21 +178,91 @@ export function safeCandleFromTick(
 }
 
 export function mergeObservedCandles(
-  history: CandlestickData<UTCTimestamp>[], observed: CandlestickData<UTCTimestamp>[], timeframe: Timeframe,
+  history: CandlestickData<UTCTimestamp>[],
+  observed: CandlestickData<UTCTimestamp>[],
+  timeframe: Timeframe,
   preserveClosedHistory = true
 ): CandlestickData<UTCTimestamp>[] {
-  const merged = new Map(history.map((bar) => [bar.time, bar]));
-  const lastHistoryTime = history.at(-1)?.time ?? -Infinity;
   const step = timeframeSeconds(timeframe);
-  const lastObservedTime = Math.floor(Math.max(-Infinity, ...observed.map(bar => bar.time)) / step) * step;
-  for (const bar of [...observed].sort((a, b) => a.time - b.time)) {
-    const time = (Math.floor(bar.time / step) * step) as UTCTimestamp;
-    if (time < lastHistoryTime || (preserveClosedHistory && time === lastHistoryTime && time < lastObservedTime)) continue;
-    const previous = merged.get(time);
-    merged.set(time, previous ? {
-      time, open: previous.open, high: Math.max(previous.high, bar.high),
-      low: Math.min(previous.low, bar.low), close: bar.close,
-    } : { ...bar, time });
+  const merged = new Map<UTCTimestamp, CandlestickData<UTCTimestamp>>();
+  const maxRawTimeByBucket = new Map<UTCTimestamp, number>();
+
+  // 1. Garante ordenação ascendente e fusão de duplicatas no histórico base (#1344)
+  const sortedHistory = [...history].sort((a, b) => Number(a.time) - Number(b.time));
+  for (const bar of sortedHistory) {
+    const t = Number(bar.time) as UTCTimestamp;
+    if (!Number.isFinite(t) || t <= 0) continue;
+    const prev = merged.get(t);
+    if (prev) {
+      merged.set(t, {
+        time: t,
+        open: prev.open,
+        high: Math.max(prev.high, bar.high, prev.open, bar.close),
+        low: Math.min(prev.low, bar.low, prev.open, bar.close),
+        close: bar.close,
+      });
+    } else {
+      merged.set(t, {
+        time: t,
+        open: bar.open,
+        high: Math.max(bar.high, bar.open, bar.close),
+        low: Math.min(bar.low, bar.open, bar.close),
+        close: bar.close,
+      });
+    }
+    maxRawTimeByBucket.set(t, t);
   }
-  return [...merged.values()].sort((a, b) => a.time - b.time);
+
+  const lastHistoryTime = sortedHistory.at(-1)?.time ?? -Infinity;
+  const lastObservedTime =
+    observed.length > 0
+      ? Math.floor(Math.max(-Infinity, ...observed.map((bar) => Number(bar.time))) / step) * step
+      : -Infinity;
+
+  for (const bar of [...observed].sort((a, b) => Number(a.time) - Number(b.time))) {
+    const rawTime = Number(bar.time);
+    if (!Number.isFinite(rawTime) || rawTime <= 0) continue;
+
+    // Alinha estritamente ao bucket canônico de `step`, exceto quando `lastHistoryTime` sintético
+    // possui offset intra-minuto e `rawTime` é posterior a `lastHistoryTime` dentro do mesmo minuto
+    let time = (Math.floor(rawTime / step) * step) as UTCTimestamp;
+    if (Number.isFinite(lastHistoryTime) && time < lastHistoryTime && rawTime >= lastHistoryTime) {
+      time = lastHistoryTime as UTCTimestamp;
+    }
+
+    if (
+      time < lastHistoryTime ||
+      (preserveClosedHistory && time === lastHistoryTime && time < lastObservedTime)
+    ) {
+      continue;
+    }
+
+    const previous = merged.get(time);
+    const prevMaxRaw = maxRawTimeByBucket.get(time) ?? -Infinity;
+    const isNewerOrEqualSubBar = rawTime >= prevMaxRaw;
+    if (isNewerOrEqualSubBar) {
+      maxRawTimeByBucket.set(time, rawTime);
+    }
+
+    merged.set(
+      time,
+      previous
+        ? {
+            time,
+            open: previous.open,
+            high: Math.max(previous.high, bar.high, previous.open, bar.close),
+            low: Math.min(previous.low, bar.low, previous.open, bar.close),
+            // Blindagem #1351: um sub-bucket atrasado (ex: :10s chegando após :30s) expande high/low mas NUNCA sobrescreve o close mais recente
+            close: isNewerOrEqualSubBar ? bar.close : previous.close,
+          }
+        : {
+            ...bar,
+            time,
+            high: Math.max(bar.high, bar.open, bar.close),
+            low: Math.min(bar.low, bar.open, bar.close),
+          }
+    );
+  }
+
+  return [...merged.values()].sort((a, b) => Number(a.time) - Number(b.time));
 }

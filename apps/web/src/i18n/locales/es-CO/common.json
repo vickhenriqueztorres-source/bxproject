@@ -1,10 +1,20 @@
 {
-  "title": "Binmax Option — Trading Room",
+  "title": "Binmax Option — Trading Room (Colombia)",
   "latency": "Latencia",
   "online": "Conectado",
   "offline": "Desconectado",
   "loading": "Cargando...",
   "error": "Ha ocurrido un error",
+  "demo_banner": "Modo Demo — sin dinero real",
+  "risk_warning": "Aviso de Riesgo: Operar contratos UP/DOWN y activos OTC conlleva un alto riesgo. Entorno 100% demostrativo — ningún dinero real circula.",
+  "legal": {
+    "terms_link": "Términos de Uso (CO)",
+    "privacy_link": "Política de Privacidad (Ley 1581)",
+    "terms_title": "Términos de Uso — Colombia (Modo Demo Fase 2)",
+    "terms_body": "Estos Términos de Uso aplican a los usuarios en Colombia durante la Fase 2 Demo. Todas las cotizaciones OTC y sintéticas se ejecutan con saldo demostrativo sin dinero real (COP de visualización).",
+    "privacy_title": "Política de Privacidad — Colombia (Ley Estatutaria 1581 de 2012)",
+    "privacy_body": "El tratamiento de datos personales y preferencias regionales (es-CO / COP / America/Bogota) cumple con la Ley 1581 de 2012 de Habeas Data en Colombia."
+  },
   "buttons": {
     "save": "Guardar",
     "cancel": "Cancelar",

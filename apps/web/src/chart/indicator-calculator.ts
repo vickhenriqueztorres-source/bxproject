@@ -1,4 +1,5 @@
 import type { UTCTimestamp } from 'lightweight-charts';
+import { normalizeTimeSeconds } from './chart-sanitizer';
 
 export interface IndicatorPoint {
   time: UTCTimestamp;
@@ -26,7 +27,7 @@ export interface StochasticPoint {
 }
 
 export type CandleInput = {
-  time?: UTCTimestamp | number;
+  time?: UTCTimestamp | number | string;
   open_time?: string;
   open?: number | string;
   high?: number | string;
@@ -35,22 +36,18 @@ export type CandleInput = {
   volume?: number | string;
 };
 
-export function extractCandleValues(c: CandleInput): {
+export interface AlignedCandleValue {
   time: UTCTimestamp;
   open: number;
   high: number;
   low: number;
   close: number;
   volume: number;
-} {
-  let epochSec: UTCTimestamp;
-  if (typeof c.time === 'number') {
-    epochSec = (c.time > 10000000000 ? Math.floor(c.time / 1000) : c.time) as UTCTimestamp;
-  } else if (c.open_time) {
-    epochSec = Math.floor(Date.parse(c.open_time) / 1000) as UTCTimestamp;
-  } else {
-    epochSec = Math.floor(Date.now() / 1000) as UTCTimestamp;
-  }
+}
+
+export function extractCandleValues(c: CandleInput): AlignedCandleValue {
+  const normalizedTime = normalizeTimeSeconds(c.time ?? c.open_time);
+  const epochSec = (normalizedTime ?? Math.floor(Date.now() / 1000)) as UTCTimestamp;
 
   const close = Number(c.close);
   const open = c.open !== undefined ? Number(c.open) : close;
@@ -65,20 +62,66 @@ export function extractCandleValues(c: CandleInput): {
 }
 
 /**
+ * Sanitiza, ordena em UTC crescente e deduplica velas antes do cálculo de aquecimento (warmup)
+ * de qualquer indicador técnico (#1344 - previne aquecimento invertido ou crash no setData).
+ */
+export function prepareAlignedCandles(candles: CandleInput[]): AlignedCandleValue[] {
+  if (!candles || candles.length === 0) return [];
+
+  const extracted: AlignedCandleValue[] = [];
+  for (let i = 0; i < candles.length; i++) {
+    const raw = candles[i];
+    if (!raw || typeof raw !== 'object') continue;
+    const val = extractCandleValues(raw);
+    if (
+      Number.isFinite(val.time) &&
+      val.time > 0 &&
+      Number.isFinite(val.close) &&
+      val.close > 0 &&
+      Number.isFinite(val.open) &&
+      Number.isFinite(val.high) &&
+      Number.isFinite(val.low)
+    ) {
+      extracted.push(val);
+    }
+  }
+
+  if (extracted.length === 0) return [];
+
+  extracted.sort((a, b) => Number(a.time) - Number(b.time));
+
+  const deduplicated: AlignedCandleValue[] = [extracted[0]];
+  for (let i = 1; i < extracted.length; i++) {
+    const cur = extracted[i];
+    const prev = deduplicated[deduplicated.length - 1];
+    if (cur.time === prev.time) {
+      prev.high = Math.max(prev.high, cur.high, prev.open, cur.close);
+      prev.low = Math.min(prev.low, cur.low, prev.open, cur.close);
+      prev.close = cur.close;
+      prev.volume += cur.volume;
+    } else if (cur.time > prev.time) {
+      deduplicated.push(cur);
+    }
+  }
+
+  return deduplicated;
+}
+
+/**
  * Calcula Média Móvel Simples (SMA)
  */
 export function calculateSMA(candles: CandleInput[], period: number): IndicatorPoint[] {
-  if (candles.length < period || period <= 0) return [];
+  const aligned = prepareAlignedCandles(candles);
+  if (aligned.length < period || period <= 0) return [];
   const result: IndicatorPoint[] = [];
 
-  for (let i = period - 1; i < candles.length; i++) {
+  for (let i = period - 1; i < aligned.length; i++) {
     let sum = 0;
     for (let j = 0; j < period; j++) {
-      sum += Number(candles[i - j].close);
+      sum += aligned[i - j].close;
     }
-    const { time } = extractCandleValues(candles[i]);
     result.push({
-      time,
+      time: aligned[i].time,
       value: Number((sum / period).toFixed(4)),
     });
   }
@@ -90,26 +133,25 @@ export function calculateSMA(candles: CandleInput[], period: number): IndicatorP
  * Calcula Média Móvel Exponencial (EMA)
  */
 export function calculateEMA(candles: CandleInput[], period: number): IndicatorPoint[] {
-  if (candles.length < period || period <= 0) return [];
+  const aligned = prepareAlignedCandles(candles);
+  if (aligned.length < period || period <= 0) return [];
   const result: IndicatorPoint[] = [];
   const multiplier = 2 / (period + 1);
 
   // Inicializar com SMA dos primeiros `period` elementos
   let sum = 0;
   for (let i = 0; i < period; i++) {
-    sum += Number(candles[i].close);
+    sum += aligned[i].close;
   }
   let prevEma = sum / period;
-  const { time: initialTime } = extractCandleValues(candles[period - 1]);
-  result.push({ time: initialTime, value: Number(prevEma.toFixed(4)) });
+  result.push({ time: aligned[period - 1].time, value: Number(prevEma.toFixed(4)) });
 
-  for (let i = period; i < candles.length; i++) {
-    const close = Number(candles[i].close);
+  for (let i = period; i < aligned.length; i++) {
+    const close = aligned[i].close;
     const curEma = (close - prevEma) * multiplier + prevEma;
     prevEma = curEma;
-    const { time } = extractCandleValues(candles[i]);
     result.push({
-      time,
+      time: aligned[i].time,
       value: Number(curEma.toFixed(4)),
     });
   }
@@ -122,19 +164,19 @@ export function calculateEMA(candles: CandleInput[], period: number): IndicatorP
  * Dá peso linear decrescente (mais recente tem maior peso)
  */
 export function calculateWMA(candles: CandleInput[], period: number): IndicatorPoint[] {
-  if (candles.length < period || period <= 0) return [];
+  const aligned = prepareAlignedCandles(candles);
+  if (aligned.length < period || period <= 0) return [];
   const result: IndicatorPoint[] = [];
   const weightSum = (period * (period + 1)) / 2;
 
-  for (let i = period - 1; i < candles.length; i++) {
+  for (let i = period - 1; i < aligned.length; i++) {
     let weightedSum = 0;
     for (let j = 0; j < period; j++) {
       const weight = period - j;
-      weightedSum += Number(candles[i - j].close) * weight;
+      weightedSum += aligned[i - j].close * weight;
     }
-    const { time } = extractCandleValues(candles[i]);
     result.push({
-      time,
+      time: aligned[i].time,
       value: Number((weightedSum / weightSum).toFixed(4)),
     });
   }
@@ -150,25 +192,25 @@ export function calculateBollinger(
   period: number = 20,
   stdDevMultiplier: number = 2
 ): BollingerPoint[] {
-  if (candles.length < period || period <= 0) return [];
+  const aligned = prepareAlignedCandles(candles);
+  if (aligned.length < period || period <= 0) return [];
   const result: BollingerPoint[] = [];
 
-  for (let i = period - 1; i < candles.length; i++) {
+  for (let i = period - 1; i < aligned.length; i++) {
     let sum = 0;
     for (let j = 0; j < period; j++) {
-      sum += Number(candles[i - j].close);
+      sum += aligned[i - j].close;
     }
     const mean = sum / period;
 
     let varianceSum = 0;
     for (let j = 0; j < period; j++) {
-      varianceSum += Math.pow(Number(candles[i - j].close) - mean, 2);
+      varianceSum += Math.pow(aligned[i - j].close - mean, 2);
     }
     const stdDev = Math.sqrt(varianceSum / period);
 
-    const { time } = extractCandleValues(candles[i]);
     result.push({
-      time,
+      time: aligned[i].time,
       upper: Number((mean + stdDevMultiplier * stdDev).toFixed(4)),
       middle: Number(mean.toFixed(4)),
       lower: Number((mean - stdDevMultiplier * stdDev).toFixed(4)),
@@ -182,12 +224,13 @@ export function calculateBollinger(
  * Calcula RSI (Relative Strength Index) com suavização de Wilder
  */
 export function calculateRSI(candles: CandleInput[], period: number = 14): IndicatorPoint[] {
-  if (candles.length <= period || period <= 0) return [];
+  const aligned = prepareAlignedCandles(candles);
+  if (aligned.length <= period || period <= 0) return [];
   const result: IndicatorPoint[] = [];
 
   const changes: number[] = [];
-  for (let i = 1; i < candles.length; i++) {
-    changes.push(Number(candles[i].close) - Number(candles[i - 1].close));
+  for (let i = 1; i < aligned.length; i++) {
+    changes.push(aligned[i].close - aligned[i - 1].close);
   }
 
   let avgGain = 0;
@@ -203,8 +246,7 @@ export function calculateRSI(candles: CandleInput[], period: number = 14): Indic
   let rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
   let rsi = avgLoss === 0 ? 100 : 100 - 100 / (1 + rs);
 
-  const { time: initialTime } = extractCandleValues(candles[period]);
-  result.push({ time: initialTime, value: Number(rsi.toFixed(2)) });
+  result.push({ time: aligned[period].time, value: Number(rsi.toFixed(2)) });
 
   // Suavização exponencial de Wilder para os próximos períodos
   for (let i = period; i < changes.length; i++) {
@@ -218,8 +260,7 @@ export function calculateRSI(candles: CandleInput[], period: number = 14): Indic
     rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
     rsi = avgLoss === 0 ? 100 : 100 - 100 / (1 + rs);
 
-    const { time } = extractCandleValues(candles[i + 1]);
-    result.push({ time, value: Number(rsi.toFixed(2)) });
+    result.push({ time: aligned[i + 1].time, value: Number(rsi.toFixed(2)) });
   }
 
   return result;
@@ -235,10 +276,11 @@ export function calculateMACD(
   slowPeriod: number = 26,
   signalPeriod: number = 9
 ): MacdPoint[] {
-  if (candles.length < slowPeriod + signalPeriod - 1) return [];
+  const aligned = prepareAlignedCandles(candles);
+  if (aligned.length < slowPeriod + signalPeriod - 1) return [];
 
-  const fastEma = calculateEMA(candles, fastPeriod);
-  const slowEma = calculateEMA(candles, slowPeriod);
+  const fastEma = calculateEMA(aligned, fastPeriod);
+  const slowEma = calculateEMA(aligned, slowPeriod);
 
   // Mapear tempos para alinhamento
   const fastMap = new Map<UTCTimestamp, number>();
@@ -300,21 +342,22 @@ export function calculateStochastic(
   kPeriod: number = 14,
   dPeriod: number = 3
 ): StochasticPoint[] {
-  if (candles.length < kPeriod + dPeriod - 1 || kPeriod <= 0 || dPeriod <= 0) return [];
+  const aligned = prepareAlignedCandles(candles);
+  if (aligned.length < kPeriod + dPeriod - 1 || kPeriod <= 0 || dPeriod <= 0) return [];
 
   const rawK: { time: UTCTimestamp; k: number }[] = [];
 
-  for (let i = kPeriod - 1; i < candles.length; i++) {
+  for (let i = kPeriod - 1; i < aligned.length; i++) {
     let minLow = Infinity;
     let maxHigh = -Infinity;
 
     for (let j = 0; j < kPeriod; j++) {
-      const c = extractCandleValues(candles[i - j]);
+      const c = aligned[i - j];
       if (c.low < minLow) minLow = c.low;
       if (c.high > maxHigh) maxHigh = c.high;
     }
 
-    const cur = extractCandleValues(candles[i]);
+    const cur = aligned[i];
     const range = maxHigh - minLow;
     const kVal = range === 0 ? 50 : ((cur.close - minLow) / range) * 100;
 
@@ -349,17 +392,18 @@ export function calculateStochastic(
  * Medição de volatilidade absoluta de Welles Wilder
  */
 export function calculateATR(candles: CandleInput[], period: number = 14): IndicatorPoint[] {
-  if (candles.length <= period || period <= 0) return [];
+  const aligned = prepareAlignedCandles(candles);
+  if (aligned.length <= period || period <= 0) return [];
   const result: IndicatorPoint[] = [];
 
   // Calcular True Range (TR)
   const trValues: { time: UTCTimestamp; tr: number }[] = [];
-  const first = extractCandleValues(candles[0]);
+  const first = aligned[0];
   trValues.push({ time: first.time, tr: first.high - first.low });
 
-  for (let i = 1; i < candles.length; i++) {
-    const cur = extractCandleValues(candles[i]);
-    const prev = extractCandleValues(candles[i - 1]);
+  for (let i = 1; i < aligned.length; i++) {
+    const cur = aligned[i];
+    const prev = aligned[i - 1];
     const tr = Math.max(
       cur.high - cur.low,
       Math.abs(cur.high - prev.close),
@@ -391,14 +435,15 @@ export function calculateATR(candles: CandleInput[], period: number = 14): Indic
  * Acumulado ponderado por volume: Σ(TypicalPrice * Volume) / Σ(Volume)
  */
 export function calculateVWAP(candles: CandleInput[]): IndicatorPoint[] {
-  if (candles.length === 0) return [];
+  const aligned = prepareAlignedCandles(candles);
+  if (aligned.length === 0) return [];
   const result: IndicatorPoint[] = [];
 
   let cumVol = 0;
   let cumTPV = 0;
 
-  for (const c of candles) {
-    const { time, high, low, close, volume } = extractCandleValues(c);
+  for (const c of aligned) {
+    const { time, high, low, close, volume } = c;
     const tp = (high + low + close) / 3;
     cumVol += volume;
     cumTPV += tp * volume;
@@ -418,11 +463,12 @@ export function calculateVWAP(candles: CandleInput[]): IndicatorPoint[] {
  * CCI = (TP - SMA(TP)) / (0.015 * MeanDeviation)
  */
 export function calculateCCI(candles: CandleInput[], period: number = 20): IndicatorPoint[] {
-  if (candles.length < period || period <= 0) return [];
+  const aligned = prepareAlignedCandles(candles);
+  if (aligned.length < period || period <= 0) return [];
   const result: IndicatorPoint[] = [];
 
-  const tps: { time: UTCTimestamp; tp: number }[] = candles.map((c) => {
-    const { time, high, low, close } = extractCandleValues(c);
+  const tps: { time: UTCTimestamp; tp: number }[] = aligned.map((c) => {
+    const { time, high, low, close } = c;
     return { time, tp: (high + low + close) / 3 };
   });
 

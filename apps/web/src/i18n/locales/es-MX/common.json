@@ -1,10 +1,20 @@
 {
-  "title": "Binmax Option — Trading Room",
+  "title": "Binmax Option — Trading Room (México)",
   "latency": "Latencia",
   "online": "Conectado",
   "offline": "Desconectado",
   "loading": "Cargando...",
   "error": "Ha ocurrido un error",
+  "demo_banner": "Modo Demo — sin dinero real",
+  "risk_warning": "Aviso de Riesgo: Operar contratos UP/DOWN y activos OTC conlleva un alto riesgo. Entorno 100% demostrativo — ningún dinero real circula.",
+  "legal": {
+    "terms_link": "Términos de Uso (MX)",
+    "privacy_link": "Aviso de Privacidad (LFPDPPP)",
+    "terms_title": "Términos de Uso — México (Modo Demo Fase 2)",
+    "terms_body": "Estos Términos de Uso regulan el acceso desde México a la plataforma de simulación educativa en la Fase 2. No se realizan depósitos, retiros ni operaciones con dinero real (MXN sólo de visualización).",
+    "privacy_title": "Aviso de Privacidad — México (LFPDPPP)",
+    "privacy_body": "Sus datos de sesión y configuración regional (es-MX / MXN / America/Mexico_City) están protegidos conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares."
+  },
   "buttons": {
     "save": "Guardar",
     "cancel": "Cancelar",

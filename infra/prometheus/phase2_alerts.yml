@@ -1,7 +1,8 @@
-# Regras de Alerta do Prometheus e Alertmanager para a Fase 2 (América Latina)
+# Regras de Alerta do Prometheus e Alertmanager para a Fase 2 (América Latina) — Seção 12.2
 groups:
   - name: phase2_regional_monitoring
     rules:
+      # 1. Geoblocking falhou ou pico anormal de rejeições na borda
       - alert: HighGeoblockRejectionRate
         expr: rate(broker_geoblock_rejections_total[1m]) > 10
         for: 1m
@@ -12,6 +13,17 @@ groups:
           summary: "Pico de conexões bloqueadas por Geoblocking (País: {{ $labels.country }})"
           description: "Foram detectadas mais de 10 tentativas/minuto de acesso a partir de região não autorizada na Fase 2."
 
+      - alert: GeoblockingFailed
+        expr: sum(rate(broker_http_requests_total{country!~"BR|MX|CO|AR|CL|PE",status="200",path=~"/api/v1/contracts.*"}[1m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+          tier: edge_security
+        annotations:
+          summary: "Falha crítica de Geoblocking detectada (País não suportado operou com HTTP 200)"
+          description: "Requisição de contrato em país fora da lista de 6 países permitidos retornou HTTP 200."
+
+      # 2. Feed OTC parado em um país / Circuit Breaker Aberto
       - alert: OtcFeedCircuitBreakerOpen
         expr: broker_otc_real_feed_status == 1
         for: 30s
@@ -22,6 +34,39 @@ groups:
           summary: "Feed de mercado real em fallback estocástico para {{ $labels.symbol }}"
           description: "O conector de mercado real falhou e o mercado está sendo sustentado pelo gerador Ornstein-Uhlenbeck."
 
+      - alert: OtcFeedStoppedInCountry
+        expr: broker_otc_real_feed_status == 1 or tick_age_seconds{symbol=~".*_OTC"} > 5
+        for: 15s
+        labels:
+          severity: critical
+          tier: market_data
+        annotations:
+          summary: "Feed OTC parado ou degradado para o ativo {{ $labels.symbol }}"
+          description: "O feed OTC excedeu 5 segundos de staleness ou entrou em circuit breaker."
+
+      # 3. Latência alta em uma região
+      - alert: HighRegionLatency
+        expr: broker_region_latency_p95_ms > 200 or api_request_latency_p95_ms > 200
+        for: 1m
+        labels:
+          severity: warning
+          tier: regional_sla
+        annotations:
+          summary: "Latência p95 acima de 200ms na região {{ $labels.country }}"
+          description: "A latência regional p95 ultrapassou o limite de 200ms definido na Seção 13.4 da Fase 2."
+
+      # 4. Erro 5xx por país
+      - alert: High5xxErrorRateByCountry
+        expr: rate(broker_http_5xx_by_country_total[1m]) > 0 or rate(api_http_5xx_total[1m]) > 0
+        for: 30s
+        labels:
+          severity: critical
+          tier: availability
+        annotations:
+          summary: "Erros HTTP 5xx detectados no país {{ $labels.country }}"
+          description: "A API está retornando respostas 5xx para requisições originadas no país {{ $labels.country }}."
+
+      # 5. Feature flag alterada ou país desativado
       - alert: CountryFeatureFlagDisabled
         expr: broker_feature_flags_status{flag="trading_enabled"} == 0
         for: 2m
@@ -31,3 +76,13 @@ groups:
         annotations:
           summary: "Trading desativado no país {{ $labels.country }}"
           description: "O trading foi administrativamente suspenso ou colocado em manutenção no país selecionado."
+
+      - alert: FeatureFlagChanged
+        expr: increase(broker_feature_flag_changes_total[5m]) >= 1
+        for: 0m
+        labels:
+          severity: info
+          tier: audit_ops
+        annotations:
+          summary: "Feature flag {{ $labels.flag }} alterada em runtime ({{ $labels.country }})"
+          description: "Uma feature flag foi comutada em tempo de execução sem necessidade de deploy."

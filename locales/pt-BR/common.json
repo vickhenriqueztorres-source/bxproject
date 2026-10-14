@@ -1,0 +1,48 @@
+{
+  "title": "LATAM Trading Platform",
+  "latency": "Latência",
+  "online": "Conectado",
+  "offline": "Desconectado",
+  "loading": "Carregando...",
+  "error": "Ocorreu um erro",
+  "demo_banner": "Modo Demo — sem dinheiro real",
+  "risk_warning": "Aviso de Risco: Operar contratos UP/DOWN e ativos OTC envolve alto risco. Ambiente 100% demonstrativo — nenhum dinheiro real circula.",
+  "legal": {
+    "terms_link": "Termos de Uso (BR)",
+    "privacy_link": "Política de Privacidade (LGPD)",
+    "terms_title": "Termos de Uso — Brasil (Modo Demo Fase 2)",
+    "terms_body": "Estes Termos de Uso regem o acesso de residentes no Brasil à plataforma de simulação educacional e demonstrativa na Fase 2. Nenhum depósito, saque ou valor monetário real é aceito ou liquidado.",
+    "privacy_title": "Política de Privacidade — Brasil (LGPD Lei nº 13.709/2018)",
+    "privacy_body": "Seus dados de sessão e preferências regionais (pt-BR / BRL / America/Sao_Paulo) são tratados em conformidade com a Lei Geral de Proteção de Dados (LGPD)."
+  },
+  "buttons": {
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "close": "Fechar",
+    "confirm": "Confirmar"
+  },
+  "currencies": {
+    "select_currency": "Moeda de Exibição",
+    "brl": "Real Brasileiro (BRL)",
+    "mxn": "Peso Mexicano (MXN)",
+    "cop": "Peso Colombiano (COP)",
+    "ars": "Peso Argentino (ARS)",
+    "clp": "Peso Chileno (CLP)",
+    "pen": "Sol Peruano (PEN)",
+    "usd": "Dólar Americano (USD - Base)"
+  },
+  "tabs": {
+    "forex": "Forex",
+    "crypto": "Cripto",
+    "commodities": "Commodities",
+    "synthetics": "Sintéticos",
+    "all": "Todos"
+  },
+  "geoblock": {
+    "title": "Acesso Não Disponível na sua Região",
+    "message": "Nossa plataforma opera atualmente na Fase 2 exclusivamente nos seguintes 6 países da América Latina:",
+    "countries": "Brasil, México, Colômbia, Argentina, Chile e Peru.",
+    "support": "Se você reside em um desses países e está usando VPN, por favor desative-a para acessar.",
+    "button_retry": "Verificar Novamente"
+  }
+}

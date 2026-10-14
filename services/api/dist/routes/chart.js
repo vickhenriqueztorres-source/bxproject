@@ -1,3 +1,16 @@
+const SYMBOL_ALIASES = {
+    SYNTH_VOL_10: 'VOL_10',
+    SYNTH_VOL_25: 'VOL_25',
+    SYNTH_VOL_50: 'VOL_50',
+    SYNTH_VOL_75: 'VOL_75',
+    SYNTH_VOL_100: 'VOL_100',
+    SYNTH_CRASH_BOOM_100: 'CRASH_BOOM_100',
+};
+function resolveSymbol(sym) {
+    if (!sym)
+        return 'VOL_50';
+    return SYMBOL_ALIASES[sym] || sym;
+}
 export const chartRoutes = async (server) => {
     // 1. GET /api/v1/chart/config (TradingView UDF Config)
     server.get("/api/v1/chart/config", async () => {
@@ -16,16 +29,19 @@ export const chartRoutes = async (server) => {
     });
     // 3. GET /api/v1/chart/symbols (Symbol Metadata)
     server.get("/api/v1/chart/symbols", async (request, reply) => {
-        const symbol = request.query.symbol || "SYNTH_VOL_50";
+        const symbol = resolveSymbol(request.query.symbol);
         // Busca no banco se existe
         let name = symbol;
-        let description = "Synthetic Volatility Index (OTC)";
-        let pricescale = 100000;
+        let description = "Índice de Volatilidad (24/7)";
+        let pricescale = 10000;
         try {
-            const res = await server.pg.query("SELECT symbol, name FROM indices WHERE symbol = $1", [symbol]);
+            const res = await server.pg.query("SELECT symbol, COALESCE(params->>'name', symbol) as name, COALESCE(params->>'subtitle', params->>'name', symbol) as description, COALESCE((params->>'precision')::int, 4) as precision FROM indices WHERE symbol = $1", [symbol]);
             if (res.rows.length > 0) {
                 name = res.rows[0].symbol;
-                description = res.rows[0].name;
+                description = res.rows[0].description || res.rows[0].name;
+                if (res.rows[0].precision) {
+                    pricescale = Math.pow(10, res.rows[0].precision);
+                }
             }
         }
         catch {
@@ -50,7 +66,8 @@ export const chartRoutes = async (server) => {
     });
     // 4. GET /api/v1/chart/history (TradingView Bars)
     server.get("/api/v1/chart/history", async (request, reply) => {
-        const { symbol = "SYNTH_VOL_50", resolution = "1", from, to, countback } = request.query;
+        const { symbol: rawSymbol = "VOL_50", resolution = "1", from, to, countback } = request.query;
+        const symbol = resolveSymbol(rawSymbol);
         if (!from || !to) {
             return reply.status(400).send({ s: "error", errmsg: "Missing 'from' or 'to' parameters" });
         }
@@ -146,7 +163,7 @@ export const chartRoutes = async (server) => {
         }
     });
     const handleCandlesRequest = async (request, reply) => {
-        const symbol = request.query.symbol || "SYNTH_VOL_50";
+        const symbol = resolveSymbol(request.query.symbol);
         const interval = request.query.interval || "1m";
         const rawLimit = parseInt(request.query.limit || "1440", 10);
         const limit = Math.min(Math.max(1, isNaN(rawLimit) ? 1440 : rawLimit), 10080);

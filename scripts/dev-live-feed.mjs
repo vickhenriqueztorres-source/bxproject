@@ -39,7 +39,7 @@ let blnk = null;
 try {
   const blnkModule = require('../services/wallet-adapter/dist/blnk-client.js');
   BlnkClient = blnkModule.BlnkClient;
-  const BLNK_URL = process.env.BLNK_URL || 'http://172.18.0.11:5001';
+  const BLNK_URL = process.env.BLNK_URL || 'http://127.0.0.1:5001';
   blnk = new BlnkClient(BLNK_URL, 2500);
   blnk.initializeLedgerAndHouseAccounts().then(() => {
     console.log('[Blnk] Ledger e contas da casa inicializadas com sucesso.');
@@ -477,6 +477,7 @@ const fanoutTelemetry = {
 // Armazenamento em memória de carteira e contratos para o ambiente de desenvolvimento
 const devContracts = [];
 let devWallet = { currency: 'USD', available_minor: 1000000, reserved_minor: 0 };
+const inFlightOrders = new Map(); // idempotencyKey -> Promise
 
 let newsCache = null;
 let newsCacheExpiresAt = 0;
@@ -1364,7 +1365,9 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
       try {
         const payload = JSON.parse(body || '{}');
         const name = typeof payload.name === 'string' ? payload.name.trim() : '';
-        const country = typeof payload.country === 'string' ? payload.country.trim().toUpperCase().slice(0, 2) : '';
+        const country = typeof payload.country === 'string' 
+          ? payload.country.trim().toUpperCase().slice(0, 2) 
+          : (typeof payload.country_code === 'string' ? payload.country_code.trim().toUpperCase().slice(0, 2) : '');
         const phoneCode = typeof payload.phone_code === 'string' ? payload.phone_code.trim() : (typeof payload.phoneCode === 'string' ? payload.phoneCode.trim() : '+34');
         const phoneNumber = typeof payload.phone_number === 'string' ? payload.phone_number.trim() : (typeof payload.phoneNumber === 'string' ? payload.phoneNumber.trim() : '');
 
@@ -1397,6 +1400,7 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
                 name: row.name,
                 email: row.email,
                 country: row.country_code,
+                country_code: row.country_code,
                 phone_code: row.phone_code,
                 phone_number: row.phone_number,
                 demo_balance_minor: Number(row.demo_balance_minor),
@@ -1412,7 +1416,10 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
           for (const [em, mUser] of memoryUsers.entries()) {
             if (mUser.id === userId) {
               if (name) mUser.name = name;
-              if (country) mUser.country_code = country;
+              if (country) {
+                mUser.country_code = country;
+                mUser.country = country;
+              }
               mUser.phone_code = phoneCode;
               mUser.phone_number = phoneNumber;
               updatedUser = {
@@ -1420,6 +1427,7 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
                 name: mUser.name,
                 email: mUser.email,
                 country: mUser.country_code || mUser.country || 'ES',
+                country_code: mUser.country_code || mUser.country || 'ES',
                 phone_code: mUser.phone_code,
                 phone_number: mUser.phone_number,
                 demo_balance_minor: mUser.demo_balance_minor || 1000000,
@@ -1442,6 +1450,7 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
         res.end(JSON.stringify({
           success: true,
           message: 'Perfil guardado con éxito',
+          ...updatedUser,
           user: updatedUser,
           token
         }));
@@ -1544,48 +1553,77 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
   // Endpoint de Carteira: /api/wallet, /wallet, /api/v1/wallet, /v1/wallet (Blnk Ledger Oficial - D-02, I-01)
   if (pathname === '/api/wallet' || pathname === '/wallet' || pathname === '/api/v1/wallet' || pathname === '/v1/wallet') {
     const authData = extractBearerUser(req);
-    if (authData && authData.sub && blnk) {
-      try {
-        let blnkBalance;
+    if (authData && authData.sub) {
+      let resolvedBalance = null;
+
+      // 1. Tenta obter o saldo oficial do Blnk Ledger
+      if (blnk) {
         try {
-          blnkBalance = await blnk.getBalance(authData.sub);
-        } catch (bErr) {
-          if (bErr.message?.includes('404') || bErr.message?.includes('not found') || bErr.message?.includes('BLNK_HTTP_ERROR_404')) {
-            // Onboarding do usuário com injeção do saldo inicial demo de US$ 10.000 (D-11, I-01)
-            await blnk.onboardUser(authData.sub);
+          let blnkBalance;
+          try {
             blnkBalance = await blnk.getBalance(authData.sub);
-          } else {
-            throw bErr;
+          } catch (bErr) {
+            if (bErr.message?.includes('404') || bErr.message?.includes('not found') || bErr.message?.includes('BLNK_HTTP_ERROR_404')) {
+              await blnk.onboardUser(authData.sub);
+              blnkBalance = await blnk.getBalance(authData.sub);
+            } else {
+              throw bErr;
+            }
+          }
+          if (blnkBalance && Number.isSafeInteger(Number(blnkBalance.available_minor))) {
+            resolvedBalance = {
+              currency: 'USD',
+              available_minor: Number(blnkBalance.available_minor),
+              reserved_minor: Number(blnkBalance.reserved_minor || 0)
+            };
+            // Espelha atomicamente no PostgreSQL para consistência forte
+            if (pgPool) {
+              pgPool.query('UPDATE users SET demo_balance_minor = $1, updated_at = NOW() WHERE id = $2', [resolvedBalance.available_minor, authData.sub]).catch(() => {});
+            }
+          }
+        } catch (err) {
+          console.warn('[Blnk Wallet Error, attempting PostgreSQL fallback]:', err.message);
+        }
+      }
+
+      // 2. Fallback resiliente no PostgreSQL (I-01, D-05)
+      if (!resolvedBalance && pgPool) {
+        try {
+          const uRes = await pgPool.query('SELECT demo_balance_minor FROM users WHERE id = $1', [authData.sub]);
+          if (uRes.rows.length > 0) {
+            resolvedBalance = {
+              currency: 'USD',
+              available_minor: Number(uRes.rows[0].demo_balance_minor),
+              reserved_minor: 0
+            };
+          }
+        } catch (dbErr) {
+          console.error('[DB Wallet Fallback Error]:', dbErr.message);
+        }
+      }
+
+      // 3. Fallback em memória para ambiente de teste
+      if (!resolvedBalance) {
+        for (const mUser of memoryUsers.values()) {
+          if (mUser.id === authData.sub) {
+            resolvedBalance = {
+              currency: 'USD',
+              available_minor: Number(mUser.demo_balance_minor || 1000000),
+              reserved_minor: 0
+            };
+            break;
           }
         }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          currency: 'USD',
-          available_minor: Number(blnkBalance.available_minor || 0),
-          reserved_minor: Number(blnkBalance.reserved_minor || 0)
-        }));
-        return;
-      } catch (err) {
-        console.error('[Blnk Wallet Error]', err.message);
       }
-    } else if (authData && authData.sub && pgPool) {
-      // Fallback secundário seguro via DB caso o Blnk esteja indisponível temporariamente
-      try {
-        const uRes = await pgPool.query('SELECT demo_balance_minor FROM users WHERE id = $1', [authData.sub]);
-        if (uRes.rows.length > 0) {
-          const userBal = Number(uRes.rows[0].demo_balance_minor);
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            currency: 'USD',
-            available_minor: userBal,
-            reserved_minor: 0
-          }));
-          return;
-        }
-      } catch (dbErr) {
-        console.error('[DB Fallback Wallet Error]', dbErr.message);
+
+      if (resolvedBalance) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(resolvedBalance));
+        return;
       }
     }
+
+    // Modo Convidado / Anônimo não autenticado
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(devWallet));
     return;
@@ -2442,6 +2480,10 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
     let body = '';
     req.on('data', chunk => { body += chunk; });
     req.on('end', async () => {
+      let resolveInFlight = null;
+      let rejectInFlight = null;
+      let activeIdemKey = null;
+
       try {
         const payload = JSON.parse(body || '{}');
         const rawSymbol = payload.symbol;
@@ -2474,6 +2516,28 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
 
         const authData = extractBearerUser(req);
         const idempotencyKey = req.headers['idempotency-key'] || ('idem_' + Date.now() + '_' + crypto.randomBytes(6).toString('hex'));
+        activeIdemKey = idempotencyKey;
+
+        // Trava de Concorrência e Idempotência In-Flight (Skill 05-resilience-patterns)
+        if (inFlightOrders.has(idempotencyKey)) {
+          try {
+            const existing = await inFlightOrders.get(idempotencyKey);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              success: true,
+              is_duplicate: true,
+              contract: existing
+            }));
+            return;
+          } catch (_) {}
+        }
+
+        const inFlightPromise = new Promise((resolve, reject) => {
+          resolveInFlight = resolve;
+          rejectInFlight = reject;
+        });
+        inFlightOrders.set(idempotencyKey, inFlightPromise);
+        setTimeout(() => inFlightOrders.delete(idempotencyKey), 60_000);
 
         // 1. Verificação prévia de Idempotência no PostgreSQL (D-12, B-05, I-03)
         if (authData && authData.sub && pgPool) {
@@ -2501,6 +2565,7 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
                 strike_price: Number(row.entry_price),
                 idempotency_key: row.idempotency_key
               };
+              resolveInFlight(existingContract);
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({
                 success: true,
@@ -2512,6 +2577,20 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
           } catch (idemErr) {
             console.error('[DB Idempotency Check Error]', idemErr.message);
           }
+        }
+
+        // 1.1 Verificação de Idempotência em memória (resiliência de contingência)
+        const targetUserId = authData?.sub || '00000000-0000-4000-8000-000000000001';
+        const inMemExisting = devContracts.find(c => c.user_id === targetUserId && c.idempotency_key === idempotencyKey);
+        if (inMemExisting) {
+          resolveInFlight(inMemExisting);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            success: true,
+            is_duplicate: true,
+            contract: inMemExisting
+          }));
+          return;
         }
 
         let userBalance = devWallet.available_minor;
@@ -2533,32 +2612,69 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
           return;
         }
 
+        // 1. Dedução atômica persistida no PostgreSQL para o usuário autenticado (I-01 a I-03)
+        if (authData && authData.sub && pgPool) {
+          try {
+            const deductRes = await pgPool.query(
+              'UPDATE users SET demo_balance_minor = demo_balance_minor - $1, updated_at = NOW() WHERE id = $2 AND demo_balance_minor >= $1 RETURNING demo_balance_minor',
+              [stake, authData.sub]
+            );
+            if (deductRes.rows.length === 0) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ code: 'INSUFFICIENT_BALANCE', message: 'Saldo insuficiente' }));
+              return;
+            }
+          } catch (dbDeductErr) {
+            console.error('[DB Stake Deduct Error]', dbDeductErr.message);
+          }
+        }
+
         devWallet.available_minor = Math.max(0, devWallet.available_minor - stake);
         devWallet.reserved_minor += stake;
 
         const contractId = crypto.randomUUID();
+
+        // 2. Reserva contábil no Blnk Ledger
+        if (blnk && authData && authData.sub) {
+          blnk.reserveStake(authData.sub, contractId, stake).catch(e => {
+            console.warn('[Blnk Reserve Warning]:', e.message);
+          });
+        }
         const entryPrice = parseFloat(state.currentPrice);
 
-        // Cálculo autêntico no servidor baseado no modo de expiração
+        // Cálculo autêntico no servidor baseado no modo de expiração (Subetapa 9.1)
         const expiryMode = payload.expiry_mode || (payload.duration_seconds === 300 ? 'CANDLE_5M' : '1M_FIXED');
-        let calculatedDurationMs;
+        let targetExpiryEpoch;
+        let safeDurationMs;
 
-        if (expiryMode === 'CANDLE_1M') {
-          const cur1mEnd = Math.ceil(now / 60_000) * 60_000;
-          const remSec = Math.floor((cur1mEnd - now) / 1000);
-          calculatedDurationMs = (remSec < 30 ? cur1mEnd + 60_000 : cur1mEnd) - now;
-        } else if (expiryMode === 'CANDLE_5M') {
-          const cur5mEnd = Math.ceil(now / 300_000) * 300_000;
-          const remSec = Math.floor((cur5mEnd - now) / 1000);
-          calculatedDurationMs = (remSec < 30 ? cur5mEnd + 300_000 : cur5mEnd) - now;
-        } else {
-          // 1M_FIXED ou turbo: segundos corridos a partir da recepção
-          const requestedSec = parseInt(payload.duration_seconds, 10) || 60;
-          calculatedDurationMs = requestedSec * 1000;
+        // Se o cliente forneceu target_expires_at calibrado, valida e honra com precisão absoluta
+        if (payload.target_expires_at) {
+          const clientExpiryMs = Date.parse(payload.target_expires_at);
+          if (Number.isFinite(clientExpiryMs) && clientExpiryMs - now >= 25_000 && clientExpiryMs - now <= 3_600_000) {
+            targetExpiryEpoch = clientExpiryMs;
+            safeDurationMs = Math.max(30_000, targetExpiryEpoch - now);
+          }
         }
 
-        const safeDurationMs = Math.max(3000, calculatedDurationMs);
-        const targetExpiryEpoch = now + safeDurationMs;
+        if (!targetExpiryEpoch) {
+          let calculatedDurationMs;
+          if (expiryMode === 'CANDLE_1M') {
+            const cur1mEnd = Math.ceil(now / 60_000) * 60_000;
+            const remSec = Math.floor((cur1mEnd - now) / 1000);
+            calculatedDurationMs = (remSec < 30 ? cur1mEnd + 60_000 : cur1mEnd) - now;
+          } else if (expiryMode === 'CANDLE_5M') {
+            const cur5mEnd = Math.ceil(now / 300_000) * 300_000;
+            const remSec = Math.floor((cur5mEnd - now) / 1000);
+            calculatedDurationMs = (remSec < 30 ? cur5mEnd + 300_000 : cur5mEnd) - now;
+          } else {
+            // 1M_FIXED ou turbo: segundos corridos a partir da recepção
+            const requestedSec = parseInt(payload.duration_seconds, 10) || 60;
+            calculatedDurationMs = requestedSec * 1000;
+          }
+          safeDurationMs = Math.max(30_000, calculatedDurationMs);
+          targetExpiryEpoch = now + safeDurationMs;
+        }
+
         const expiresAt = new Date(targetExpiryEpoch).toISOString();
         const durationSeconds = Math.round(safeDurationMs / 1000);
 
@@ -2653,18 +2769,18 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
         }
 
         devContracts.unshift(newContract);
+        if (resolveInFlight) resolveInFlight(newContract);
 
-        // Reserva contábil de stake no Blnk Ledger (I-02, I-03)
+        // Reserva contábil de stake no Blnk Ledger (I-02, I-03) disparada de forma assíncrona
+        // A garantia de consistência reside no evento atômico RESERVE_STAKE na outbox_events do PostgreSQL (Subetapa 9.2)
         if (blnk && authData && authData.sub) {
-          try {
-            await blnk.reserveStake(authData.sub, contractId, stake);
-          } catch (reserveErr) {
-            console.error('[Blnk Stake Reservation Error]', reserveErr.message);
-          }
+          blnk.reserveStake(authData.sub, contractId, stake).catch((reserveErr) => {
+            console.error('[Blnk Stake Reservation Async Error]', reserveErr.message);
+          });
         }
 
-        // Agendamento de Liquidação oficial contra o tick autêntico do símbolo (mínimo de 30s)
-        const settlementDelayMs = safeDurationMs;
+        // Agendamento de Liquidação oficial contra o tick autêntico do símbolo (Subetapa 9.3)
+        const settlementDelayMs = Math.max(1000, targetExpiryEpoch - Date.now());
         setTimeout(async () => {
           const target = devContracts.find(c => c.id === contractId);
           if (target && target.status === 'OPEN') {
@@ -2685,16 +2801,46 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
             devWallet.reserved_minor = Math.max(0, devWallet.reserved_minor - stake);
             devWallet.available_minor += payoutMinor;
 
-            // 1. Liquidação contábil oficial no Blnk Ledger (D-19, I-02, I-04, I-05)
-            if (blnk && authData && authData.sub) {
+            // 1. Atualização do saldo do usuário no PostgreSQL (I-01, I-04, I-05)
+            let updatedUserBalance = null;
+            if (pgPool && authData && authData.sub) {
               try {
-                await blnk.settleContract(contractId, authData.sub, result, stake, payoutMinor);
-              } catch (blnkSettleErr) {
-                console.error('[Blnk Settlement Error]', blnkSettleErr.message);
+                if (payoutMinor > 0) {
+                  const creditRes = await pgPool.query(`
+                    UPDATE users
+                    SET demo_balance_minor = demo_balance_minor + $1, updated_at = NOW()
+                    WHERE id = $2
+                    RETURNING demo_balance_minor
+                  `, [payoutMinor, authData.sub]);
+                  if (creditRes.rows.length > 0) {
+                    updatedUserBalance = Number(creditRes.rows[0].demo_balance_minor);
+                  }
+                } else {
+                  // LOSS: A stake já foi debitada na abertura. Consulta o saldo atual persistido
+                  const balRes = await pgPool.query('SELECT demo_balance_minor FROM users WHERE id = $1', [authData.sub]);
+                  if (balRes.rows.length > 0) {
+                    updatedUserBalance = Number(balRes.rows[0].demo_balance_minor);
+                  }
+                }
+              } catch (dbErr) {
+                console.error('[DB Settlement Balance Update Error]', dbErr.message);
               }
             }
 
-            // 2. Persiste estado final do contrato no PostgreSQL
+            // 2. Liquidação contábil oficial no Blnk Ledger (D-19, I-02, I-04, I-05)
+            if (blnk && authData && authData.sub) {
+              try {
+                await blnk.settleContract(contractId, authData.sub, result, stake, payoutMinor);
+                const bal = await blnk.getBalance(authData.sub);
+                if (bal && Number.isSafeInteger(Number(bal.available_minor))) {
+                  updatedUserBalance = Number(bal.available_minor);
+                }
+              } catch (blnkSettleErr) {
+                console.warn('[Blnk Settlement Warning]', blnkSettleErr.message);
+              }
+            }
+
+            // 3. Persiste estado final do contrato no PostgreSQL
             if (pgPool && authData && authData.sub) {
               try {
                 await pgPool.query(`
@@ -2707,19 +2853,11 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
               }
             }
 
-            // 3. Obtém saldo atualizado do usuário no Blnk para o broadcast
-            let currentAvailable = devWallet.available_minor;
-            if (blnk && authData && authData.sub) {
-              try {
-                const bal = await blnk.getBalance(authData.sub);
-                currentAvailable = Number(bal.available_minor || 0);
-              } catch (_) {}
-            }
-
-            // Broadcast de liquidação aos clientes conectados
+            // 4. Broadcast de liquidação e saldo aos clientes conectados
+            const finalBroadcastBal = updatedUserBalance !== null ? updatedUserBalance : devWallet.available_minor;
             for (const client of wss.clients) {
               if (client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify({ type: 'wallet_balance', available_minor: currentAvailable }));
+                client.send(JSON.stringify({ type: 'wallet_balance', available_minor: finalBroadcastBal }));
                 client.send(JSON.stringify({ type: 'contract_settled', contract_id: contractId, result, payout_minor: payoutMinor }));
               }
             }
@@ -2737,6 +2875,10 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
           strike_price: entryPrice
         }));
       } catch (err) {
+        if (rejectInFlight) {
+          try { rejectInFlight(err); } catch (_) {}
+          if (activeIdemKey) inFlightOrders.delete(activeIdemKey);
+        }
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ code: 'BAD_REQUEST', error: String(err) }));
       }

@@ -1,10 +1,20 @@
 {
-  "title": "Binmax Option — Trading Room",
+  "title": "Binmax Option — Trading Room (Chile)",
   "latency": "Latencia",
   "online": "Conectado",
   "offline": "Desconectado",
   "loading": "Cargando...",
   "error": "Ha ocurrido un error",
+  "demo_banner": "Modo Demo — sin dinero real",
+  "risk_warning": "Aviso de Riesgo: Operar contratos UP/DOWN y activos OTC conlleva un alto riesgo. Entorno 100% demostrativo — ningún dinero real circula.",
+  "legal": {
+    "terms_link": "Términos de Uso (CL)",
+    "privacy_link": "Política de Privacidad (Ley 19.628)",
+    "terms_title": "Términos de Uso — Chile (Modo Demo Fase 2)",
+    "terms_body": "Estos Términos de Uso regulan el acceso en Chile al entorno de práctica de índices sintéticos y OTC. Ninguna operación involucra dinero real (CLP sólo para visualización).",
+    "privacy_title": "Política de Privacidad — Chile (Ley Nº 19.628)",
+    "privacy_body": "El resguardo de datos y configuración regional (es-CL / CLP / America/Santiago) se rige por la Ley 19.628 sobre Protección de la Vida Privada en Chile."
+  },
   "buttons": {
     "save": "Guardar",
     "cancel": "Cancelar",

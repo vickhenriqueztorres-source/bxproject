@@ -26,6 +26,14 @@ export declare class BlnkClient {
     readonly HOUSE_PAYOUT = "@house_payout";
     readonly BROKER_FLOAT = "@broker_float";
     readonly DEMO_START_BALANCE_MINOR = 1000000;
+    /**
+     * Nomenclatura canônica da Fase 2 (Seção 7.1): user:{id}:demo:{currency}:available | reserved
+     */
+    static getUserDemoAccount(userId: string, kind: "available" | "reserved", currency?: string): string;
+    /**
+     * Nomenclatura canônica da Fase 2 (Seção 7.2): platform:demo:{currency}:liability | revenue | payout
+     */
+    static getPlatformDemoAccount(kind: "liability" | "revenue" | "payout", currency?: string): string;
     constructor(baseUrl?: string, timeoutMs?: number);
     private isCircuitOpen;
     private recordSuccess;
