@@ -6,6 +6,10 @@ import { OrderTicket } from './OrderTicket';
 import { setNewTraderoomEnabled } from '../lib/feature-flags';
 import { parseStakeInput, formatMinor } from '../lib/money';
 import { calculateExecutionExpiry, calculateExpirySlots } from './expiry-calculator';
+import { setTraderoomPolishEnabled } from '../lib/traderoom-polish';
+
+// Este arquivo cobre o ticket anterior (chips de valor, +85% em linha). Ver subetapa-polish-01-ticket.
+setTraderoomPolishEnabled(false);
 
 function renderOrderTicket(props: Partial<React.ComponentProps<typeof OrderTicket>> = {}) {
   const queryClient = new QueryClient({

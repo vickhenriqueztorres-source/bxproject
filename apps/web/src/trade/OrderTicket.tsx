@@ -9,6 +9,7 @@ import { safeRandomUUID } from '../lib/uuid';
 import { ExpiryDropdown } from './ExpiryDropdown';
 import { calculateExecutionExpiry, calculateExpirySlots, formatSecondsToMmSs, type ExpirySlot, type ExpiryMode } from './expiry-calculator';
 import { isNewTraderoomEnabled } from '../lib/feature-flags';
+import { isTraderoomPolishEnabled } from '../lib/traderoom-polish';
 
 const messages: Record<string, string> = {
   INDEX_PAUSED: 'Índice pausado pela operação.',
@@ -41,6 +42,8 @@ export function OrderTicket({
   isCompact = false,
 }: OrderTicketProps) {
   const isBinmax = isNewTraderoomEnabled();
+  // Acabamento profissional (TRADEROOM_POLISH). Desligada = ticket idêntico ao anterior.
+  const polish = isBinmax && isTraderoomPolishEnabled();
   const queryClient = useQueryClient();
   const [stake, setStake] = useState(isBinmax ? '100' : '10,00');
   const [busy, setBusy] = useState(false);
@@ -259,7 +262,7 @@ export function OrderTicket({
               marginBottom: isCompact ? '3px' : '6px',
             }}
           >
-            <span style={{ fontSize: isCompact ? '11px' : '12px', color: 'var(--text-muted)', fontWeight: 500, fontFamily: "'Inter', sans-serif" }}>
+            <span style={{ fontSize: isCompact ? '11px' : '12px', color: 'var(--text-muted)', fontWeight: 500, fontFamily: polish ? 'var(--font-ui)' : "'Inter', sans-serif" }}>
               Monto
             </span>
             <span
@@ -286,8 +289,8 @@ export function OrderTicket({
             style={{
               display: 'flex',
               alignItems: 'center',
-              background: '#151922',
-              border: '1px solid rgba(244, 245, 247, 0.08)',
+              background: polish ? 'var(--bg-3)' : '#151922',
+              border: polish ? '1px solid var(--line)' : '1px solid rgba(244, 245, 247, 0.08)',
               borderRadius: '8px',
               height: fieldHeight,
               boxSizing: 'border-box',
@@ -380,7 +383,8 @@ export function OrderTicket({
             </button>
           </div>
 
-          {/* Preset Buttons Row */}
+          {/* Preset Buttons Row (proibidos na spec §D com TRADEROOM_POLISH) */}
+          {!polish && (
           <div
             data-testid="stake-presets"
             style={{
@@ -421,6 +425,7 @@ export function OrderTicket({
               );
             })}
           </div>
+          )}
         </div>
 
         {/* D2: EXPIRACIÓN */}
@@ -433,7 +438,7 @@ export function OrderTicket({
               marginBottom: isCompact ? '3px' : '6px',
             }}
           >
-            <span style={{ fontSize: isCompact ? '11px' : '12px', color: 'var(--text-muted)', fontWeight: 500, fontFamily: "'Inter', sans-serif" }}>
+            <span style={{ fontSize: isCompact ? '11px' : '12px', color: 'var(--text-muted)', fontWeight: 500, fontFamily: polish ? 'var(--font-ui)' : "'Inter', sans-serif" }}>
               Expiración
             </span>
             <span
@@ -460,8 +465,8 @@ export function OrderTicket({
             style={{
               display: 'flex',
               alignItems: 'center',
-              background: '#151922',
-              border: '1px solid rgba(244, 245, 247, 0.08)',
+              background: polish ? 'var(--bg-3)' : '#151922',
+              border: polish ? '1px solid var(--line)' : '1px solid rgba(244, 245, 247, 0.08)',
               borderRadius: '8px',
               height: fieldHeight,
               boxSizing: 'border-box',
@@ -566,7 +571,7 @@ export function OrderTicket({
                 top: '56px',
                 right: 0,
                 width: '180px',
-                background: '#151922',
+                background: polish ? 'var(--bg-2)' : '#151922',
                 border: '1px solid rgba(244, 245, 247, 0.15)',
                 borderRadius: '8px',
                 boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
@@ -624,7 +629,7 @@ export function OrderTicket({
               marginBottom: isCompact ? '1px' : '2px',
             }}
           >
-            <span style={{ fontSize: isCompact ? '10px' : '12px', color: 'var(--text-muted)', fontWeight: 500, fontFamily: "'Inter', sans-serif" }}>
+            <span style={{ fontSize: isCompact ? '10px' : '12px', color: 'var(--text-muted)', fontWeight: 500, fontFamily: polish ? 'var(--font-ui)' : "'Inter', sans-serif" }}>
               Ganancia
             </span>
             <span
@@ -650,21 +655,26 @@ export function OrderTicket({
           <div
             data-testid="ganancia-pct"
             style={{
-              fontSize: isCompact ? '18px' : '22px',
-              fontWeight: 800,
+              fontSize: polish ? (isCompact ? '28px' : '40px') : (isCompact ? '18px' : '22px'),
+              fontWeight: polish ? 600 : 800,
               lineHeight: '1.05',
               color: 'var(--profit)',
               fontFamily: "'Geist Mono', monospace",
               letterSpacing: '-0.3px',
             }}
           >
-            {`+${payoutPct}%`}
+            {polish ? (
+              <>
+                {`+${payoutPct}`}
+                <span data-testid="ganancia-pct-sign" style={{ fontSize: isCompact ? '18px' : '24px', fontWeight: 500 }}>%</span>
+              </>
+            ) : `+${payoutPct}%`}
           </div>
 
           <div
             data-testid="ganancia-amount"
             style={{
-              fontSize: isCompact ? '11.5px' : '13px',
+              fontSize: polish ? (isCompact ? '14px' : '18px') : (isCompact ? '11.5px' : '13px'),
               fontWeight: 700,
               color: 'var(--profit)',
               fontFamily: "'Geist Mono', monospace",
@@ -684,11 +694,11 @@ export function OrderTicket({
           onClick={() => handleExecute('UP')}
           style={{
             width: '100%',
-            height: btnHeight,
-            borderRadius: '6px',
+            height: polish && !isCompact ? '80px' : btnHeight,
+            borderRadius: polish ? '10px' : '6px',
             background: 'var(--profit)',
             border: 'none',
-            color: '#FFFFFF',
+            color: polish ? 'var(--bg-0)' : '#FFFFFF',
             cursor: blocked || busy ? 'not-allowed' : 'pointer',
             opacity: blocked || busy ? 0.45 : 1,
             display: 'flex',
@@ -698,8 +708,10 @@ export function OrderTicket({
             gap: isCompact ? '2px' : '3px',
             padding: '4px',
             boxSizing: 'border-box',
-            boxShadow: blocked || busy ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.25)',
-            transition: 'transform 0.12s ease, opacity 0.12s ease, background 0.12s ease',
+            boxShadow: polish || blocked || busy ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.25)',
+            transition: polish
+              ? 'transform var(--t-micro) var(--ease), opacity var(--t-micro) var(--ease), background-color var(--t-micro) var(--ease)'
+              : 'transform 0.12s ease, opacity 0.12s ease, background 0.12s ease',
           }}
         >
           <svg
@@ -707,7 +719,7 @@ export function OrderTicket({
             height={isCompact ? '18' : '20'}
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#FFFFFF"
+            stroke={polish ? 'currentColor' : '#FFFFFF'}
             strokeWidth="2.2"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -717,7 +729,7 @@ export function OrderTicket({
             <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
             <polyline points="16 7 22 7 22 13" />
           </svg>
-          <span style={{ fontSize: isCompact ? '12px' : '13px', fontWeight: 800, letterSpacing: '0.6px', color: '#FFFFFF' }}>
+          <span style={{ fontSize: polish ? (isCompact ? '13px' : '15px') : (isCompact ? '12px' : '13px'), fontWeight: polish ? 700 : 800, letterSpacing: '0.6px', color: polish ? 'currentColor' : '#FFFFFF' }}>
             SUBE
           </span>
         </button>
@@ -731,11 +743,11 @@ export function OrderTicket({
           onClick={() => handleExecute('DOWN')}
           style={{
             width: '100%',
-            height: btnHeight,
-            borderRadius: '6px',
+            height: polish && !isCompact ? '80px' : btnHeight,
+            borderRadius: polish ? '10px' : '6px',
             background: 'var(--loss)',
             border: 'none',
-            color: '#FFFFFF',
+            color: polish ? 'var(--bg-0)' : '#FFFFFF',
             cursor: blocked || busy ? 'not-allowed' : 'pointer',
             opacity: blocked || busy ? 0.45 : 1,
             display: 'flex',
@@ -745,8 +757,10 @@ export function OrderTicket({
             gap: isCompact ? '2px' : '3px',
             padding: '4px',
             boxSizing: 'border-box',
-            boxShadow: blocked || busy ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.25)',
-            transition: 'transform 0.12s ease, opacity 0.12s ease, background 0.12s ease',
+            boxShadow: polish || blocked || busy ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.25)',
+            transition: polish
+              ? 'transform var(--t-micro) var(--ease), opacity var(--t-micro) var(--ease), background-color var(--t-micro) var(--ease)'
+              : 'transform 0.12s ease, opacity 0.12s ease, background 0.12s ease',
           }}
         >
           <svg
@@ -754,7 +768,7 @@ export function OrderTicket({
             height={isCompact ? '18' : '20'}
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#FFFFFF"
+            stroke={polish ? 'currentColor' : '#FFFFFF'}
             strokeWidth="2.2"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -764,7 +778,7 @@ export function OrderTicket({
             <polyline points="22 17 13.5 8.5 8.5 13.5 2 7" />
             <polyline points="16 17 22 17 22 11" />
           </svg>
-          <span style={{ fontSize: isCompact ? '12px' : '13px', fontWeight: 800, letterSpacing: '0.6px', color: '#FFFFFF' }}>
+          <span style={{ fontSize: polish ? (isCompact ? '13px' : '15px') : (isCompact ? '12px' : '13px'), fontWeight: polish ? 700 : 800, letterSpacing: '0.6px', color: polish ? 'currentColor' : '#FFFFFF' }}>
             BAJA
           </span>
         </button>

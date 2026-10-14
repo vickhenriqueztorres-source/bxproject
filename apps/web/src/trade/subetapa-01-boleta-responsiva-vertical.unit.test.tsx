@@ -3,6 +3,10 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { OrderTicket } from './OrderTicket';
+import { setTraderoomPolishEnabled } from '../lib/traderoom-polish';
+
+// Este arquivo cobre o ticket anterior (chips de valor, +85% em linha). Ver subetapa-polish-01-ticket.
+setTraderoomPolishEnabled(false);
 
 describe('SUBETAPA 01: Boleta Elástica e Responsiva Verticalmente (OrderTicket 100% Encaixado)', () => {
   const renderWithQuery = (ui: React.ReactElement) => {

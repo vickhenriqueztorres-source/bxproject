@@ -7,6 +7,10 @@ import { OrderTicket } from '../trade/OrderTicket';
 import { PortfolioDrawer } from '../components/drawer/PortfolioDrawer';
 import { TerminalLayout } from '../components/layout/TerminalLayout';
 import * as clientApi from '../api/client';
+import { setTraderoomPolishEnabled } from '../lib/traderoom-polish';
+
+// Este arquivo cobre o ticket anterior (chips de valor, +85% em linha). Ver subetapa-polish-01-ticket.
+setTraderoomPolishEnabled(false);
 
 describe('SUBETAPA 03: Bateria de Certificação, Estresse, Caos, Segurança e Não-Regressão', () => {
   let queryClient: QueryClient;
