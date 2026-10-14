@@ -1,7 +1,32 @@
 import { useEffect, useState } from 'react';
 import type { IChartApi, UTCTimestamp } from 'lightweight-charts';
 import { isNewTraderoomEnabled } from '../lib/feature-flags';
+import { isTraderoomPolishEnabled } from '../lib/traderoom-polish';
 import { timeframeSeconds, type Timeframe } from './candle-adapter';
+
+export interface TimeCountdowns {
+  secondsRemaining: number;
+  purchaseSecondsRemaining: number;
+  isPurchaseLocked: boolean;
+}
+
+/** Contagens da vela de 1 minuto: compra trava aos :30, expiração aos :00. */
+export function computeTimeCountdowns(nowMs: number): TimeCountdowns {
+  const safeNow = Number.isFinite(nowMs) ? nowMs : Date.now();
+  const currentSec = Math.floor(safeNow / 1000) % 60;
+  const remExp = 60 - currentSec;
+  const remPurchase = 30 - currentSec;
+  return {
+    secondsRemaining: remExp === 0 ? 60 : remExp,
+    purchaseSecondsRemaining: remPurchase > 0 ? remPurchase : 0,
+    isPurchaseLocked: remPurchase <= 0,
+  };
+}
+
+/** Única pulsação permitida pelo guia: os últimos 5 s antes da trava de compra. */
+export function shouldPulseCountdown(secondsLeft: number): boolean {
+  return secondsLeft > 0 && secondsLeft <= 5;
+}
 
 export interface TimeLinesOverlayProps {
   containerWidth: number;
@@ -23,6 +48,8 @@ export function TimeLinesOverlay({
   hideTopTags = false,
 }: TimeLinesOverlayProps) {
   const isBinmax = isNewTraderoomEnabled();
+  // Acabamento profissional (TRADEROOM_POLISH). Desligada = overlay idêntico ao anterior.
+  const polish = isBinmax && isTraderoomPolishEnabled();
   const [secondsRemaining, setSecondsRemaining] = useState<number>(60);
   const [purchaseSecondsRemaining, setPurchaseSecondsRemaining] = useState<number>(30);
   const [isPurchaseLocked, setIsPurchaseLocked] = useState<boolean>(false);
@@ -30,23 +57,11 @@ export function TimeLinesOverlay({
   // Sincronização temporal de alta fidelidade
   useEffect(() => {
     const updateCountdown = () => {
-      const now = tickTimestamp ? Date.parse(tickTimestamp) : Date.now();
-      const currentSec = Math.floor(now / 1000) % 60;
-      
-      // Contagem regressiva até a expiração (:00s do próximo minuto)
-      const remExp = 60 - currentSec;
-      setSecondsRemaining(remExp === 0 ? 60 : remExp);
-
-      // Contagem regressiva até a trava de compra (:30s da vela atual)
-      const remPurchase = 30 - currentSec;
-      if (remPurchase > 0) {
-        setPurchaseSecondsRemaining(remPurchase);
-        setIsPurchaseLocked(false);
-      } else {
-        // Trava ativa para a vela em curso
-        setPurchaseSecondsRemaining(0);
-        setIsPurchaseLocked(true);
-      }
+      const parsed = tickTimestamp ? Date.parse(tickTimestamp) : Date.now();
+      const next = computeTimeCountdowns(parsed);
+      setSecondsRemaining(next.secondsRemaining);
+      setPurchaseSecondsRemaining(next.purchaseSecondsRemaining);
+      setIsPurchaseLocked(next.isPurchaseLocked);
     };
 
     updateCountdown();
@@ -139,8 +154,43 @@ export function TimeLinesOverlay({
           borderLeft: isBinmax ? '1px dotted rgba(244, 245, 247, 0.85)' : '1px dashed rgba(255, 255, 255, 0.75)',
         }}
       >
-        {/* Tag Superior: Hora de Compra */}
-        {!hideTopTags && (
+        {/* Tag Superior: Hora de Compra (TRADEROOM_POLISH: rótulo em 2 linhas, sem caixa, como C10) */}
+        {polish && !hideTopTags && (
+          <div
+            className="time-tag-purchase"
+            data-testid="time-tag-purchase"
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: '8px',
+              background: 'transparent',
+              border: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              whiteSpace: 'nowrap',
+              fontFamily: 'var(--font-ui)',
+            }}
+          >
+            <span style={{ fontSize: '10px', fontWeight: 500, lineHeight: 1.2, color: 'var(--text-muted)', textAlign: 'right', letterSpacing: '0.02em' }}>
+              HORA DE<br />COMPRA
+            </span>
+            <strong
+              data-testid="purchase-countdown"
+              className={shouldPulseCountdown(purchaseSecondsRemaining) ? 'bm-countdown-pulse' : undefined}
+              style={{
+                fontSize: '20px',
+                fontWeight: 600,
+                fontFamily: 'var(--font-mono)',
+                fontVariantNumeric: 'tabular-nums',
+                color: isPurchaseLocked ? 'var(--text-muted)' : 'var(--text-strong)',
+              }}
+            >
+              00:{purchaseSecondsRemaining.toString().padStart(2, '0')}
+            </strong>
+          </div>
+        )}
+        {!polish && !hideTopTags && (
           <div
             className="time-tag-purchase"
             data-testid="time-tag-purchase"
@@ -217,13 +267,13 @@ export function TimeLinesOverlay({
           left: `${xExpiration}px`,
           top: 0,
           bottom: 0,
-          width: isBinmax ? '1.5px' : '2px',
-          background: isBinmax ? '#E5484D' : '#ff3d71',
-          boxShadow: isBinmax ? '0 0 6px rgba(229, 72, 77, 0.4)' : '0 0 10px rgba(255, 61, 113, 0.75)',
+          width: polish ? '1px' : isBinmax ? '1.5px' : '2px',
+          background: polish ? 'var(--loss)' : isBinmax ? '#E5484D' : '#ff3d71',
+          boxShadow: polish ? 'none' : isBinmax ? '0 0 6px rgba(229, 72, 77, 0.4)' : '0 0 10px rgba(255, 61, 113, 0.75)',
         }}
       >
-        {/* Tag Superior: Expiração com Contagem Regressiva */}
-        {!hideTopTags && (
+        {/* Tag Superior: Expiração com Contagem Regressiva (some com TRADEROOM_POLISH: evita colisão com a hora de compra) */}
+        {!polish && !hideTopTags && (
           <div
             className="time-tag-expiration"
             data-testid="time-tag-expiration"

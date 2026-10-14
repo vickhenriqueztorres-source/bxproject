@@ -1,8 +1,69 @@
 import { useState } from 'react';
 import { isNewTraderoomEnabled } from '../lib/feature-flags';
+import { isTraderoomPolishEnabled } from '../lib/traderoom-polish';
 
 export interface TradersMoodBarProps {
   bullsPercentage: number;
+}
+
+const MOOD_DIAMONDS = 12;
+
+/** Divide os 12 losangos na proporção de compradores, com pelo menos 1 de cada lado. */
+export function moodDiamondSplit(bullsPercentage: number): { bulls: number; bears: number } {
+  const pct = Number.isFinite(bullsPercentage) ? Math.min(100, Math.max(0, bullsPercentage)) : 50;
+  const bulls = Math.min(MOOD_DIAMONDS - 1, Math.max(1, Math.round((pct / 100) * MOOD_DIAMONDS)));
+  return { bulls, bears: MOOD_DIAMONDS - bulls };
+}
+
+const MOOD_LABEL = { fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)', fontFamily: 'var(--font-ui)', lineHeight: 1.2, textAlign: 'center' } as const;
+const MOOD_PCT = { display: 'block', fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-ui)', fontVariantNumeric: 'tabular-nums' } as const;
+
+/** Sentimento como na IQ (C3): SUBE/% em cima, coluna de losangos, BAJA/% embaixo. */
+function PolishMoodBar({ bulls, bears }: { bulls: number; bears: number }) {
+  const split = moodDiamondSplit(bulls);
+  const diamond = (kind: 'bull' | 'bear', i: number) => (
+    <span
+      key={`${kind}-${i}`}
+      data-mood-diamond={kind}
+      aria-hidden="true"
+      style={{ width: '9px', height: '9px', transform: 'rotate(45deg)', borderRadius: '1px', background: kind === 'bull' ? 'var(--profit)' : 'var(--loss)', opacity: 0.85 }}
+    />
+  );
+  return (
+    <aside
+      className="traders-mood-bar"
+      data-testid="traders-mood-bar"
+      aria-label={`Sentimiento del mercado: ${bulls}% SUBE, ${bears}% BAJA`}
+      style={{
+        position: 'absolute',
+        left: '16px',
+        top: '28%',
+        bottom: '38%',
+        width: '44px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '6px',
+        zIndex: 10,
+        pointerEvents: 'none',
+        userSelect: 'none',
+      }}
+    >
+      <div data-testid="mood-tag-bulls" style={MOOD_LABEL}>
+        SUBE
+        <span data-testid="mood-pct-bulls" style={MOOD_PCT}>{`${bulls}%`}</span>
+      </div>
+      <div data-testid="mood-diamond-column" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', minHeight: 0, overflow: 'hidden' }}>
+        {Array.from({ length: split.bulls }, (_, i) => diamond('bull', i))}
+        {Array.from({ length: split.bears }, (_, i) => diamond('bear', i))}
+      </div>
+      <div data-testid="mood-tag-bears" style={MOOD_LABEL}>
+        BAJA
+        <span data-testid="mood-pct-bears" style={MOOD_PCT}>{`${bears}%`}</span>
+      </div>
+    </aside>
+  );
 }
 
 export function TradersMoodBar({ bullsPercentage }: TradersMoodBarProps) {
@@ -10,6 +71,11 @@ export function TradersMoodBar({ bullsPercentage }: TradersMoodBarProps) {
   const isBinmax = isNewTraderoomEnabled();
   const bulls = Math.min(95, Math.max(5, Math.round(bullsPercentage)));
   const bears = 100 - bulls;
+
+  // Acabamento profissional (TRADEROOM_POLISH). Desligada = barra idêntica à anterior.
+  if (isBinmax && isTraderoomPolishEnabled()) {
+    return <PolishMoodBar bulls={Number.isFinite(bulls) ? bulls : 50} bears={Number.isFinite(bears) ? bears : 50} />;
+  }
 
   return (
     <aside
