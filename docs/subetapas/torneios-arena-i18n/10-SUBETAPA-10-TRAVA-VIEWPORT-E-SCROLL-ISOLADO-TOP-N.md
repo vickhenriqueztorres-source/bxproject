@@ -1,6 +1,6 @@
 # Subetapa 10 — Trava de Viewport e Scroll Isolado no Ranking (`Top 5 / 10 / 20 / 30`)
 
-**Status**: `PENDENTE`
+**Status**: `CONCLUÍDA E VALIDADA (100%)`
 **Agentes**: `surgical-frontend-agent` + `qa-resilience-agent`
 **Skills**: `17-mudanca-cirurgica`, `21-designer-senior-binmax`, `06-testing-quality`
 
