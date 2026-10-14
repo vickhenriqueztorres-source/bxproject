@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { tradingFeedManager, type TradingFeedManager } from './TradingFeedManager';
+import { normalizeSymbol } from '../catalog/assets';
 
 /**
  * MultiSymbolPriceTracker gerencia a inscrição e o ciclo de vida
@@ -34,24 +35,31 @@ export class MultiSymbolPriceTracker {
     // Inscreve novos símbolos
     for (const sym of desired) {
       if (!this.unsubs.has(sym)) {
-        // Seed inicial a partir do cache do manager
-        const last = this.manager.getLastPrice(sym);
-        if (last !== null) {
-          const num = Number(last);
+        // Contratos antigos guardam o símbolo legado (SYNTH_VOL_50), mas o feed envia os
+        // ticks com o canônico (VOL_50). Escuta os dois e grava sempre na chave pedida.
+        const canonical = normalizeSymbol(sym);
+        const aliases = canonical && canonical !== sym ? [canonical, sym] : [sym];
+
+        // Seed inicial a partir do cache do manager (o canônico é o mais recente)
+        for (const alias of aliases) {
+          const last = this.manager.getLastPrice(alias);
+          const num = last !== null ? Number(last) : NaN;
           if (Number.isFinite(num)) {
             this.prices[sym] = num;
             changed = true;
+            break;
           }
         }
 
-        const unsub = this.manager.subscribeSymbol(sym, (tick) => {
+        const onTick = (tick: { price: string | number }) => {
           const num = Number(tick.price);
-          if (Number.isFinite(num) && this.prices[tick.symbol] !== num) {
-            this.prices[tick.symbol] = num;
+          if (Number.isFinite(num) && this.prices[sym] !== num) {
+            this.prices[sym] = num;
             this.notify();
           }
-        });
-        this.unsubs.set(sym, unsub);
+        };
+        const subs = aliases.map((alias) => this.manager.subscribeSymbol(alias, onTick));
+        this.unsubs.set(sym, () => subs.forEach((unsub) => unsub()));
       }
     }
 
