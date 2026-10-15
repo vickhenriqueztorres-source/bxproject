@@ -23,6 +23,15 @@ export function sanitizeCsvField(field: string | number): string {
   return safeStr;
 }
 
+export function resolveContractClosingPrice(c: Contract): number | string | null {
+  if (!c || c.status === 'OPEN') return null;
+  if (c.exit_price !== undefined) return c.exit_price;
+  if (c.strike_price !== undefined && c.strike_price !== null && c.strike_price !== c.entry_price) {
+    return c.strike_price;
+  }
+  return null;
+}
+
 export function generateCsvContent(contracts: Contract[]): string {
   const headers = [
     'ID Operación',
@@ -41,6 +50,7 @@ export function generateCsvContent(contracts: Contract[]): string {
     const stakeNum = typeof c.stake_minor === 'string' ? parseInt(c.stake_minor, 10) : c.stake_minor;
     const payoutNum = c.payout_minor !== null ? (typeof c.payout_minor === 'string' ? parseInt(c.payout_minor, 10) : c.payout_minor) : 0;
     const netProfit = c.result === 'WIN' ? (payoutNum - stakeNum) : c.result === 'DRAW' ? 0 : -stakeNum;
+    const closingPrice = resolveContractClosingPrice(c);
 
     return [
       c.id,
@@ -48,8 +58,8 @@ export function generateCsvContent(contracts: Contract[]): string {
       c.symbol,
       c.direction === 'UP' ? 'SUBE' : 'BAJA',
       (stakeNum / 100).toFixed(2),
-      c.entry_price ?? '-',
-      c.strike_price ?? '-',
+      c.entry_price ?? '—',
+      closingPrice ?? '—',
       c.result ?? 'PENDIENTE',
       (payoutNum / 100).toFixed(2),
       (netProfit / 100).toFixed(2),
@@ -471,10 +481,13 @@ export function HistoryPage({ initialContracts }: HistoryPageProps = {}) {
                           {`$${(stake / 100).toFixed(2)}`}
                         </td>
                         <td style={{ padding: '14px 18px', textAlign: 'right', fontFamily: PRECISION_FONTS.mono, color: PRECISION_TEXT.muted }} className="bm-tabular-nums">
-                          {typeof c.entry_price === 'number' ? c.entry_price.toFixed(4) : c.entry_price ?? '-'}
+                          {typeof c.entry_price === 'number' ? c.entry_price.toFixed(4) : c.entry_price ?? '—'}
                         </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right', fontFamily: PRECISION_FONTS.mono, color: PRECISION_TEXT.muted }} className="bm-tabular-nums">
-                          {typeof c.strike_price === 'number' ? c.strike_price.toFixed(4) : c.strike_price ?? '-'}
+                        <td style={{ padding: '14px 18px', textAlign: 'right', fontFamily: PRECISION_FONTS.mono, color: PRECISION_TEXT.muted }} className="bm-tabular-nums" data-testid={`closing-price-${c.id}`}>
+                          {(() => {
+                            const cp = resolveContractClosingPrice(c);
+                            return typeof cp === 'number' ? cp.toFixed(4) : cp ?? '—';
+                          })()}
                         </td>
                         <td style={{ padding: '14px 18px', textAlign: 'center' }}>
                           <span

@@ -181,7 +181,7 @@ export function PriceChart({
       totalStakeMinor += stake;
 
       const curP = tick ? Number(tick.price) : Number(c.entry_price ?? 0);
-      const strike = Number(c.strike_price ?? c.entry_price ?? curP);
+      const strike = Number(c.entry_price ?? c.strike_price ?? curP);
       const isUp = c.direction === 'UP';
       const isWin = isUp ? curP > strike : curP < strike;
       const isDraw = curP === strike;
@@ -1007,15 +1007,22 @@ export function PriceChart({
 
     if (polish) return;
 
-    // Criar linhas de strike para contratos abertos
+    // Criar ou reconciliar linhas de strike para contratos abertos
     for (const contract of effectiveContracts) {
       if (contract.status !== 'OPEN') continue;
       if (!isSameAsset(contract.symbol, symbol) && contract.symbol) continue;
-      if (strikeLinesMap.current.has(contract.id)) continue;
 
-      const rawStrike = contract.strike_price ?? contract.entry_price ?? tick?.price;
+      const rawStrike = contract.entry_price ?? contract.strike_price ?? tick?.price;
       const strike = Number(rawStrike);
       if (!Number.isFinite(strike) || strike <= 0) continue;
+
+      const existingLine = strikeLinesMap.current.get(contract.id);
+      if (existingLine) {
+        try {
+          existingLine.line.applyOptions({ price: strike });
+        } catch { /* ignore if series is disposed */ }
+        continue;
+      }
 
       const isUp = contract.direction === 'UP';
       const color = isBinmax ? (isUp ? '#22C55E' : '#E5484D') : (isUp ? '#00e676' : '#ff3d71');

@@ -41,7 +41,7 @@ export function groupOpenContracts(contracts: Contract[], currentPrice: number |
 
   for (const c of contracts) {
     if (c.status !== 'OPEN') continue;
-    const strike = Number(c.strike_price ?? c.entry_price);
+    const strike = Number(c.entry_price ?? c.strike_price);
     const precision = getAssetMeta(c.symbol || '').precision;
     const strikeFormatted = Number.isFinite(strike) ? strike.toFixed(precision) : '—';
     const direction: 'UP' | 'DOWN' = c.direction === 'DOWN' ? 'DOWN' : 'UP';
@@ -321,7 +321,7 @@ export function OrderFlagsOverlay({
           }}
         >
           {openContracts.map((contract, index) => {
-            const rawPrice = contract.strike_price ?? contract.entry_price ?? currentPrice ?? 0;
+            const rawPrice = contract.entry_price ?? contract.strike_price ?? currentPrice ?? 0;
             const strikePrice = Number(rawPrice);
             const isUp = contract.direction === 'UP';
             const baseColor = isUp ? (isBinmax ? '#22C47A' : '#00e676') : (isBinmax ? '#F2545B' : '#ff3d71');
@@ -362,7 +362,7 @@ export function OrderFlagsOverlay({
 
       {/* Badges de Operação Flutuantes & Marcadores de Taxa */}
       {!polish && openContracts.map((contract, index) => {
-        const rawPrice = contract.strike_price ?? contract.entry_price ?? currentPrice ?? 0;
+        const rawPrice = contract.entry_price ?? contract.strike_price ?? currentPrice ?? 0;
         const strikePrice = Number(rawPrice);
         const isUp = contract.direction === 'UP';
         const stakeMinor = Number(contract.stake_minor);
@@ -575,7 +575,7 @@ export function OrderFlagsOverlay({
           : `-$${(stakeMin / 100).toFixed(2)}`;
 
         let yCoord = Math.round(containerHeight / 2);
-        const exitPrice = Number(contract.strike_price ?? contract.entry_price ?? currentPrice ?? 0);
+        const exitPrice = Number(contract.exit_price ?? contract.strike_price ?? contract.entry_price ?? currentPrice ?? 0);
         if (activeSeries && Number.isFinite(exitPrice)) {
           try {
             const coord = activeSeries.priceToCoordinate(exitPrice);

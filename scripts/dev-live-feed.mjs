@@ -10,6 +10,7 @@ import {
 import {
   recordTickInHistory,
   createSettlementCoordinator,
+  serializeContract,
 } from './lib/settlement-engine.mjs';
 import { createLiveMarketStore } from '../services/tick-engine/live-market-store.mjs';
 import { createWalletReadEngine } from './lib/wallet-read-engine.mjs';
@@ -60,6 +61,7 @@ try {
   pgPool.on('error', (err) => {
     console.error('[DB] Erro no pool do PostgreSQL:', err.message);
   });
+  pgPool.query('ALTER TABLE contracts ADD COLUMN IF NOT EXISTS entry_tick_sequence BIGINT').catch(() => {});
 } catch (e) {
   console.warn('[DB] Fallback em memória para auth/users:', e.message);
 }
@@ -998,25 +1000,7 @@ const server = http.createServer(async (req, res) => {
           ? await pgPool.query('SELECT * FROM contracts WHERE id = $1 AND user_id = $2', [contractId, authData.sub])
           : await pgPool.query('SELECT * FROM contracts WHERE id = $1 AND user_id = $2', [contractId, '00000000-0000-4000-8000-000000000001']);
         if (queryRes.rows.length > 0) {
-          const row = queryRes.rows[0];
-          found = {
-            id: row.id,
-            user_id: row.user_id,
-            symbol: row.symbol,
-            direction: row.direction,
-            status: row.status,
-            result: row.result,
-            stake_minor: Number(row.stake_minor),
-            payout_minor: row.payout_minor !== null ? Number(row.payout_minor) : null,
-            entry_price: Number(row.entry_price),
-            strike_price: row.exit_price !== null ? Number(row.exit_price) : Number(row.entry_price),
-            exit_price: row.exit_price !== null ? Number(row.exit_price) : null,
-            exit_tick_sequence: row.exit_tick_sequence !== null && row.exit_tick_sequence !== undefined ? Number(row.exit_tick_sequence) : null,
-            expires_at: row.expires_at,
-            created_at: row.created_at,
-            opened_at: row.opened_at,
-            settled_at: row.settled_at
-          };
+          found = serializeContract(queryRes.rows[0]);
         }
       } catch (err) {
         // Fallback em memória se id não for UUID ou erro no banco
@@ -1028,7 +1012,7 @@ const server = http.createServer(async (req, res) => {
       if (memCandidate) {
         const expectedOwner = authData?.sub || '00000000-0000-4000-8000-000000000001';
         if (!memCandidate.user_id || memCandidate.user_id === expectedOwner) {
-          found = memCandidate;
+          found = serializeContract(memCandidate);
         }
       }
     }
@@ -2677,8 +2661,7 @@ const server = http.createServer(async (req, res) => {
     if (authData && authData.sub && pgPool) {
       try {
         let query = `
-          SELECT id, symbol, direction, status, result, stake_minor, payout_minor,
-                 entry_price, exit_price, exit_tick_sequence, opened_at, expires_at, settled_at, created_at
+          SELECT *
           FROM contracts
           WHERE user_id = $1
         `;
@@ -2690,23 +2673,7 @@ const server = http.createServer(async (req, res) => {
         query += ` ORDER BY created_at DESC LIMIT 100`;
 
         const dbRes = await pgPool.query(query, params);
-        const formattedContracts = dbRes.rows.map(row => ({
-          id: row.id,
-          symbol: row.symbol,
-          direction: row.direction,
-          status: row.status,
-          result: row.result,
-          stake_minor: Number(row.stake_minor),
-          payout_minor: row.payout_minor !== null ? Number(row.payout_minor) : null,
-          entry_price: Number(row.entry_price),
-          strike_price: row.exit_price !== null ? Number(row.exit_price) : Number(row.entry_price),
-          exit_price: row.exit_price !== null ? Number(row.exit_price) : null,
-          exit_tick_sequence: row.exit_tick_sequence !== null && row.exit_tick_sequence !== undefined ? Number(row.exit_tick_sequence) : null,
-          expires_at: row.expires_at,
-          created_at: row.created_at,
-          opened_at: row.opened_at,
-          settled_at: row.settled_at
-        }));
+        const formattedContracts = dbRes.rows.map(row => serializeContract(row));
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(formattedContracts));
@@ -2716,7 +2683,8 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    const filtered = filter ? devContracts.filter(c => c.result === filter) : devContracts;
+    const filtered = (filter ? devContracts.filter(c => c.result === filter) : devContracts)
+      .map(c => serializeContract(c));
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(filtered));
     return;
@@ -2834,7 +2802,7 @@ const server = http.createServer(async (req, res) => {
             res.end(JSON.stringify({
               success: true,
               is_duplicate: true,
-              contract: existing
+              contract: serializeContract(existing)
             }));
             return;
           } catch (_) {}
@@ -2861,28 +2829,13 @@ const server = http.createServer(async (req, res) => {
         if (authData && authData.sub && pgPool) {
           try {
             const existingRes = await pgPool.query(
-              `SELECT id, user_id, symbol, direction, status, result, stake_minor, payout_minor, entry_price, opened_at, expires_at, idempotency_key
+              `SELECT *
                FROM contracts
                WHERE user_id = $1 AND idempotency_key = $2`,
               [authData.sub, idempotencyKey]
             );
             if (existingRes.rows.length > 0) {
-              const row = existingRes.rows[0];
-              const existingContract = {
-                id: row.id,
-                user_id: row.user_id,
-                symbol: row.symbol,
-                direction: row.direction,
-                stake_minor: parseInt(row.stake_minor, 10),
-                status: row.status,
-                result: row.result || null,
-                payout_minor: row.payout_minor !== null ? Number(row.payout_minor) : null,
-                expires_at: new Date(row.expires_at).toISOString(),
-                created_at: new Date(row.opened_at).toISOString(),
-                entry_price: Number(row.entry_price),
-                strike_price: Number(row.entry_price),
-                idempotency_key: row.idempotency_key
-              };
+              const existingContract = serializeContract(existingRes.rows[0]);
               resolveInFlight(existingContract);
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({
@@ -2900,12 +2853,13 @@ const server = http.createServer(async (req, res) => {
         // 1.1 Verificação de Idempotência em memória
         const inMemExisting = devContracts.find(c => c.user_id === targetUserId && c.idempotency_key === idempotencyKey);
         if (inMemExisting) {
-          resolveInFlight(inMemExisting);
+          const serializedMem = serializeContract(inMemExisting);
+          resolveInFlight(serializedMem);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
             success: true,
             is_duplicate: true,
-            contract: inMemExisting
+            contract: serializedMem
           }));
           return;
         }
@@ -3082,9 +3036,9 @@ const server = http.createServer(async (req, res) => {
             await dbClient.query(`
               INSERT INTO contracts (
                 id, user_id, symbol, direction, status, stake_minor, entry_price,
-                idempotency_key, opened_at, expires_at, created_at
-              ) VALUES ($1, $2, $3, $4, 'OPEN', $5, $6, $7, NOW(), $8, NOW())
-            `, [contractId, authData.sub, dbSymbol, direction, stake, entryPrice, idempotencyKey, expiresAt]);
+                idempotency_key, opened_at, expires_at, created_at, entry_tick_sequence
+              ) VALUES ($1, $2, $3, $4, 'OPEN', $5, $6, $7, NOW(), $8, NOW(), $9)
+            `, [contractId, authData.sub, dbSymbol, direction, stake, entryPrice, idempotencyKey, expiresAt, entryTickSequence]);
 
             const outboxPayload = JSON.stringify({
               contract_id: contractId,
@@ -3119,23 +3073,12 @@ const server = http.createServer(async (req, res) => {
             if (dbErr.code === '23505' && dbErr.constraint === 'uq_contracts_user_idempotency') {
               try {
                 const dupRes = await pgPool.query(
-                  `SELECT id, user_id, symbol, direction, status, stake_minor, payout_minor, entry_price, opened_at, expires_at, idempotency_key
+                  `SELECT *
                    FROM contracts WHERE user_id = $1 AND idempotency_key = $2`,
                   [authData.sub, idempotencyKey]
                 );
                 if (dupRes.rows.length > 0) {
-                  const dRow = dupRes.rows[0];
-                  const dupContract = {
-                    id: dRow.id,
-                    user_id: dRow.user_id,
-                    symbol: dRow.symbol,
-                    direction: dRow.direction,
-                    stake_minor: parseInt(dRow.stake_minor, 10),
-                    status: dRow.status,
-                    entry_price: Number(dRow.entry_price),
-                    expires_at: new Date(dRow.expires_at).toISOString(),
-                    idempotency_key: dRow.idempotency_key,
-                  };
+                  const dupContract = serializeContract(dupRes.rows[0]);
                   if (resolveInFlight) resolveInFlight(dupContract);
                   res.writeHead(200, { 'Content-Type': 'application/json' });
                   res.end(JSON.stringify({
@@ -3157,7 +3100,8 @@ const server = http.createServer(async (req, res) => {
         }
 
         devContracts.unshift(newContract);
-        if (resolveInFlight) resolveInFlight(newContract);
+        const serializedCreated = serializeContract(newContract);
+        if (resolveInFlight) resolveInFlight(serializedCreated);
 
         // Agendamento de Liquidação determinística pelo primeiro tick >= expires_at + Sweeper contínuo (Subetapa 1)
         const settlementDelayMs = Math.max(250, targetExpiryEpoch - Date.now());
@@ -3173,10 +3117,12 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({
           success: true,
           is_duplicate: false,
-          contract: newContract,
+          contract: serializedCreated,
           id: contractId,
           expires_at: expiresAt,
           status: 'OPEN',
+          entry_price: entryPrice,
+          entry_tick_sequence: entryTickSequence,
           strike_price: entryPrice
         }));
       } catch (err) {

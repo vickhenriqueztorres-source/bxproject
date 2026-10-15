@@ -216,13 +216,17 @@ export function OrderTicket({
 
       // Reconciliação atômica: substitui o contrato provisório com os dados oficiais do servidor
       queryClient.setQueryData<Contract[]>(['contracts'], (old = []) => {
+        const confirmedEntry = opened.entry_price ?? opened.strike_price;
         return old.map((c) => {
           if (c.id === key) {
+            const finalEntry = confirmedEntry ?? c.entry_price ?? c.strike_price;
             return {
               ...c,
               id: opened.id,
-              strike_price: opened.strike_price ?? c.strike_price,
-              entry_price: opened.strike_price ?? opened.entry_price ?? c.entry_price,
+              entry_price: finalEntry,
+              strike_price: finalEntry,
+              exit_price: null,
+              entry_tick_sequence: opened.entry_tick_sequence ?? c.entry_tick_sequence ?? null,
               expires_at: opened.expires_at ?? c.expires_at,
             };
           }
@@ -883,7 +887,22 @@ export function OrderTicket({
           </div>
         )}
 
-        {/* Resumo Discreto de Última Operação (Elimina Cartão Volumoso Duplicado) */}
+        {/* Confirmação do preço executado oficial e resumo discreto de última operação (Relatório #12) */}
+        {receipt && contract.data?.status !== 'SETTLED' && (receipt.entry_price ?? receipt.strike_price) !== undefined && (
+          <div
+            data-testid="receipt-executed-price"
+            style={{
+              textAlign: 'center',
+              fontSize: '10px',
+              color: 'var(--text-muted)',
+              marginTop: '4px',
+              fontFamily: "'Geist Mono', monospace",
+            }}
+            aria-live="polite"
+          >
+            {isPt ? 'Executado a' : 'Ejecutado a'} {Number(receipt.entry_price ?? receipt.strike_price).toFixed(4)}
+          </div>
+        )}
         {receipt && contract.data?.status === 'SETTLED' && (
           <div
             style={{
@@ -1237,6 +1256,11 @@ export function OrderTicket({
             <span style={{ fontSize: '10px', color: '#687b99', fontWeight: 700 }}>OPERAÇÃO EM VOO</span>
             <small style={{ color: '#8898b8', fontSize: '10px' }}>#{receipt.id.slice(0, 8)}</small>
           </div>
+          {(receipt.entry_price ?? receipt.strike_price) !== undefined && (
+            <div data-testid="receipt-executed-price" style={{ fontSize: '11px', color: '#a2b3cf', marginBottom: '4px' }}>
+              Executado a {Number(receipt.entry_price ?? receipt.strike_price).toFixed(4)}
+            </div>
+          )}
           <div style={{ fontSize: '13px', fontWeight: 700 }}>
             {contract.data?.status === 'SETTLED' ? (
               contract.data.result === 'WIN' ? (

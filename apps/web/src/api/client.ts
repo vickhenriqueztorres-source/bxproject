@@ -15,14 +15,41 @@ export type Candle = { time: number; open: string; high: string; low: string;
 export type Contract = { id: string; symbol: string; direction: 'UP' | 'DOWN';
   stake_minor: number | string; status: string; result: 'WIN' | 'LOSS' | 'DRAW' | null;
   payout_minor: number | string | null; expires_at: string; created_at: string;
-  entry_price?: number | string; strike_price?: number | string };
+  entry_price?: number | string; exit_price?: number | string | null;
+  entry_tick_sequence?: number | null; exit_tick_sequence?: number | null;
+  /** @deprecated Alias legado de entry_price (Relatório #12). Sempre igual a entry_price. */
+  strike_price?: number | string };
 export type Receipt = {
   id: string;
   expires_at: string;
   status: string;
   strike_price?: number;
   entry_price?: number;
+  entry_tick_sequence?: number | null;
 };
+
+export function normalizeContractFields(raw: Contract): Contract {
+  if (!raw || typeof raw !== 'object') return raw;
+  const entryNum = raw.entry_price !== undefined && raw.entry_price !== null ? Number(raw.entry_price) : undefined;
+  const strikeNum = raw.strike_price !== undefined && raw.strike_price !== null ? Number(raw.strike_price) : undefined;
+  const exitNum = raw.exit_price !== undefined && raw.exit_price !== null ? Number(raw.exit_price) : undefined;
+
+  const canonicalEntry = Number.isFinite(entryNum) ? entryNum : (Number.isFinite(strikeNum) ? strikeNum : raw.entry_price);
+  const isOpen = raw.status === 'OPEN';
+  // Compatibilidade com contratos legados salvos antes do #12 onde strike_price guardava a saída
+  const recoveredExit = isOpen
+    ? null
+    : (Number.isFinite(exitNum)
+        ? exitNum
+        : (Number.isFinite(strikeNum) && Number.isFinite(entryNum) && strikeNum !== entryNum ? strikeNum : null));
+
+  return {
+    ...raw,
+    entry_price: canonicalEntry,
+    strike_price: canonicalEntry,
+    exit_price: recoveredExit,
+  };
+}
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string) { super(code); }
@@ -70,7 +97,11 @@ function getStoredMock(): MockStore {
       try {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
-          return parsed as MockStore;
+          const store = parsed as MockStore;
+          if (Array.isArray(store.contracts)) {
+            store.contracts = store.contracts.map(normalizeContractFields);
+          }
+          return store;
         }
       } catch { /* ignore */ }
     }
@@ -393,29 +424,32 @@ export const getContracts = async (filter: string): Promise<Contract[]> => {
       const res = await fetch(resolveApiUrl(`/v1/contracts?limit=100${filter ? `&result=${encodeURIComponent(filter)}` : ''}`), { signal: AbortSignal.timeout(4000) });
       if (res.ok) {
         const body = await res.json();
-        return Array.isArray(body) ? body : (body.contracts || []);
+        const list: Contract[] = Array.isArray(body) ? body : (body.contracts || []);
+        return list.map(normalizeContractFields);
       }
     } catch (_) {}
     const store = getStoredMock();
     if (!filter) return store.contracts;
     return store.contracts.filter((c) => c.result === filter);
   }
-  return api<Contract[]>(
+  const list = await api<Contract[]>(
     `/contracts?limit=100${filter ? `&result=${encodeURIComponent(filter)}` : ''}`);
+  return Array.isArray(list) ? list.map(normalizeContractFields) : [];
 };
 
 export const getContract = async (id: string): Promise<Contract> => {
   if (isGuestMode()) {
     try {
       const res = await fetch(resolveApiUrl(`/v1/contracts/${encodeURIComponent(id)}`), { signal: AbortSignal.timeout(4000) });
-      if (res.ok) return await res.json();
+      if (res.ok) return normalizeContractFields(await res.json());
     } catch (_) {}
     const store = getStoredMock();
     const found = store.contracts.find((c) => c.id === id);
     if (!found) throw new ApiError(404, 'CONTRACT_NOT_FOUND');
-    return found;
+    return normalizeContractFields(found);
   }
-  return api<Contract>(`/contracts/${encodeURIComponent(id)}`);
+  const res = await api<Contract>(`/contracts/${encodeURIComponent(id)}`);
+  return normalizeContractFields(res);
 };
 
 export const openContract = async (
@@ -456,14 +490,17 @@ export const openContract = async (
       if (res.ok) {
         const body = await res.json();
         const contract = (body.contract || body) as Record<string, unknown>;
-        const rawStrike = contract.strike_price ?? contract.entry_price ?? (body as any)?.strike_price;
-        const numStrike = typeof rawStrike === 'number' ? rawStrike : (typeof rawStrike === 'string' ? parseFloat(rawStrike) : undefined);
+        const rawEntry = contract.entry_price ?? contract.strike_price ?? (body as any)?.entry_price ?? (body as any)?.strike_price;
+        const numEntry = typeof rawEntry === 'number' ? rawEntry : (typeof rawEntry === 'string' ? parseFloat(rawEntry) : undefined);
+        const rawSeq = contract.entry_tick_sequence;
+        const numSeq = typeof rawSeq === 'number' && Number.isFinite(rawSeq) ? rawSeq : null;
         return {
           id: String(contract.id || key),
           status: String(contract.status || 'OPEN'),
           expires_at: String(contract.expires_at || expiresAt),
-          strike_price: numStrike,
-          entry_price: numStrike,
+          strike_price: numEntry,
+          entry_price: numEntry,
+          entry_tick_sequence: numSeq,
         };
       }
     } catch (_) {}
@@ -492,6 +529,7 @@ export const openContract = async (
       created_at: new Date().toISOString(),
       entry_price: entryPrice,
       strike_price: entryPrice,
+      exit_price: null,
     };
 
     store.contracts.unshift(newContract);
@@ -541,12 +579,17 @@ export const openContract = async (
       || !Number.isFinite(calendarTime) || !new Date(calendarTime).toISOString().startsWith(iso[1])) {
     throw new ApiError(502, 'INVALID_CONTRACT_RESPONSE');
   }
-  const rawStrike = contract.strike_price ?? (envelope as any)?.strike_price;
-  const numStrike = typeof rawStrike === 'number' ? rawStrike : (typeof rawStrike === 'string' ? parseFloat(rawStrike) : undefined);
+  const rawEntry = contract.entry_price ?? contract.strike_price ?? (envelope as any)?.entry_price ?? (envelope as any)?.strike_price;
+  const numEntry = typeof rawEntry === 'number' ? rawEntry : (typeof rawEntry === 'string' ? parseFloat(rawEntry) : undefined);
+  const rawSeq = contract.entry_tick_sequence;
+  const numSeq = typeof rawSeq === 'number' && Number.isFinite(rawSeq) ? rawSeq : null;
   const resultReceipt: Receipt = { id, status, expires_at: expiry };
-  if (numStrike !== undefined) {
-    resultReceipt.strike_price = numStrike;
-    resultReceipt.entry_price = numStrike;
+  if (numEntry !== undefined) {
+    resultReceipt.strike_price = numEntry;
+    resultReceipt.entry_price = numEntry;
+  }
+  if (numSeq !== null) {
+    resultReceipt.entry_tick_sequence = numSeq;
   }
   return resultReceipt;
 };

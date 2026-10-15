@@ -121,6 +121,78 @@ export function computeContractOutcome({ direction, entryPrice, exitPrice, stake
 }
 
 /**
+ * Serializa de forma única e canônica qualquer linha do banco ou objeto de contrato em memória (Relatório #12).
+ * Invariantes invioláveis:
+ * - entry_price: preço oficial de entrada (sempre numérico).
+ * - strike_price: alias legado de entry_price (SEMPRE igual a entry_price, nunca sobrescrito por exit_price).
+ * - exit_price: null enquanto status === 'OPEN'; preço oficial de saída quando 'SETTLED'.
+ * - entry_tick_sequence / exit_tick_sequence: sequences oficiais dos ticks de abertura e liquidação.
+ */
+export function serializeContract(row) {
+  if (!row || typeof row !== 'object') return null;
+  const entryPrice = Number(row.entry_price ?? row.strike_price);
+  const isOpen = row.status === 'OPEN';
+  const rawExit = isOpen ? null : row.exit_price;
+  const exitPrice =
+    rawExit !== null && rawExit !== undefined && Number.isFinite(Number(rawExit))
+      ? Number(rawExit)
+      : null;
+  const entryTickSequence =
+    row.entry_tick_sequence !== null &&
+    row.entry_tick_sequence !== undefined &&
+    Number.isFinite(Number(row.entry_tick_sequence))
+      ? Number(row.entry_tick_sequence)
+      : null;
+  const exitTickSequence =
+    !isOpen &&
+    row.exit_tick_sequence !== null &&
+    row.exit_tick_sequence !== undefined &&
+    Number.isFinite(Number(row.exit_tick_sequence))
+      ? Number(row.exit_tick_sequence)
+      : null;
+
+  const toIsoOrKeep = (val) => {
+    if (!val) return null;
+    if (val instanceof Date) return val.toISOString();
+    return String(val);
+  };
+
+  const serialized = {
+    id: String(row.id),
+    user_id: row.user_id ?? undefined,
+    symbol: row.symbol,
+    direction: row.direction,
+    status: row.status || 'OPEN',
+    result: isOpen ? null : (row.result || null),
+    stake_minor: Number(row.stake_minor),
+    payout_minor:
+      !isOpen && row.payout_minor !== null && row.payout_minor !== undefined
+        ? Number(row.payout_minor)
+        : null,
+    entry_price: entryPrice,
+    strike_price: entryPrice,
+    exit_price: exitPrice,
+    entry_tick_sequence: entryTickSequence,
+    exit_tick_sequence: exitTickSequence,
+    expires_at: toIsoOrKeep(row.expires_at),
+    created_at: toIsoOrKeep(row.created_at || row.opened_at),
+    opened_at: toIsoOrKeep(row.opened_at || row.created_at),
+    settled_at: isOpen ? null : toIsoOrKeep(row.settled_at),
+  };
+
+  if (row.duration_seconds !== undefined) {
+    serialized.duration_seconds = Number(row.duration_seconds);
+  }
+  if (row.expiry_mode !== undefined) {
+    serialized.expiry_mode = row.expiry_mode;
+  }
+  if (row.idempotency_key !== undefined) {
+    serialized.idempotency_key = row.idempotency_key;
+  }
+  return serialized;
+}
+
+/**
  * Cria o coordenador resiliente de liquidação (Sweeper + Trigger Direto Idempotente).
  */
 export function createSettlementCoordinator({
@@ -389,10 +461,11 @@ export function createSettlementCoordinator({
                    result = $1,
                    payout_minor = $2,
                    exit_price = $3,
+                   exit_tick_sequence = $5,
                    settled_at = NOW()
                WHERE id = $4 AND status = 'OPEN'
                RETURNING id, user_id`,
-              [result, payoutMinor, exitPrice, contractId]
+              [result, payoutMinor, exitPrice, contractId, exitTickSequence]
             );
 
             if (updateContractRes.rowCount === 0 && (target._persistedInDb || triggerSource === 'sweeper_db')) {
@@ -448,13 +521,14 @@ export function createSettlementCoordinator({
         }
       }
 
-      // 3. Atualiza estado em memória somente após confirmação durável
+      // 3. Atualiza estado em memória somente após confirmação durável (Relatório #12: strike_price permanece entryPrice)
       target.status = 'SETTLED';
       target.result = result;
       target.payout_minor = payoutMinor;
+      target.entry_price = entryPrice;
+      target.strike_price = entryPrice;
       target.exit_price = exitPrice;
       target.exit_tick_sequence = exitTickSequence;
-      target.strike_price = exitPrice;
       target.settled_at = new Date(nowMs).toISOString();
 
       if (!memTarget) {
@@ -504,7 +578,9 @@ export function createSettlementCoordinator({
           stake_minor: stake,
           payout_minor: payoutMinor,
           entry_price: entryPrice,
+          strike_price: entryPrice,
           exit_price: exitPrice,
+          entry_tick_sequence: target.entry_tick_sequence ?? null,
           exit_tick_sequence: exitTickSequence,
           symbol: target.symbol,
           direction: target.direction,
