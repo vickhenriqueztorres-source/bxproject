@@ -2794,9 +2794,17 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
           if (target && target.status === 'OPEN') {
             const curState = assetState.get(symbol);
             const exitPrice = parseFloat(curState ? curState.currentPrice : entryPrice);
+
+            // Comparação de DRAW em inteiros (BUG-3) usando precisão do ativo
+            const assetConfig = ASSETS_CONFIG.find(a => a.symbol === symbol);
+            const precision = assetConfig ? assetConfig.precision : 4;
+            const multiplier = Math.pow(10, precision);
+            const entryInt = Math.round(entryPrice * multiplier);
+            const exitInt = Math.round(exitPrice * multiplier);
+            const draw = exitInt === entryInt;
+
             const isUp = target.direction === 'UP';
-            const won = (isUp && exitPrice > entryPrice) || (!isUp && exitPrice < entryPrice);
-            const draw = exitPrice === entryPrice;
+            const won = !draw && ((isUp && exitPrice > entryPrice) || (!isUp && exitPrice < entryPrice));
             const result = won ? 'WIN' : draw ? 'DRAW' : 'LOSS';
             const payoutPct = target.payout_pct || 85;
             const payoutMinor = won ? Math.round(stake * (1 + payoutPct / 100)) : draw ? stake : 0;
