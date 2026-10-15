@@ -2,8 +2,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { TradersMoodBar } from './TradersMoodBar';
+import { PriceChart } from './PriceChart';
 import { setFeatureFlagForTesting } from '../lib/feature-flags';
 import { setTraderoomPolishEnabled } from '../lib/traderoom-polish';
+import { I18nProvider } from '../i18n';
 
 // Este arquivo cobre os overlays anteriores (cápsula de sentimento, pílula de expiração). Ver chart/subetapa-polish-05-time-mood.
 setTraderoomPolishEnabled(false);
@@ -11,6 +13,7 @@ setTraderoomPolishEnabled(false);
 describe('SUBETAPA UX 03: Redesign Ergonômico da Temperatura dos Traders (Traders Mood Bar)', () => {
   beforeEach(() => {
     setFeatureFlagForTesting(true);
+    setTraderoomPolishEnabled(false);
   });
 
   it('3.1 Modo Binmax renderiza cápsula contínua elegante em vez de diamantes empilhados', () => {
@@ -38,16 +41,18 @@ describe('SUBETAPA UX 03: Redesign Ergonômico da Temperatura dos Traders (Trade
     expect(html).toContain('Geist Mono');
   });
 
-  it('3.3 Garante clamping ergonômico de segurança entre 5% e 95%', () => {
-    // 100% de alta deve ser clamped em 95%
-    const htmlMax = renderToString(<TradersMoodBar bullsPercentage={100} />);
-    expect(htmlMax).toContain('SUBE 95%');
-    expect(htmlMax).toContain('BAJA 5%');
+  it('3.3 Mantém apenas arredondamento sem clamp artificial duplicado 5–95%', () => {
+    const htmlFloat = renderToString(<TradersMoodBar bullsPercentage={73.6} />);
+    expect(htmlFloat).toContain('SUBE 74%');
+    expect(htmlFloat).toContain('BAJA 26%');
 
-    // 0% de alta deve ser clamped em 5%
-    const htmlMin = renderToString(<TradersMoodBar bullsPercentage={0} />);
-    expect(htmlMin).toContain('SUBE 5%');
-    expect(htmlMin).toContain('BAJA 95%');
+    const htmlHigh = renderToString(<TradersMoodBar bullsPercentage={98} />);
+    expect(htmlHigh).toContain('SUBE 98%');
+    expect(htmlHigh).toContain('BAJA 2%');
+
+    const htmlLow = renderToString(<TradersMoodBar bullsPercentage={2} />);
+    expect(htmlLow).toContain('SUBE 2%');
+    expect(htmlLow).toContain('BAJA 98%');
   });
 
   it('3.4 Padrão Duas Portas: Modo Legado preserva linha gradiente com ▲ e ▼', () => {
@@ -70,5 +75,63 @@ describe('SUBETAPA UX 03: Redesign Ergonômico da Temperatura dos Traders (Trade
     }
     const elapsed = performance.now() - start;
     expect(elapsed).toBeLessThan(1500);
+  });
+
+  it('3.6 i18n pt-BR: exibe rótulos "ALTA" / "BAIXA" e aria-label traduzido em português', () => {
+    const html = renderToString(
+      <I18nProvider initialLocale="pt-BR">
+        <TradersMoodBar bullsPercentage={72} />
+      </I18nProvider>
+    );
+
+    expect(html).toContain('ALTA 72%');
+    expect(html).toContain('BAIXA 28%');
+    expect(html).toContain('aria-label="Sentimento do mercado: 72% comprando, 28% vendendo"');
+  });
+
+  it('3.7 i18n es-MX: exibe rótulos "SUBE" / "BAJA" e aria-label traduzido em espanhol', () => {
+    const html = renderToString(
+      <I18nProvider initialLocale="es-MX">
+        <TradersMoodBar bullsPercentage={72} />
+      </I18nProvider>
+    );
+
+    expect(html).toContain('SUBE 72%');
+    expect(html).toContain('BAJA 28%');
+    expect(html).toContain('aria-label="Sentimiento del mercado: 72% comprando, 28% vendiendo"');
+  });
+
+  it('3.8 Prop neutral: exibe visual neutro (50/50, opacidade reduzida) e tooltip "poucas posições abertas"', () => {
+    const html = renderToString(
+      <I18nProvider initialLocale="pt-BR">
+        <TradersMoodBar bullsPercentage={84} neutral={true} />
+      </I18nProvider>
+    );
+
+    expect(html).toContain('ALTA 50%');
+    expect(html).toContain('BAIXA 50%');
+    expect(html).toContain('opacity:0.55');
+    expect(html).toContain('title="poucas posições abertas"');
+    expect(html).toContain('data-neutral="true"');
+  });
+
+  it('3.9 PriceChart não inicia em 64% fixo nem renderiza caixa inline duplicada COMPRA/VENDA', () => {
+    setFeatureFlagForTesting(false);
+    const html = renderToString(
+      <I18nProvider initialLocale="pt-BR">
+        <PriceChart
+          candles={[]}
+          tick={{ type: 'tick', symbol: 'VOL_50', sequence: 1, price: '100.50', ts: '2026-10-15T12:00:00.000Z' }}
+          symbol="VOL_50"
+        />
+      </I18nProvider>
+    );
+
+    expect(html).not.toContain('64%');
+    expect(html).not.toContain('% COMPRA');
+    expect(html).not.toContain('% VENDA');
+    expect(html).toContain('▲ 50%');
+    expect(html).toContain('▼ 50%');
+    expect(html).toContain('data-neutral="true"');
   });
 });
