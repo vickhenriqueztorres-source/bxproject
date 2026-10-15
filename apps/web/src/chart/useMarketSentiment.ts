@@ -28,8 +28,8 @@ export function isSentimentEnabled(): boolean {
     typeof import.meta !== 'undefined' && (import.meta as unknown as { env?: Record<string, unknown> }).env
       ? (import.meta as unknown as { env: Record<string, unknown> }).env.VITE_SENTIMENT_ENABLED
       : undefined;
-  const procEnv =
-    typeof process !== 'undefined' && process.env ? process.env.VITE_SENTIMENT_ENABLED : undefined;
+  const globalProc = (globalThis as unknown as { process?: { env?: Record<string, unknown> } }).process;
+  const procEnv = globalProc?.env ? globalProc.env.VITE_SENTIMENT_ENABLED : undefined;
   const raw = metaEnv !== undefined ? metaEnv : procEnv;
 
   if (raw === false || raw === 'false' || raw === '0') {
