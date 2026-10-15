@@ -1,22 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import { PaymentErrorModal } from '../components/status/PaymentErrorModal';
 import { requestDeposit, confirmDeposit, type DepositMethod } from '../api/client';
+import { useTranslation } from '../i18n';
 
 export interface BinmaxDepositModalProps {
   isOpen: boolean;
+  country?: string;
   onClose: () => void;
   onDepositSuccess?: (amountUsd: number) => void;
 }
 
 export type { DepositMethod };
 
+export function getAvailableMethodsForCountry(country?: string | null): DepositMethod[] {
+  const norm = typeof country === 'string' ? country.trim().toUpperCase() : 'BR';
+  if (!norm || norm === 'BR' || norm === 'ES') {
+    return ['PIX', 'BANK', 'CARD', 'CRYPTO'];
+  }
+  return ['BANK', 'CARD', 'CRYPTO'];
+}
+
+function resolveModalCountry(explicitCountry?: string, i18nCountry?: string, isI18nActive?: boolean): string {
+  if (typeof explicitCountry === 'string' && explicitCountry.trim()) {
+    return explicitCountry.trim().toUpperCase();
+  }
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const rawSession = localStorage.getItem('binmax_auth_session');
+      if (rawSession) {
+        const parsed = JSON.parse(rawSession);
+        const userCountry = parsed?.user?.country || parsed?.user?.country_code;
+        if (typeof userCountry === 'string' && userCountry.trim() && userCountry.trim().toUpperCase() !== 'ES') {
+          return userCountry.trim().toUpperCase();
+        }
+      }
+    }
+  } catch {
+    // ignore storage errors
+  }
+  if (isI18nActive && typeof i18nCountry === 'string' && i18nCountry.trim()) {
+    return i18nCountry.trim().toUpperCase();
+  }
+  return 'BR';
+}
+
 export function BinmaxDepositModal({
   isOpen,
+  country,
   onClose,
   onDepositSuccess,
 }: BinmaxDepositModalProps) {
+  const i18n = typeof useTranslation === 'function' ? useTranslation() : null;
+  const effectiveCountry = resolveModalCountry(country, i18n?.country, i18n?.isI18nActive);
+  const availableMethods = getAvailableMethodsForCountry(effectiveCountry);
+  const supportsPix = availableMethods.includes('PIX');
+
   const [screen, setScreen] = useState<'SELECT' | 'PAY_PIX' | 'ERROR'>('SELECT');
-  const [method, setMethod] = useState<DepositMethod>('PIX');
+  const [method, setMethod] = useState<DepositMethod>(() => (supportsPix ? 'PIX' : 'BANK'));
   const [amount, setAmount] = useState<number>(100);
   const [pixTimeRemaining, setPixTimeRemaining] = useState(1798); // 29m 58s
   const [pixCopied, setPixCopied] = useState(false);
@@ -26,6 +66,12 @@ export function BinmaxDepositModal({
   const [pixPayload, setPixPayload] = useState<string>(
     '00020126580014BR.GOV.BCB.PIX0136a1b2c3d4-e5f6-7890-abcd-ef12345678905204000053039865802BR5912 BINMAX LTDA6009SAO PAULO62070503***6304A1B2'
   );
+
+  useEffect(() => {
+    if (!supportsPix && method === 'PIX') {
+      setMethod('BANK');
+    }
+  }, [supportsPix, method]);
 
   // Timer de Expiração do PIX (29:58)
   useEffect(() => {
@@ -82,16 +128,30 @@ export function BinmaxDepositModal({
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
-      if (method === 'PIX') {
+      if (method === 'PIX' && supportsPix) {
         const res = await requestDeposit({
           amount_minor: Math.round(amount * 100),
           method: 'PIX',
+          country: effectiveCountry,
         });
         if (res.transaction?.id) {
           setTransactionId(res.transaction.id);
         }
         if (res.transaction?.pix_code) {
           setPixPayload(res.transaction.pix_code);
+        }
+        setScreen('PAY_PIX');
+      } else if (method === 'BANK') {
+        const res = await requestDeposit({
+          amount_minor: Math.round(amount * 100),
+          method: 'BANK',
+          country: effectiveCountry,
+        });
+        if (res.transaction?.id) {
+          setTransactionId(res.transaction.id);
+        }
+        if (res.transaction?.instructions) {
+          setPixPayload(res.transaction.instructions);
         }
         setScreen('PAY_PIX');
       } else {
@@ -132,7 +192,7 @@ export function BinmaxDepositModal({
           onClose={onClose}
           onRetry={() => setScreen('SELECT')}
           onChangeMethod={() => {
-            setMethod('PIX');
+            setMethod(supportsPix ? 'PIX' : 'BANK');
             setScreen('SELECT');
           }}
           paymentMethodLabel={
@@ -196,7 +256,7 @@ export function BinmaxDepositModal({
                 Elige un método de pago y realiza tu depósito para continuar operando.
               </p>
 
-              {/* 3 Métodos de Pagamento em Cartões */}
+              {/* Métodos de Pagamento em Cartões (PIX só para Brasil; Transferência Bancária para demais países) */}
               <div
                 style={{
                   display: 'grid',
@@ -205,44 +265,87 @@ export function BinmaxDepositModal({
                   marginBottom: '24px',
                 }}
               >
-                {/* PIX */}
-                <button
-                  type="button"
-                  onClick={() => setMethod('PIX')}
-                  style={{
-                    backgroundColor: method === 'PIX' ? '#14233A' : '#0B1220',
-                    border: method === 'PIX' ? '2px solid #22C55E' : '1px solid #1F2A3A',
-                    borderRadius: '8px',
-                    padding: '16px 10px',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '6px',
-                    position: 'relative',
-                  }}
-                >
-                  <div style={{ position: 'absolute', top: '8px', right: '8px' }}>
-                    <span
-                      style={{
-                        width: '12px',
-                        height: '12px',
-                        borderRadius: '50%',
-                        border: method === 'PIX' ? '2px solid #22C55E' : '1px solid #8A96A8',
-                        backgroundColor: method === 'PIX' ? '#22C55E' : 'transparent',
-                        display: 'block',
-                      }}
-                    />
-                  </div>
-                  <div style={{ fontSize: '24px' }}>💠</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#E6EDF5' }}>PIX</div>
-                  <div style={{ fontSize: '11px', color: '#8A96A8' }}>Mínimo $10</div>
-                  <div style={{ fontSize: '11px', color: '#22C55E', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                    <span>⚡</span>
-                    <span>Instantáneo</span>
-                  </div>
-                </button>
+                {supportsPix ? (
+                  /* PIX (Apenas Brasil) */
+                  <button
+                    type="button"
+                    data-testid="deposit-method-pix"
+                    onClick={() => setMethod('PIX')}
+                    style={{
+                      backgroundColor: method === 'PIX' ? '#14233A' : '#0B1220',
+                      border: method === 'PIX' ? '2px solid #22C55E' : '1px solid #1F2A3A',
+                      borderRadius: '8px',
+                      padding: '16px 10px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '6px',
+                      position: 'relative',
+                    }}
+                  >
+                    <div style={{ position: 'absolute', top: '8px', right: '8px' }}>
+                      <span
+                        style={{
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '50%',
+                          border: method === 'PIX' ? '2px solid #22C55E' : '1px solid #8A96A8',
+                          backgroundColor: method === 'PIX' ? '#22C55E' : 'transparent',
+                          display: 'block',
+                        }}
+                      />
+                    </div>
+                    <div style={{ fontSize: '24px' }}>💠</div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#E6EDF5' }}>PIX</div>
+                    <div style={{ fontSize: '11px', color: '#8A96A8' }}>Mínimo $10</div>
+                    <div style={{ fontSize: '11px', color: '#22C55E', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                      <span>⚡</span>
+                      <span>Instantáneo</span>
+                    </div>
+                  </button>
+                ) : (
+                  /* Transferencia Bancaria (SPEI / CBU / PSE / Local) */
+                  <button
+                    type="button"
+                    data-testid="deposit-method-bank"
+                    onClick={() => setMethod('BANK')}
+                    style={{
+                      backgroundColor: method === 'BANK' ? '#14233A' : '#0B1220',
+                      border: method === 'BANK' ? '2px solid #22C55E' : '1px solid #1F2A3A',
+                      borderRadius: '8px',
+                      padding: '16px 10px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '6px',
+                      position: 'relative',
+                    }}
+                  >
+                    <div style={{ position: 'absolute', top: '8px', right: '8px' }}>
+                      <span
+                        style={{
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '50%',
+                          border: method === 'BANK' ? '2px solid #22C55E' : '1px solid #8A96A8',
+                          backgroundColor: method === 'BANK' ? '#22C55E' : 'transparent',
+                          display: 'block',
+                        }}
+                      />
+                    </div>
+                    <div style={{ fontSize: '24px' }}>🏛️</div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#E6EDF5' }}>Transferencia</div>
+                    <div style={{ fontSize: '11px', color: '#8A96A8' }}>Mínimo $10</div>
+                    <div style={{ fontSize: '11px', color: '#22C55E', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                      <span>⚡</span>
+                      <span>Local</span>
+                    </div>
+                  </button>
+                )}
 
                 {/* Tarjeta */}
                 <button

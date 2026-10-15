@@ -53,7 +53,19 @@ export type Locale =
   | "es-CO"
   | "es-AR"
   | "es-CL"
-  | "es-PE";
+  | "es-PE"
+  | "es-VE"
+  | "es-EC"
+  | "es-GT"
+  | "es-BO"
+  | "es-DO"
+  | "es-HN"
+  | "es-PY"
+  | "es-NI"
+  | "es-SV"
+  | "es-CR"
+  | "es-PA"
+  | "es-UY";
 
 export type ActiveDisplayCurrency = DisplayCurrencyCode | "USD";
 
@@ -84,15 +96,29 @@ function buildCatalog(common: any, auth: any, wallet: any, contracts: any, admin
   };
 }
 
+const defaultEsCatalog = buildCatalog(esMXCommon, esMXAuth, esMXWallet, esMXContracts, esMXAdmin);
+
 const catalogs: Record<string, any> = {
   "pt-BR": buildCatalog(ptBRCommon, ptBRAuth, ptBRWallet, ptBRContracts, ptBRAdmin),
-  "es-MX": buildCatalog(esMXCommon, esMXAuth, esMXWallet, esMXContracts, esMXAdmin),
+  "es-MX": defaultEsCatalog,
   "es-CO": buildCatalog(esCOCommon, esCOAuth, esCOWallet, esCOContracts, esCOAdmin),
   "es-AR": buildCatalog(esARCommon, esARAuth, esARWallet, esARContracts, esARAdmin),
   "es-CL": buildCatalog(esCLCommon, esCLAuth, esCLWallet, esCLContracts, esCLAdmin),
   "es-PE": buildCatalog(esPECommon, esPEAuth, esPEWallet, esPEContracts, esPEAdmin),
+  "es-VE": defaultEsCatalog,
+  "es-EC": defaultEsCatalog,
+  "es-GT": defaultEsCatalog,
+  "es-BO": defaultEsCatalog,
+  "es-DO": defaultEsCatalog,
+  "es-HN": defaultEsCatalog,
+  "es-PY": defaultEsCatalog,
+  "es-NI": defaultEsCatalog,
+  "es-SV": defaultEsCatalog,
+  "es-CR": defaultEsCatalog,
+  "es-PA": defaultEsCatalog,
+  "es-UY": defaultEsCatalog,
   // es-ES alias para es-MX
-  "es-ES": buildCatalog(esMXCommon, esMXAuth, esMXWallet, esMXContracts, esMXAdmin)
+  "es-ES": defaultEsCatalog
 };
 
 const LOCALE_TO_COUNTRY: Record<Locale, CountryCode> = {
@@ -102,6 +128,18 @@ const LOCALE_TO_COUNTRY: Record<Locale, CountryCode> = {
   "es-AR": "AR",
   "es-CL": "CL",
   "es-PE": "PE",
+  "es-VE": "VE",
+  "es-EC": "EC",
+  "es-GT": "GT",
+  "es-BO": "BO",
+  "es-DO": "DO",
+  "es-HN": "HN",
+  "es-PY": "PY",
+  "es-NI": "NI",
+  "es-SV": "SV",
+  "es-CR": "CR",
+  "es-PA": "PA",
+  "es-UY": "UY",
   "es-ES": "MX"
 };
 
@@ -117,13 +155,25 @@ export function setLocaleCookie(locale: string, days = 365): void {
   document.cookie = `broker_locale=${encodeURIComponent(locale)}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 
-const COUNTRY_TO_CURRENCY: Record<CountryCode, DisplayCurrencyCode> = {
+const COUNTRY_TO_CURRENCY: Record<CountryCode, ActiveDisplayCurrency> = {
   BR: "BRL",
   MX: "MXN",
   CO: "COP",
   AR: "ARS",
   CL: "CLP",
-  PE: "PEN"
+  PE: "PEN",
+  VE: "VES",
+  EC: "USD",
+  GT: "GTQ",
+  BO: "BOB",
+  DO: "DOP",
+  HN: "HNL",
+  PY: "PYG",
+  NI: "NIO",
+  SV: "USD",
+  CR: "CRC",
+  PA: "USD",
+  UY: "UYU"
 };
 
 export function isSupportedLocale(val: unknown): val is Locale {
@@ -349,6 +399,8 @@ export const I18nProvider: React.FC<{ children: React.ReactNode; initialLocale?:
     return result;
   };
 
+  const { rates: liveRates } = useExchangeRates();
+
   const formatBalance = (minorUSD: number | null): string => {
     if (minorUSD === null || minorUSD === undefined) return "--";
 
@@ -361,12 +413,21 @@ export const I18nProvider: React.FC<{ children: React.ReactNode; initialLocale?:
       BRL: 5.50,
       MXN: 19.50,
       COP: 4150.00,
-      ARS: 980.00,
+      ARS: 1050.00,
       CLP: 940.00,
-      PEN: 3.75
+      PEN: 3.75,
+      VES: 45.00,
+      GTQ: 7.75,
+      BOB: 6.91,
+      DOP: 60.10,
+      HNL: 25.10,
+      PYG: 7800.00,
+      NIO: 36.80,
+      CRC: 512.00,
+      UYU: 41.80
     };
 
-    const rate = defaultRates[currency as DisplayCurrencyCode] || 1.0;
+    const rate = liveRates[currency as DisplayCurrencyCode] || defaultRates[currency as DisplayCurrencyCode] || 1.0;
     const converted = convertUSDMinorToDisplay(minorUSD, rate, currency as DisplayCurrencyCode, locale);
     return converted.formatted;
   };
@@ -422,5 +483,51 @@ export function useUiLanguage(defaultLang: "pt" | "es" = "es"): "pt" | "es" {
     return defaultLang;
   }
   return context.locale.startsWith("pt") ? "pt" : "es";
+}
+
+function useExchangeRates() {
+  const [rates, setRates] = useState<Record<string, number>>({});
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof fetch === "undefined") return;
+    let cancelled = false;
+
+    const fetchRates = async () => {
+      try {
+        const res = await fetch("/api/currencies");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+        if (cancelled || !Array.isArray(data)) return;
+
+        const newRates: Record<string, number> = {};
+        let latestUpdate = "";
+
+        data.forEach((item: { code: string; rate: number; updated_at?: string }) => {
+          if (item && typeof item.code === "string" && Number.isFinite(Number(item.rate))) {
+            newRates[item.code] = Number(item.rate);
+            if (item.updated_at && item.updated_at > latestUpdate) {
+              latestUpdate = item.updated_at;
+            }
+          }
+        });
+
+        setRates(newRates);
+        if (latestUpdate) setUpdatedAt(latestUpdate);
+      } catch {
+        // Mantém fallback estático silenciosamente em modo offline/teste
+      }
+    };
+
+    fetchRates();
+    const interval = setInterval(fetchRates, 5 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  return { rates, updatedAt };
 }
 

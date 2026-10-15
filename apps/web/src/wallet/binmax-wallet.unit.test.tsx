@@ -85,4 +85,22 @@ describe('SUBETAPA 03: Módulo Financeiro BINMAX (Depósito & Saque)', () => {
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     expect(html).not.toContain('<script>');
   });
+
+  it('[Subetapa 7.5] exibe PIX apenas para o Brasil (BR) e Transferencia para outros paises (MX, AR, CO)', () => {
+    const htmlBR = renderToString(
+      <BinmaxDepositModal isOpen={true} onClose={vi.fn()} country="BR" />
+    );
+    expect(htmlBR).toContain('data-testid="deposit-method-pix"');
+    expect(htmlBR).toContain('PIX');
+
+    for (const country of ['MX', 'AR', 'CO']) {
+      const htmlOther = renderToString(
+        <BinmaxDepositModal isOpen={true} onClose={vi.fn()} country={country} />
+      );
+      expect(htmlOther).not.toContain('data-testid="deposit-method-pix"');
+      expect(htmlOther).toContain('data-testid="deposit-method-bank"');
+      expect(htmlOther).toContain('Transferencia');
+    }
+  });
 });
+

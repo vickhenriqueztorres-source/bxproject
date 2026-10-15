@@ -30,6 +30,13 @@ import {
   generateSeededHistoricalCandlesUnified,
   generateForwardGapCandles,
 } from './lib/ou-engine.mjs';
+import {
+  CURRENCIES_TO_TRACK,
+  FALLBACK_EXCHANGE_RATES,
+  LATAM_COUNTRIES,
+  generateDepositInstructions,
+  getAvailableDepositMethods,
+} from './lib/deposit-instructions.mjs';
 
 const require = createRequire(import.meta.url);
 const WebSocket = require('../node_modules/.pnpm/ws@8.22.0/node_modules/ws');
@@ -71,6 +78,86 @@ try {
   });
 } catch (bErr) {
   console.warn('[Blnk] Adaptador Blnk não carregado:', bErr.message);
+}
+
+// ============================================================
+// EXCHANGE RATES AUTO-UPDATER (15 moedas LATAM - Subetapas 7.1 e 7.2)
+// ============================================================
+const EXCHANGE_RATE_UPDATE_INTERVAL = 5 * 60 * 1000; // 5 min
+let lastGoodRates = new Map();
+
+async function fetchExchangeRates() {
+  try {
+    const pairs = CURRENCIES_TO_TRACK.map((c) => `USD-${c}`).join(',');
+    const awesomeUrl = `https://economia.awesomeapi.com.br/json/last/${pairs}`;
+    const res1 = await fetch(awesomeUrl, { signal: AbortSignal.timeout(5000) }).catch(() => null);
+
+    const rates1 = {};
+    if (res1 && res1.ok) {
+      const awesome = await res1.json();
+      for (const curr of CURRENCIES_TO_TRACK) {
+        const key = `USD${curr}`;
+        if (awesome[key]?.bid) {
+          rates1[curr] = parseFloat(awesome[key].bid);
+        }
+      }
+    }
+
+    const frankfurterUrl = `https://api.frankfurter.app/latest?from=USD&to=${CURRENCIES_TO_TRACK.join(',')}`;
+    const res2 = await fetch(frankfurterUrl, { signal: AbortSignal.timeout(5000) }).catch(() => null);
+    const rates2 = res2 && res2.ok ? ((await res2.json()).rates || {}) : {};
+
+    const finalRates = {};
+    for (const curr of CURRENCIES_TO_TRACK) {
+      const r1 = rates1[curr];
+      const r2 = rates2[curr];
+
+      if (r1 && r2) {
+        const diff = Math.abs(r1 - r2) / Math.max(r1, r2);
+        if (diff > 0.05) {
+          console.warn(`[ExchangeRates] ${curr}: divergence ${(diff * 100).toFixed(1)}% (${r1} vs ${r2})`);
+          finalRates[curr] = lastGoodRates.has(curr) ? lastGoodRates.get(curr) : (r1 + r2) / 2;
+        } else {
+          finalRates[curr] = r1;
+        }
+      } else if (r1) {
+        finalRates[curr] = r1;
+      } else if (r2) {
+        finalRates[curr] = r2;
+      } else if (lastGoodRates.has(curr)) {
+        finalRates[curr] = lastGoodRates.get(curr);
+      } else if (FALLBACK_EXCHANGE_RATES[curr]) {
+        finalRates[curr] = FALLBACK_EXCHANGE_RATES[curr];
+      }
+    }
+
+    const now = new Date().toISOString();
+    for (const [code, rate] of Object.entries(finalRates)) {
+      lastGoodRates.set(code, rate);
+      if (pgPool) {
+        try {
+          await pgPool.query(
+            `INSERT INTO display_currencies (code, rate, updated_at)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (code) DO UPDATE SET rate = $2, updated_at = $3`,
+            [code, rate, now]
+          );
+        } catch {
+          // Mantém em memória se tabela display_currencies não estiver disponível
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[ExchangeRates] Falha ao atualizar câmbio, usando fallback:', err.message);
+  }
+}
+
+fetchExchangeRates().catch(() => {});
+const exchangeRatesTimer = setInterval(() => {
+  fetchExchangeRates().catch(() => {});
+}, EXCHANGE_RATE_UPDATE_INTERVAL);
+if (typeof exchangeRatesTimer.unref === 'function') {
+  exchangeRatesTimer.unref();
 }
 
 const memoryUsers = new Map();
@@ -1698,8 +1785,8 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Endpoint de Depósito: POST /api/v1/wallet/deposit ou POST /v1/wallet/deposit
-  if ((pathname === '/api/v1/wallet/deposit' || pathname === '/v1/wallet/deposit') && req.method === 'POST') {
+  // Endpoint de Depósito: POST /api/v1/wallet/deposit, /v1/wallet/deposit ou /api/deposits
+  if ((pathname === '/api/v1/wallet/deposit' || pathname === '/v1/wallet/deposit' || pathname === '/api/deposits') && req.method === 'POST') {
     const authData = extractBearerUser(req);
     if (!authData || !authData.sub) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
@@ -1712,7 +1799,7 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const payload = JSON.parse(body || '{}');
-        const amountMinor = parseInt(payload.amount_minor, 10);
+        const amountMinor = parseInt(payload.amount_minor ?? payload.amount, 10);
         const method = (payload.method || 'PIX').toUpperCase();
         const idempotencyKey = req.headers['idempotency-key'] || payload.idempotency_key || ('idem_dep_' + Date.now() + '_' + crypto.randomUUID().slice(0, 8));
 
@@ -1729,9 +1816,24 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
+        const rawCountry = payload.country || req.headers['x-country'] || authData.country || 'BR';
+        const normalizedCountry = String(rawCountry).trim().toUpperCase();
+        const userCountry = normalizedCountry === 'ES' ? 'BR' : normalizedCountry;
+
+        // Validação: PIX apenas para Brasil (country === 'BR' && method === 'PIX')
+        if (method === 'PIX' && userCountry !== 'BR') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: 'PIX is only available in Brazil',
+            availableMethods: getAvailableDepositMethods(userCountry),
+          }));
+          return;
+        }
+
         const transactionId = crypto.randomUUID();
         const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-        const pixPayload = '00020126580014BR.GOV.BCB.PIX0136' + transactionId + '5204000053039865802BR5912BINMAX LTDA6009SAO PAULO62070503***6304A1B2';
+        const instructions = generateDepositInstructions(userCountry, method, amountMinor, transactionId);
+        const pixPayload = method === 'PIX' ? instructions : undefined;
 
         if (pgPool) {
           try {
@@ -1739,7 +1841,19 @@ const server = http.createServer(async (req, res) => {
               INSERT INTO wallet_transactions (
                 id, user_id, type, method, amount_minor, status, idempotency_key, metadata
               ) VALUES ($1, $2, 'DEPOSIT', $3, $4, 'PENDING', $5, $6)
-            `, [transactionId, authData.sub, method, amountMinor, idempotencyKey, JSON.stringify({ pix_payload: pixPayload, expires_at: expiresAt })]);
+            `, [
+              transactionId,
+              authData.sub,
+              method,
+              amountMinor,
+              idempotencyKey,
+              JSON.stringify({
+                country: userCountry,
+                instructions,
+                pix_payload: pixPayload,
+                expires_at: expiresAt,
+              }),
+            ]);
           } catch (dbErr) {
             console.error('[DB Deposit Insert Error]', dbErr.message);
           }
@@ -1752,15 +1866,17 @@ const server = http.createServer(async (req, res) => {
             id: transactionId,
             type: 'DEPOSIT',
             method,
+            country: userCountry,
             amount_minor: amountMinor,
             status: 'PENDING',
-            pix_code: pixPayload,
+            instructions,
+            ...(pixPayload ? { pix_code: pixPayload } : {}),
             expires_at: expiresAt,
           }
         }));
       } catch (err) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'BAD_REQUEST', message: 'Error en la solicitud de depósito' }));
+        res.end(JSON.stringify({ error: 'BAD_REQUEST', message: err.message || 'Error en la solicitud de depósito' }));
       }
     });
     return;
@@ -2085,6 +2201,54 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ error: 'BAD_REQUEST', message: 'Error en la solicitud de KYC' }));
       }
     });
+    return;
+  }
+
+  // GET /api/currencies — Retorna taxas de câmbio atualizadas para as 15 moedas LATAM
+  if ((pathname === '/api/currencies' || pathname === '/api/v1/currencies') && req.method === 'GET') {
+    try {
+      if (pgPool) {
+        try {
+          const result = await pgPool.query(
+            `SELECT code, rate, updated_at
+             FROM display_currencies
+             WHERE code = ANY($1)
+             ORDER BY code`,
+            [CURRENCIES_TO_TRACK]
+          );
+          if (result.rows.length > 0) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result.rows));
+            return;
+          }
+        } catch {
+          // Fallback para memória/estático
+        }
+      }
+
+      const now = new Date().toISOString();
+      if (lastGoodRates.size > 0) {
+        const rates = Array.from(lastGoodRates.entries()).map(([code, rate]) => ({
+          code,
+          rate,
+          updated_at: now,
+        }));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(rates));
+        return;
+      }
+
+      const rates = Object.entries(FALLBACK_EXCHANGE_RATES).map(([code, rate]) => ({
+        code,
+        rate,
+        updated_at: now,
+      }));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(rates));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Failed to fetch exchange rates' }));
+    }
     return;
   }
 

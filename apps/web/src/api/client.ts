@@ -589,8 +589,10 @@ export interface DepositResponse {
     id: string;
     type: 'DEPOSIT';
     method: DepositMethod;
+    country?: string;
     amount_minor: number;
     status: 'PENDING';
+    instructions?: string;
     pix_code?: string;
     expires_at?: string;
   };
@@ -619,6 +621,7 @@ export interface WithdrawResponse {
 export async function requestDeposit(params: {
   amount_minor: number;
   method?: DepositMethod;
+  country?: string;
   idempotency_key?: string;
 }): Promise<DepositResponse> {
   const key = params.idempotency_key || ('idem_dep_' + safeRandomUUID());
