@@ -11,7 +11,7 @@ export { getAssetBasePrice };
 export type Wallet = { currency: 'USD'; available_minor: number; reserved_minor: number };
 export type Index = { symbol: string; status: 'ACTIVE' | 'PAUSED' };
 export type Candle = { time: number; open: string; high: string; low: string;
-  close: string; volume: number; last_sequence?: number };
+  close: string; volume: number; last_sequence?: number | null; source?: string };
 export type Contract = { id: string; symbol: string; direction: 'UP' | 'DOWN';
   stake_minor: number | string; status: string; result: 'WIN' | 'LOSS' | 'DRAW' | null;
   payout_minor: number | string | null; expires_at: string; created_at: string;

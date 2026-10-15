@@ -65,7 +65,12 @@ export function isSubMinuteTimeframe(tf: Timeframe): boolean {
   return tf === '5s' || tf === '15s' || tf === '30s';
 }
 
-export function candleData(row: Candle): CandlestickData<UTCTimestamp> {
+export type CandlestickWithMeta = CandlestickData<UTCTimestamp> & {
+  last_sequence?: number;
+  source?: string;
+};
+
+export function candleData(row: Candle): CandlestickWithMeta {
   const normalizedSec = normalizeTimeSeconds(row.time);
   const t = normalizedSec ?? 0;
 
@@ -77,13 +82,20 @@ export function candleData(row: Candle): CandlestickData<UTCTimestamp> {
   const high = Math.max(open, close, Number.isFinite(rawHigh) ? rawHigh : open);
   const low = Math.min(open, close, Number.isFinite(rawLow) ? rawLow : close);
 
-  return {
+  const out: CandlestickWithMeta = {
     time: t as UTCTimestamp,
     open,
     high,
     low,
     close,
   };
+  if (typeof row.last_sequence === 'number' && Number.isFinite(row.last_sequence)) {
+    out.last_sequence = row.last_sequence;
+  }
+  if (typeof row.source === 'string') {
+    out.source = row.source;
+  }
+  return out;
 }
 
 /**
@@ -93,11 +105,11 @@ export function candleData(row: Candle): CandlestickData<UTCTimestamp> {
 export function resampleCandles(
   candles: Candle[],
   timeframe: Timeframe
-): CandlestickData<UTCTimestamp>[] {
+): CandlestickWithMeta[] {
   if (!candles || candles.length === 0) return [];
 
   // Ordenar, validar e mesclar duplicatas nos dados de entrada (#1344)
-  const validBase: CandlestickData<UTCTimestamp>[] = [];
+  const validBase: CandlestickWithMeta[] = [];
   for (let i = 0; i < candles.length; i++) {
     const c = candleData(candles[i]);
     if (
@@ -119,7 +131,7 @@ export function resampleCandles(
 
   validBase.sort((a, b) => a.time - b.time);
 
-  const unique: CandlestickData<UTCTimestamp>[] = [validBase[0]];
+  const unique: CandlestickWithMeta[] = [validBase[0]];
   let hasSubMinuteInput = false;
 
   for (let i = 1; i < validBase.length; i++) {
@@ -129,6 +141,12 @@ export function resampleCandles(
       prev.high = Math.max(prev.high, cur.high, prev.open, cur.close);
       prev.low = Math.min(prev.low, cur.low, prev.open, cur.close);
       prev.close = cur.close;
+      if (typeof cur.last_sequence === 'number') {
+        prev.last_sequence =
+          typeof prev.last_sequence === 'number'
+            ? Math.max(prev.last_sequence, cur.last_sequence)
+            : cur.last_sequence;
+      }
     } else if (cur.time > prev.time) {
       if (cur.time - prev.time < 60) {
         hasSubMinuteInput = true;
@@ -139,8 +157,12 @@ export function resampleCandles(
 
   const stepSec = timeframeSeconds(timeframe);
 
-  // Se a entrada contiver apenas 1 barra e o timestamp não estiver alinhado a 60s
-  if (!hasSubMinuteInput && unique.length === 1 && (unique[0].time % 60 !== 0)) {
+  // Se a entrada contiver apenas 1 barra e o timestamp não estiver alinhado a 60s ou tiver source === 'ticks'
+  if (
+    !hasSubMinuteInput &&
+    ((unique.length === 1 && unique[0].time % 60 !== 0) ||
+      unique.some((b) => b.source === 'ticks'))
+  ) {
     hasSubMinuteInput = true;
   }
 
@@ -151,22 +173,31 @@ export function resampleCandles(
       return unique;
     }
 
-    const bucketsMap = new Map<number, CandlestickData<UTCTimestamp>>();
+    const bucketsMap = new Map<number, CandlestickWithMeta>();
     for (const c of unique) {
       const bucketTime = (Math.floor(c.time / stepSec) * stepSec) as UTCTimestamp;
       const existing = bucketsMap.get(bucketTime);
       if (!existing) {
-        bucketsMap.set(bucketTime, {
+        const entry: CandlestickWithMeta = {
           time: bucketTime,
           open: c.open,
           high: c.high,
           low: c.low,
           close: c.close,
-        });
+        };
+        if (typeof c.last_sequence === 'number') entry.last_sequence = c.last_sequence;
+        if (c.source) entry.source = c.source;
+        bucketsMap.set(bucketTime, entry);
       } else {
         existing.high = Math.max(existing.high, c.high, existing.open, c.close);
         existing.low = Math.min(existing.low, c.low, existing.open, c.close);
         existing.close = c.close; // Fechamento é o da última vela do período
+        if (typeof c.last_sequence === 'number') {
+          existing.last_sequence =
+            typeof existing.last_sequence === 'number'
+              ? Math.max(existing.last_sequence, c.last_sequence)
+              : c.last_sequence;
+        }
       }
     }
     return Array.from(bucketsMap.values()).sort((a, b) => a.time - b.time);

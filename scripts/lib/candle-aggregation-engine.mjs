@@ -21,16 +21,34 @@ export function parseIntervalSeconds(intervalStr) {
   return VALID_INTERVALS_SEC[intervalStr] || 60;
 }
 
+export function bucketStartTime(timeSec, stepSec) {
+  const step = Math.max(1, Math.floor(Number(stepSec) || 5));
+  return Math.floor(Number(timeSec) / step) * step;
+}
+
 /**
- * Agrega velas base (1m) para timeframe superior preservando invariantes OHLCV,
+ * Agrega velas base (5s ou 1m) para timeframe superior preservando invariantes OHLCV,
  * protegendo contra chegada fora de ordem (open pelo menor time, close pelo maior time)
  * e deduplicando timestamps repetidos para não inflar volume.
  */
-export function aggregateCandlesToInterval(baseBars, intervalSec) {
+export function aggregateCandlesToInterval(baseBars, intervalSec, _precision, explicitBaseStepSec) {
   if (!baseBars || baseBars.length === 0 || !intervalSec) return baseBars || [];
-  const firstBar = baseBars[0];
-  const secondBar = baseBars.length > 1 ? baseBars[1] : null;
-  const baseStep = secondBar ? Math.abs(secondBar.time - firstBar.time) : (intervalSec < 60 ? 5 : 60);
+  let baseStep = Number(explicitBaseStepSec) > 0 ? Number(explicitBaseStepSec) : 0;
+  if (!baseStep) {
+    let minDiff = Infinity;
+    const scanLimit = Math.min(baseBars.length, 32);
+    for (let i = 0; i < scanLimit; i++) {
+      if (baseBars[i].time % 60 !== 0) {
+        minDiff = 5;
+        break;
+      }
+      if (i > 0) {
+        const diff = Math.abs(baseBars[i].time - baseBars[i - 1].time);
+        if (diff > 0 && diff < minDiff) minDiff = diff;
+      }
+    }
+    baseStep = Number.isFinite(minDiff) ? minDiff : (intervalSec < 60 ? 5 : 60);
+  }
   if (intervalSec <= baseStep) return baseBars || [];
 
   const map = new Map();
@@ -67,6 +85,11 @@ export function aggregateCandlesToInterval(baseBars, intervalSec) {
         low: b.low,
         close: b.close,
         volume: b.volume,
+        last_sequence:
+          typeof b.last_sequence === 'number' && Number.isFinite(b.last_sequence)
+            ? b.last_sequence
+            : null,
+        source: b.source,
         legacy: b.legacy,
         provenance: b.provenance,
         _highNum: parseFloat(b.high),
@@ -123,6 +146,15 @@ export function aggregateCandlesToInterval(baseBars, intervalSec) {
         existing._maxTime = b.time;
         existing.close = b.close;
       }
+      if (typeof b.last_sequence === 'number' && Number.isFinite(b.last_sequence)) {
+        existing.last_sequence =
+          existing.last_sequence !== null
+            ? Math.max(existing.last_sequence, b.last_sequence)
+            : b.last_sequence;
+      }
+      if (b.source === 'ticks') {
+        existing.source = 'ticks';
+      }
       if (b.legacy === false) {
         existing.legacy = false;
         existing.provenance = 'official';
@@ -141,6 +173,10 @@ export function aggregateCandlesToInterval(baseBars, intervalSec) {
       close: item.close,
       volume: item.volume,
     };
+    if (item.last_sequence !== null && item.last_sequence !== undefined) {
+      bar.last_sequence = item.last_sequence;
+    }
+    if (item.source !== undefined) bar.source = item.source;
     if (item.legacy !== undefined) bar.legacy = Boolean(item.legacy);
     if (item.provenance !== undefined) bar.provenance = item.provenance;
     result[idx++] = bar;
@@ -168,7 +204,11 @@ export function aggregateTicksToCandles(ticks, intervalSec, precision = 4) {
   for (let i = 0; i < ticks.length; i++) {
     const t = ticks[i];
     const seq = Number(t.sequence);
-    const tsMs = Number.isFinite(t.event_time) ? Number(t.event_time) : Date.parse(t.ts);
+    const tsMs = Number.isFinite(t.event_time)
+      ? Number(t.event_time)
+      : typeof t.ts === 'number' && Number.isFinite(t.ts)
+        ? (t.ts < 1e11 ? t.ts * 1000 : t.ts)
+        : Date.parse(t.ts);
     if (!Number.isFinite(tsMs) || !Number.isFinite(seq)) continue;
     const bucket = Math.floor(Math.floor(tsMs / 1000) / intervalSec) * intervalSec;
     if (bucket < prevBucket) {
@@ -225,6 +265,8 @@ export function aggregateTicksToCandles(ticks, intervalSec, precision = 4) {
       low: item.low,
       close: item.close,
       volume: item.volume,
+      last_sequence: item._maxSeq,
+      source: 'ticks',
       legacy: false,
       provenance: 'official',
     };
@@ -276,11 +318,20 @@ export function applyTickToCandleBuffer(
     const newLow = Math.min(curLow, tickNum, openNum);
     lastBar.high = newHigh.toFixed(precision);
     lastBar.low = newLow.toFixed(precision);
-    lastBar.close = priceStr;
+    const prevSeq =
+      typeof lastBar.last_sequence === 'number' && Number.isFinite(lastBar.last_sequence)
+        ? lastBar.last_sequence
+        : null;
+    const isNewerOrEqualSeq =
+      sequence === null || sequence === undefined || prevSeq === null || sequence >= prevSeq;
+    if (isNewerOrEqualSeq) {
+      lastBar.close = priceStr;
+    }
     lastBar.volume = (Number(lastBar.volume) || 0) + 1;
     if (sequence !== null && sequence !== undefined) {
-      lastBar.last_sequence = sequence;
+      lastBar.last_sequence = prevSeq !== null ? Math.max(prevSeq, sequence) : sequence;
     }
+    lastBar.source = 'ticks';
   } else if (!lastBar || bucketTime > lastBar.time) {
     const newBar = {
       time: bucketTime,
@@ -290,6 +341,7 @@ export function applyTickToCandleBuffer(
       close: priceStr,
       volume: 1,
       last_sequence: sequence !== null && sequence !== undefined ? sequence : null,
+      source: 'ticks',
       legacy: false,
       provenance,
     };
@@ -298,6 +350,81 @@ export function applyTickToCandleBuffer(
       candlesArray.shift();
     }
   }
+}
+
+/**
+ * Reconciliação Servidor × Cliente (Relatório #11 — Item 4):
+ * - Velas fechadas (isClosed = true): vale a do servidor; reporta mismatch se houver diferença.
+ * - Vela corrente (isClosed = false): open do servidor, high = max, low = min, close do lado com sequence maior.
+ */
+export function reconcileServerAndClientCandle(serverBar, clientBar, isClosed = false) {
+  const sOpen = Number(serverBar.open);
+  const sHigh = Number(serverBar.high);
+  const sLow = Number(serverBar.low);
+  const sClose = Number(serverBar.close);
+
+  const cOpen = Number(clientBar.open);
+  const cHigh = Number(clientBar.high);
+  const cLow = Number(clientBar.low);
+  const cClose = Number(clientBar.close);
+
+  const eps = 1e-9;
+  const hasDiff =
+    Math.abs(sOpen - cOpen) > eps ||
+    Math.abs(sHigh - cHigh) > eps ||
+    Math.abs(sLow - cLow) > eps ||
+    Math.abs(sClose - cClose) > eps;
+
+  if (isClosed) {
+    return {
+      merged: { ...serverBar },
+      mismatch: hasDiff,
+    };
+  }
+
+  const sSeq =
+    typeof serverBar.last_sequence === 'number' && Number.isFinite(serverBar.last_sequence)
+      ? serverBar.last_sequence
+      : -1;
+  const cSeq =
+    typeof clientBar.last_sequence === 'number' && Number.isFinite(clientBar.last_sequence)
+      ? clientBar.last_sequence
+      : -1;
+
+  const useClientClose = cSeq > sSeq || (cSeq === -1 && sSeq === -1);
+  const close = useClientClose ? cClose : sClose;
+  const open = sOpen;
+  const high = Math.max(sHigh, cHigh, open, close);
+  const low = Math.min(sLow, cLow, open, close);
+  const maxSeq = Math.max(sSeq, cSeq);
+
+  return {
+    merged: {
+      time: Number(serverBar.time),
+      open,
+      high,
+      low,
+      close,
+      volume: Math.max(Number(serverBar.volume) || 1, Number(clientBar.volume) || 1),
+      last_sequence: maxSeq >= 0 ? maxSeq : (serverBar.last_sequence ?? clientBar.last_sequence ?? null),
+      source: serverBar.source ?? clientBar.source ?? 'ticks',
+    },
+    mismatch: false,
+  };
+}
+
+/**
+ * Recalibra sigma e theta do processo Ornstein-Uhlenbeck ao alterar a frequência de ticks (Risco 1 do Relatório #11).
+ */
+export function scaleOuParamsForFrequency(sigma1Hz, theta1Hz, intervalMsOrBaseHz = 1000, targetHz) {
+  const dtSec =
+    typeof targetHz === 'number' && Number.isFinite(targetHz) && targetHz > 0
+      ? Math.max(0.05, Number(intervalMsOrBaseHz) / targetHz)
+      : Math.max(0.05, Number(intervalMsOrBaseHz) / 1000);
+  const sigma = sigma1Hz * Math.sqrt(dtSec);
+  const clampedTheta = Math.min(0.9999, Math.max(0, theta1Hz));
+  const theta = 1 - Math.pow(1 - clampedTheta, dtSec);
+  return { sigma, theta, dtSec };
 }
 
 /**

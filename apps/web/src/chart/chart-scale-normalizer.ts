@@ -125,11 +125,28 @@ export function normalizeSeedWithTick(candles: Candle[], tick: Tick | null): Can
 /**
  * Atualiza ou gera a vela corrente a partir de um tick, com blindagem defensiva rigorosa.
  */
+export type ObservedCandlestick = CandlestickData<UTCTimestamp> & {
+  last_sequence?: number;
+};
+
+let candleMismatchTotal = 0;
+
+export function getCandleMismatchTotal(): number {
+  return candleMismatchTotal;
+}
+
+export function resetCandleMismatchTotal(): void {
+  candleMismatchTotal = 0;
+}
+
+/**
+ * Atualiza ou gera a vela corrente a partir de um tick, com blindagem defensiva rigorosa.
+ */
 export function safeCandleFromTick(
   tick: Tick,
-  previous: CandlestickData<UTCTimestamp> | null,
+  previous: ObservedCandlestick | null,
   timeframe: Timeframe = '1m'
-): CandlestickData<UTCTimestamp> | null {
+): ObservedCandlestick | null {
   if (!tick) return null;
 
   const tsSeconds = normalizeTimeSeconds(tick.ts);
@@ -140,15 +157,19 @@ export function safeCandleFromTick(
 
   const stepSec = timeframeSeconds(timeframe);
   const bucket = (Math.floor(tsSeconds / stepSec) * stepSec) as UTCTimestamp;
+  const tickSeq =
+    typeof tick.sequence === 'number' && Number.isFinite(tick.sequence) ? tick.sequence : undefined;
 
   if (!previous) {
-    return {
+    const out: ObservedCandlestick = {
       time: bucket,
       open: price,
       high: price,
       low: price,
       close: price,
     };
+    if (tickSeq !== undefined) out.last_sequence = tickSeq;
+    return out;
   }
 
   // Se o tick estiver no passado em relação à vela atual já processada, descarta
@@ -158,33 +179,45 @@ export function safeCandleFromTick(
 
   // Se iniciou um novo bucket (novo minuto/timeframe)
   if (bucket > previous.time) {
-    return {
+    const out: ObservedCandlestick = {
       time: bucket,
       open: price,
       high: price,
       low: price,
       close: price,
     };
+    if (tickSeq !== undefined) out.last_sequence = tickSeq;
+    return out;
   }
 
-  // Atualização da mesma vela em andamento
-  return {
+  // Atualização da mesma vela em andamento (open = 1º tick, close = maior sequence)
+  const prevSeq = previous.last_sequence;
+  const isNewerOrEqualSeq =
+    tickSeq === undefined || prevSeq === undefined || tickSeq >= prevSeq;
+  const out: ObservedCandlestick = {
     time: previous.time,
     open: previous.open,
     high: Math.max(previous.high, price),
     low: Math.min(previous.low, price),
-    close: price,
+    close: isNewerOrEqualSeq ? price : previous.close,
   };
+  if (tickSeq !== undefined || prevSeq !== undefined) {
+    out.last_sequence =
+      tickSeq !== undefined && prevSeq !== undefined
+        ? Math.max(tickSeq, prevSeq)
+        : (tickSeq ?? prevSeq);
+  }
+  return out;
 }
 
 export function mergeObservedCandles(
-  history: CandlestickData<UTCTimestamp>[],
-  observed: CandlestickData<UTCTimestamp>[],
+  history: ObservedCandlestick[],
+  observed: ObservedCandlestick[],
   timeframe: Timeframe,
   preserveClosedHistory = true
-): CandlestickData<UTCTimestamp>[] {
+): ObservedCandlestick[] {
   const step = timeframeSeconds(timeframe);
-  const merged = new Map<UTCTimestamp, CandlestickData<UTCTimestamp>>();
+  const merged = new Map<UTCTimestamp, ObservedCandlestick>();
   const maxRawTimeByBucket = new Map<UTCTimestamp, number>();
 
   // 1. Garante ordenação ascendente e fusão de duplicatas no histórico base (#1344)
@@ -194,21 +227,29 @@ export function mergeObservedCandles(
     if (!Number.isFinite(t) || t <= 0) continue;
     const prev = merged.get(t);
     if (prev) {
-      merged.set(t, {
+      const nextBar: ObservedCandlestick = {
         time: t,
         open: prev.open,
         high: Math.max(prev.high, bar.high, prev.open, bar.close),
         low: Math.min(prev.low, bar.low, prev.open, bar.close),
         close: bar.close,
-      });
+      };
+      if (typeof bar.last_sequence === 'number' || typeof prev.last_sequence === 'number') {
+        nextBar.last_sequence = Math.max(prev.last_sequence ?? -1, bar.last_sequence ?? -1);
+      }
+      merged.set(t, nextBar);
     } else {
-      merged.set(t, {
+      const nextBar: ObservedCandlestick = {
         time: t,
         open: bar.open,
         high: Math.max(bar.high, bar.open, bar.close),
         low: Math.min(bar.low, bar.open, bar.close),
         close: bar.close,
-      });
+      };
+      if (typeof bar.last_sequence === 'number') {
+        nextBar.last_sequence = bar.last_sequence;
+      }
+      merged.set(t, nextBar);
     }
     maxRawTimeByBucket.set(t, t);
   }
@@ -230,6 +271,7 @@ export function mergeObservedCandles(
       time = lastHistoryTime as UTCTimestamp;
     }
 
+    // Velas fechadas: vale a do servidor (Relatório #11 — Item 4)
     if (
       time < lastHistoryTime ||
       (preserveClosedHistory && time === lastHistoryTime && time < lastObservedTime)
@@ -244,24 +286,45 @@ export function mergeObservedCandles(
       maxRawTimeByBucket.set(time, rawTime);
     }
 
-    merged.set(
-      time,
-      previous
-        ? {
-            time,
-            open: previous.open,
-            high: Math.max(previous.high, bar.high, previous.open, bar.close),
-            low: Math.min(previous.low, bar.low, previous.open, bar.close),
-            // Blindagem #1351: um sub-bucket atrasado (ex: :10s chegando após :30s) expande high/low mas NUNCA sobrescreve o close mais recente
-            close: isNewerOrEqualSubBar ? bar.close : previous.close,
-          }
-        : {
-            ...bar,
-            time,
-            high: Math.max(bar.high, bar.open, bar.close),
-            low: Math.min(bar.low, bar.open, bar.close),
-          }
-    );
+    if (previous) {
+      // Reconciliação da vela corrente por last_sequence quando ambos os lados informam sequence (#11 Item 4)
+      const prevSeq =
+        typeof previous.last_sequence === 'number' && Number.isFinite(previous.last_sequence)
+          ? previous.last_sequence
+          : null;
+      const obsSeq =
+        typeof bar.last_sequence === 'number' && Number.isFinite(bar.last_sequence)
+          ? bar.last_sequence
+          : null;
+
+      let resolvedClose: number;
+      if (prevSeq !== null && obsSeq !== null) {
+        resolvedClose = obsSeq >= prevSeq ? bar.close : previous.close;
+      } else {
+        resolvedClose = isNewerOrEqualSubBar ? bar.close : previous.close;
+      }
+
+      const nextBar: ObservedCandlestick = {
+        time,
+        open: previous.open,
+        high: Math.max(previous.high, bar.high, previous.open, bar.close),
+        low: Math.min(previous.low, bar.low, previous.open, bar.close),
+        close: resolvedClose,
+      };
+      if (prevSeq !== null || obsSeq !== null) {
+        nextBar.last_sequence =
+          prevSeq !== null && obsSeq !== null ? Math.max(prevSeq, obsSeq) : (obsSeq ?? prevSeq)!;
+      }
+      merged.set(time, nextBar);
+    } else {
+      const nextBar: ObservedCandlestick = {
+        ...bar,
+        time,
+        high: Math.max(bar.high, bar.open, bar.close),
+        low: Math.min(bar.low, bar.open, bar.close),
+      };
+      merged.set(time, nextBar);
+    }
   }
 
   return [...merged.values()].sort((a, b) => Number(a.time) - Number(b.time));

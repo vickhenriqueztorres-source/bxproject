@@ -3404,6 +3404,24 @@ const server = http.createServer(async (req, res) => {
     lines.push('# TYPE market_audit_diffs_total gauge');
     lines.push(`market_audit_diffs_total ${persistMetrics.market_audit_diffs_total}`);
 
+    lines.push('# HELP candle_mismatch_total Total de divergencias detectadas entre velas do servidor e rebuild (Relatorio 11)');
+    lines.push('# TYPE candle_mismatch_total counter');
+    lines.push(`candle_mismatch_total ${persistMetrics.market_audit_diffs_total || 0}`);
+
+    let lastClosed5sTicks = 5;
+    for (const state of assetState.values()) {
+      if (Array.isArray(state.candles5s) && state.candles5s.length >= 2) {
+        const prev5s = state.candles5s[state.candles5s.length - 2];
+        if (prev5s && Number.isFinite(Number(prev5s.volume))) {
+          lastClosed5sTicks = Number(prev5s.volume);
+          break;
+        }
+      }
+    }
+    lines.push('# HELP ticks_per_5s_bucket Quantidade de ticks na ultima vela fechada de 5s (nominal a 1 Hz = 5)');
+    lines.push('# TYPE ticks_per_5s_bucket gauge');
+    lines.push(`ticks_per_5s_bucket ${lastClosed5sTicks}`);
+
     res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' });
     res.end(lines.join('\n') + '\n');
     return;
@@ -3726,6 +3744,8 @@ function applyCommittedSymbolTick(symbol, state, committed) {
     lastBar.low = newLow.toFixed(state.precision);
     lastBar.close = formattedPrice;
     lastBar.volume += 1;
+    lastBar.last_sequence = nextSeq;
+    lastBar.source = 'ticks';
   } else {
     const newBar = {
       time: currentBucket,
@@ -3736,6 +3756,8 @@ function applyCommittedSymbolTick(symbol, state, committed) {
       volume: 1,
       legacy: false,
       provenance: 'official',
+      source: 'ticks',
+      last_sequence: nextSeq,
     };
     state.candles.push(newBar);
     if (state.candles.length > CANDLE_BUFFER_MAX_SIZE) {
