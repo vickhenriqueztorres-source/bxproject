@@ -44,5 +44,11 @@
     "countries": "Brasil, México, Colombia, Argentina, Chile y Perú.",
     "support": "Si resides en uno de estos países y estás usando VPN, por favor desactívala para acceder.",
     "button_retry": "Verificar nuevamente"
+  },
+  "mood": {
+    "up": "SUBE",
+    "down": "BAJA",
+    "aria": "Sentimiento del mercado: {{bulls}}% comprando, {{bears}}% vendiendo",
+    "lowSample": "pocas posiciones abiertas"
   }
 }
