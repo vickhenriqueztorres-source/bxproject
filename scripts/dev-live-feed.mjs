@@ -2603,7 +2603,10 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
               userBalance = Number(uRes.rows[0].demo_balance_minor);
             }
           } catch (err) {
-            console.error('[DB Balance Check Error]', err.message);
+            console.error('[DB Balance Check Error - Failing Closed]', err.message);
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ code: 'BALANCE_CHECK_UNAVAILABLE', message: 'Não foi possível verificar saldo' }));
+            return;
           }
         }
 
