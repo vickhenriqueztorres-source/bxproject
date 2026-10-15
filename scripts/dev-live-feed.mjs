@@ -38,6 +38,7 @@ import {
   generateDepositInstructions,
   getAvailableDepositMethods,
 } from './lib/deposit-instructions.mjs';
+import { startSentimentService, getSentiment } from './sentiment/sentiment-service.mjs';
 
 const require = createRequire(import.meta.url);
 const WebSocket = require('../node_modules/.pnpm/ws@8.22.0/node_modules/ws');
@@ -435,6 +436,8 @@ function resolveSymbol(sym) {
   return SYMBOL_ALIASES[sym] || sym;
 }
 
+startSentimentService({ pgPool, resolveSymbol, enabled: process.env.SENTIMENT_ENABLED !== 'false' });
+
 // Constantes Globais de Capacidade de Velas (Histórico Macro de 7 Dias - Subetapa 1)
 const CANDLE_BUFFER_MAX_SIZE = 10080; // 7 dias de velas de 1 minuto em RAM (10.080 minutos)
 const CANDLE_BUFFER_INITIAL_SEED = 10080; // 7 dias de histórico no arranque
@@ -711,6 +714,25 @@ const server = http.createServer(async (req, res) => {
       activeAssets: assetState.size,
       connectedClients: wss.clients.size,
     }));
+    return;
+  }
+
+  if (req.method === 'GET' && pathname === '/api/sentiment') {
+    const rawSymbol = (parsedUrl.searchParams.get('symbol') || '').trim();
+    const symbol = rawSymbol ? resolveSymbol(rawSymbol) : '';
+    if (!symbol || !assetState.has(symbol)) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ error: 'Invalid or missing symbol' }));
+      return;
+    }
+    const sentiment = getSentiment(symbol);
+    if (!sentiment) {
+      res.writeHead(404, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ error: 'Sentiment service disabled' }));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify(sentiment));
     return;
   }
 

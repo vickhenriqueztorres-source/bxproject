@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { isNewTraderoomEnabled } from '../lib/feature-flags';
 import { isTraderoomPolishEnabled } from '../lib/traderoom-polish';
+import { useTranslation } from '../i18n';
 
 export interface TradersMoodBarProps {
   bullsPercentage: number;
+  neutral?: boolean;
 }
 
 const MOOD_DIAMONDS = 12;
@@ -19,7 +21,23 @@ const MOOD_LABEL = { fontSize: '12px', fontWeight: 500, color: 'var(--text-muted
 const MOOD_PCT = { display: 'block', fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-ui)', fontVariantNumeric: 'tabular-nums' } as const;
 
 /** Sentimento como na IQ (C3): SUBE/% em cima, coluna de losangos, BAJA/% embaixo. */
-function PolishMoodBar({ bulls, bears }: { bulls: number; bears: number }) {
+function PolishMoodBar({
+  bulls,
+  bears,
+  upLabel,
+  downLabel,
+  ariaLabel,
+  neutral,
+  lowSampleText,
+}: {
+  bulls: number;
+  bears: number;
+  upLabel: string;
+  downLabel: string;
+  ariaLabel: string;
+  neutral?: boolean;
+  lowSampleText: string;
+}) {
   const split = moodDiamondSplit(bulls);
   const diamond = (kind: 'bull' | 'bear', i: number) => (
     <span
@@ -33,7 +51,9 @@ function PolishMoodBar({ bulls, bears }: { bulls: number; bears: number }) {
     <aside
       className="traders-mood-bar"
       data-testid="traders-mood-bar"
-      aria-label={`Sentimiento del mercado: ${bulls}% SUBE, ${bears}% BAJA`}
+      data-neutral={neutral ? 'true' : undefined}
+      title={neutral ? lowSampleText : undefined}
+      aria-label={ariaLabel}
       style={{
         position: 'absolute',
         left: '16px',
@@ -46,12 +66,13 @@ function PolishMoodBar({ bulls, bears }: { bulls: number; bears: number }) {
         justifyContent: 'center',
         gap: '6px',
         zIndex: 10,
-        pointerEvents: 'none',
+        pointerEvents: neutral ? 'auto' : 'none',
         userSelect: 'none',
+        ...(neutral ? { opacity: 0.55 } : {}),
       }}
     >
       <div data-testid="mood-tag-bulls" style={MOOD_LABEL}>
-        SUBE
+        {upLabel}
         <span data-testid="mood-pct-bulls" style={MOOD_PCT}>{`${bulls}%`}</span>
       </div>
       <div data-testid="mood-diamond-column" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', minHeight: 0, overflow: 'hidden' }}>
@@ -59,28 +80,57 @@ function PolishMoodBar({ bulls, bears }: { bulls: number; bears: number }) {
         {Array.from({ length: split.bears }, (_, i) => diamond('bear', i))}
       </div>
       <div data-testid="mood-tag-bears" style={MOOD_LABEL}>
-        BAJA
+        {downLabel}
         <span data-testid="mood-pct-bears" style={MOOD_PCT}>{`${bears}%`}</span>
       </div>
     </aside>
   );
 }
 
-export function TradersMoodBar({ bullsPercentage }: TradersMoodBarProps) {
+export function TradersMoodBar({ bullsPercentage, neutral }: TradersMoodBarProps) {
   const [hovered, setHovered] = useState(false);
   const isBinmax = isNewTraderoomEnabled();
-  const bulls = Math.min(95, Math.max(5, Math.round(bullsPercentage)));
+  const i18n = typeof useTranslation === 'function' ? useTranslation() : null;
+  const isI18nActive = Boolean(i18n?.isI18nActive);
+
+  const rounded = Number.isFinite(bullsPercentage)
+    ? Math.min(100, Math.max(0, Math.round(bullsPercentage)))
+    : 50;
+  const bulls = neutral ? 50 : rounded;
   const bears = 100 - bulls;
+
+  const upLabel = isI18nActive ? i18n!.t('common.mood.up') : 'SUBE';
+  const downLabel = isI18nActive ? i18n!.t('common.mood.down') : 'BAJA';
+  const lowSampleText = isI18nActive ? i18n!.t('common.mood.lowSample') : 'poucas posições abertas';
 
   // Acabamento profissional (TRADEROOM_POLISH). Desligada = barra idêntica à anterior.
   if (isBinmax && isTraderoomPolishEnabled()) {
-    return <PolishMoodBar bulls={Number.isFinite(bulls) ? bulls : 50} bears={Number.isFinite(bears) ? bears : 50} />;
+    const polishAriaLabel = isI18nActive
+      ? i18n!.t('common.mood.aria', { bulls, bears })
+      : `Sentimiento del mercado: ${bulls}% SUBE, ${bears}% BAJA`;
+    return (
+      <PolishMoodBar
+        bulls={bulls}
+        bears={bears}
+        upLabel={upLabel}
+        downLabel={downLabel}
+        ariaLabel={polishAriaLabel}
+        neutral={neutral}
+        lowSampleText={lowSampleText}
+      />
+    );
   }
+
+  const legacyAriaLabel = isI18nActive
+    ? i18n!.t('common.mood.aria', { bulls, bears })
+    : "Sentimento de mercado (Trader's Mood)";
 
   return (
     <aside
       className="traders-mood-bar"
-      aria-label="Sentimento de mercado (Trader's Mood)"
+      data-neutral={neutral ? 'true' : undefined}
+      title={neutral ? lowSampleText : undefined}
+      aria-label={legacyAriaLabel}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -96,9 +146,10 @@ export function TradersMoodBar({ bullsPercentage }: TradersMoodBarProps) {
         zIndex: 10,
         pointerEvents: 'auto',
         userSelect: 'none',
+        ...(neutral ? { opacity: 0.55 } : {}),
       }}
     >
-      {/* Tag Superior: SUBE (Bulls) */}
+      {/* Tag Superior: SUBE/ALTA (Bulls) */}
       <div
         className="mood-tag-bulls"
         data-testid="mood-tag-bulls"
@@ -117,7 +168,7 @@ export function TradersMoodBar({ bullsPercentage }: TradersMoodBarProps) {
           transition: 'all 0.3s ease',
         }}
       >
-        {isBinmax ? `SUBE ${bulls}%` : `▲ ${bulls}%`}
+        {isBinmax ? `${upLabel} ${bulls}%` : `▲ ${bulls}%`}
       </div>
 
       {/* Barra Vertical: Cápsula Contínua Bicolor na Binmax, Linha Gradiente no Legado */}
@@ -212,7 +263,7 @@ export function TradersMoodBar({ bullsPercentage }: TradersMoodBarProps) {
         </div>
       )}
 
-      {/* Tag Inferior: BAJA (Bears) */}
+      {/* Tag Inferior: BAJA/BAIXA (Bears) */}
       <div
         className="mood-tag-bears"
         data-testid="mood-tag-bears"
@@ -231,7 +282,7 @@ export function TradersMoodBar({ bullsPercentage }: TradersMoodBarProps) {
           transition: 'all 0.3s ease',
         }}
       >
-        {isBinmax ? `BAJA ${bears}%` : `▼ ${bears}%`}
+        {isBinmax ? `${downLabel} ${bears}%` : `▼ ${bears}%`}
       </div>
 
       {/* Tooltip Informativo ao Passar o Mouse */}
@@ -259,18 +310,24 @@ export function TradersMoodBar({ bullsPercentage }: TradersMoodBarProps) {
             fontFamily: isBinmax ? "'Geist', sans-serif" : 'inherit',
           }}
         >
-          <div style={{ fontWeight: 700, marginBottom: '2px' }}>
-            {isBinmax ? 'Sentimiento del Mercado' : 'Sentimento dos Traders'}
-          </div>
-          <div style={{ fontSize: '10px', color: '#8e9ebc', fontFamily: isBinmax ? "'Geist Mono', monospace" : 'inherit' }}>
-            <span style={{ color: isBinmax ? '#22C47A' : '#00e676', fontWeight: 700 }}>
-              {isBinmax ? `${bulls}% Compradores (SUBE)` : `${bulls}% Alta`}
-            </span>
-            {' · '}
-            <span style={{ color: isBinmax ? '#F2545B' : '#ff3d71', fontWeight: 700 }}>
-              {isBinmax ? `${bears}% Vendedores (BAJA)` : `${bears}% Baixa`}
-            </span>
-          </div>
+          {neutral ? (
+            <div style={{ fontWeight: 600, color: '#8e9ebc' }}>{lowSampleText}</div>
+          ) : (
+            <>
+              <div style={{ fontWeight: 700, marginBottom: '2px' }}>
+                {isBinmax ? 'Sentimiento del Mercado' : 'Sentimento dos Traders'}
+              </div>
+              <div style={{ fontSize: '10px', color: '#8e9ebc', fontFamily: isBinmax ? "'Geist Mono', monospace" : 'inherit' }}>
+                <span style={{ color: isBinmax ? '#22C47A' : '#00e676', fontWeight: 700 }}>
+                  {isBinmax ? `${bulls}% Compradores (${upLabel})` : `${bulls}% ${upLabel}`}
+                </span>
+                {' · '}
+                <span style={{ color: isBinmax ? '#F2545B' : '#ff3d71', fontWeight: 700 }}>
+                  {isBinmax ? `${bears}% Vendedores (${downLabel})` : `${bears}% ${downLabel}`}
+                </span>
+              </div>
+            </>
+          )}
         </div>
       )}
     </aside>

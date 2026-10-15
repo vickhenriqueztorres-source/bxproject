@@ -25,6 +25,7 @@ import { IsolatedChartHost } from './IsolatedChartHost';
 import { TimeLinesOverlay } from './TimeLinesOverlay';
 import { OrderFlagsOverlay } from './OrderFlagsOverlay';
 import { TradersMoodBar } from './TradersMoodBar';
+import { useMarketSentiment } from './useMarketSentiment';
 import { useTickPulse } from './useTickPulse';
 import { RafChartUpdater } from './raf-updater';
 import { ChartDrawingToolbar } from './ChartDrawingToolbar';
@@ -130,7 +131,8 @@ export function PriceChart({
 
   const [chartType, setChartType] = useState<ChartType>('candles');
   const [timeframe, setTimeframe] = useState<Timeframe>('1m');
-  const [sentimentBulls, setSentimentBulls] = useState(64);
+  const { bulls: sentimentBulls, neutral: sentimentNeutral } =
+    typeof useMarketSentiment === 'function' ? useMarketSentiment(symbol) : { bulls: 50, neutral: true };
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const [isChartReady, setIsChartReady] = useState(false);
   const lastPrice = useRef<number | null>(null);
@@ -343,10 +345,8 @@ export function PriceChart({
       if (lastPrice.current !== null) {
         if (currentPrice > lastPrice.current) {
           setPriceDirection('UP');
-          setSentimentBulls((prev) => Math.min(88, Math.max(45, prev + 1)));
         } else if (currentPrice < lastPrice.current) {
           setPriceDirection('DOWN');
-          setSentimentBulls((prev) => Math.max(25, Math.min(65, prev - 1)));
         }
       }
       lastPrice.current = currentPrice;
@@ -1452,50 +1452,6 @@ export function PriceChart({
             <span>{isStale ? '⏸️' : priceDirection === 'DOWN' ? '▼' : '▲'}</span>
           </div>
         )}
-
-        {/* Trader Sentiment Bar (Sentimento da Comunidade Legado) */}
-        {!isBinmax && (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '4px',
-              background: 'rgba(10, 16, 30, 0.85)',
-              backdropFilter: 'blur(8px)',
-              border: '1px solid #1f2e4b',
-              borderRadius: '8px',
-              padding: '6px 12px',
-              pointerEvents: 'auto',
-              minWidth: '170px',
-              boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontWeight: 800 }}>
-              <span style={{ color: '#00e676' }}>▲ {sentimentBulls}% COMPRA</span>
-              <span style={{ color: '#ff3d71' }}>▼ {100 - sentimentBulls}% VENDA</span>
-            </div>
-            {/* Barra bicolor */}
-            <div
-              style={{
-                height: '4px',
-                width: '100%',
-                borderRadius: '2px',
-                background: '#ff3d71',
-                overflow: 'hidden',
-                display: 'flex',
-              }}
-            >
-              <div
-                style={{
-                  height: '100%',
-                  width: `${sentimentBulls}%`,
-                  background: '#00e676',
-                  transition: 'width 0.4s ease',
-                }}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Barra de Ferramentas Gráficas Lateral (Estilo IQ Option) */}
@@ -1561,7 +1517,7 @@ export function PriceChart({
       )}
 
       {/* Barra de Sentimento Vertical (Trader's Mood Bar) */}
-      <TradersMoodBar bullsPercentage={sentimentBulls} />
+      <TradersMoodBar bullsPercentage={sentimentBulls} neutral={sentimentNeutral} />
 
       {/* Canvas Ilhado do Lightweight Charts (Subetapa 01/03) */}
       <IsolatedChartHost
