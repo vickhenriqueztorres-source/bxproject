@@ -9,12 +9,24 @@ export interface CurrencyConfig {
 }
 
 export const CURRENCY_CONFIGS: Record<DisplayCurrencyCode, CurrencyConfig> = {
+  // Já implementados (6)
   BRL: { code: "BRL", symbol: "R$", name: "Real Brasileiro", defaultLocale: "pt-BR", decimals: 2 },
   MXN: { code: "MXN", symbol: "Mex$", name: "Peso Mexicano", defaultLocale: "es-MX", decimals: 2 },
   COP: { code: "COP", symbol: "Col$", name: "Peso Colombiano", defaultLocale: "es-CO", decimals: 0 },
   ARS: { code: "ARS", symbol: "$", name: "Peso Argentino", defaultLocale: "es-AR", decimals: 2 },
   CLP: { code: "CLP", symbol: "CLP$", name: "Peso Chileno", defaultLocale: "es-CL", decimals: 0 },
-  PEN: { code: "PEN", symbol: "S/.", name: "Sol Peruano", defaultLocale: "es-PE", decimals: 2 }
+  PEN: { code: "PEN", symbol: "S/.", name: "Sol Peruano", defaultLocale: "es-PE", decimals: 2 },
+
+  // Novos (9) - USD compartilhado por EC/SV/PA
+  VES: { code: "VES", symbol: "Bs.D", name: "Bolívar Digital", defaultLocale: "es-VE", decimals: 2 },
+  GTQ: { code: "GTQ", symbol: "Q", name: "Quetzal Guatemalteco", defaultLocale: "es-GT", decimals: 2 },
+  BOB: { code: "BOB", symbol: "Bs.", name: "Boliviano", defaultLocale: "es-BO", decimals: 2 },
+  DOP: { code: "DOP", symbol: "RD$", name: "Peso Dominicano", defaultLocale: "es-DO", decimals: 2 },
+  HNL: { code: "HNL", symbol: "L", name: "Lempira Hondureño", defaultLocale: "es-HN", decimals: 2 },
+  PYG: { code: "PYG", symbol: "₲", name: "Guaraní Paraguayo", defaultLocale: "es-PY", decimals: 0 },
+  NIO: { code: "NIO", symbol: "C$", name: "Córdoba Nicaragüense", defaultLocale: "es-NI", decimals: 2 },
+  CRC: { code: "CRC", symbol: "₡", name: "Colón Costarricense", defaultLocale: "es-CR", decimals: 2 },
+  UYU: { code: "UYU", symbol: "$U", name: "Peso Uruguayo", defaultLocale: "es-UY", decimals: 2 }
 };
 
 /**

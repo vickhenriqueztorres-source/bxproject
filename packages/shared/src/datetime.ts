@@ -1,12 +1,27 @@
 import { CountryCode, PHASE2_COUNTRIES } from "./types.js";
 
 export const COUNTRY_TIMEZONES: Record<CountryCode, string> = {
-  BR: "America/Sao_Paulo",
-  MX: "America/Mexico_City",
-  CO: "America/Bogota",
-  AR: "America/Argentina/Buenos_Aires",
-  CL: "America/Santiago",
-  PE: "America/Lima"
+  // Já implementados (6)
+  BR: "America/Sao_Paulo",          // UTC-3
+  MX: "America/Mexico_City",         // UTC-6
+  CO: "America/Bogota",              // UTC-5
+  AR: "America/Argentina/Buenos_Aires", // UTC-3
+  CL: "America/Santiago",            // UTC-4 (UTC-3 no verão)
+  PE: "America/Lima",                // UTC-5
+
+  // Novos (12)
+  VE: "America/Caracas",             // UTC-4
+  EC: "America/Guayaquil",           // UTC-5
+  GT: "America/Guatemala",           // UTC-6
+  BO: "America/La_Paz",              // UTC-4
+  DO: "America/Santo_Domingo",       // UTC-4
+  HN: "America/Tegucigalpa",         // UTC-6
+  PY: "America/Asuncion",            // UTC-4 (UTC-3 no verão)
+  NI: "America/Managua",             // UTC-6
+  SV: "America/El_Salvador",         // UTC-6
+  CR: "America/Costa_Rica",          // UTC-6
+  PA: "America/Panama",              // UTC-5
+  UY: "America/Montevideo"           // UTC-3
 };
 
 /**
