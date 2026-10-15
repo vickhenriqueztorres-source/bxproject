@@ -293,48 +293,48 @@ const HOST = '127.0.0.1';
 // Catálogo com os 36 ativos e configurações calibradas por classe de ativo
 const ASSETS_CONFIG = [
   // Forex OTC (18) - Menor volatilidade, micro-tendências e ruído refinado
-  { symbol: 'EURUSD_OTC', price: 1.08542, precision: 5, sigma: 0.00018 },
-  { symbol: 'GBPUSD_OTC', price: 1.29415, precision: 5, sigma: 0.00020 },
-  { symbol: 'USDJPY_OTC', price: 153.820, precision: 3, sigma: 0.00018 },
-  { symbol: 'USDCHF_OTC', price: 0.86510, precision: 5, sigma: 0.00017 },
-  { symbol: 'AUDUSD_OTC', price: 0.65820, precision: 5, sigma: 0.00019 },
-  { symbol: 'USDCAD_OTC', price: 1.38450, precision: 5, sigma: 0.00018 },
-  { symbol: 'NZDUSD_OTC', price: 0.59820, precision: 5, sigma: 0.00019 },
-  { symbol: 'EURGBP_OTC', price: 0.83850, precision: 5, sigma: 0.00016 },
-  { symbol: 'EURJPY_OTC', price: 166.950, precision: 3, sigma: 0.00020 },
-  { symbol: 'GBPJPY_OTC', price: 199.120, precision: 3, sigma: 0.00022 },
-  { symbol: 'EURCAD_OTC', price: 1.50280, precision: 5, sigma: 0.00019 },
-  { symbol: 'EURAUD_OTC', price: 1.64890, precision: 5, sigma: 0.00020 },
-  { symbol: 'GBPAUD_OTC', price: 1.96620, precision: 5, sigma: 0.00021 },
-  { symbol: 'GBPCAD_OTC', price: 1.79210, precision: 5, sigma: 0.00020 },
-  { symbol: 'AUDCAD_OTC', price: 0.91120, precision: 5, sigma: 0.00018 },
-  { symbol: 'AUDJPY_OTC', price: 101.250, precision: 3, sigma: 0.00019 },
-  { symbol: 'CADJPY_OTC', price: 111.120, precision: 3, sigma: 0.00019 },
-  { symbol: 'NZDJPY_OTC', price: 92.050, precision: 3, sigma: 0.00019 },
+  { symbol: 'EURUSD_OTC', price: 1.08542, precision: 5, sigma: 0.00018, payout_pct: 85 },
+  { symbol: 'GBPUSD_OTC', price: 1.29415, precision: 5, sigma: 0.00020, payout_pct: 85 },
+  { symbol: 'USDJPY_OTC', price: 153.820, precision: 3, sigma: 0.00018, payout_pct: 85 },
+  { symbol: 'USDCHF_OTC', price: 0.86510, precision: 5, sigma: 0.00017, payout_pct: 85 },
+  { symbol: 'AUDUSD_OTC', price: 0.65820, precision: 5, sigma: 0.00019, payout_pct: 85 },
+  { symbol: 'USDCAD_OTC', price: 1.38450, precision: 5, sigma: 0.00018, payout_pct: 85 },
+  { symbol: 'NZDUSD_OTC', price: 0.59820, precision: 5, sigma: 0.00019, payout_pct: 85 },
+  { symbol: 'EURGBP_OTC', price: 0.83850, precision: 5, sigma: 0.00016, payout_pct: 85 },
+  { symbol: 'EURJPY_OTC', price: 166.950, precision: 3, sigma: 0.00020, payout_pct: 85 },
+  { symbol: 'GBPJPY_OTC', price: 199.120, precision: 3, sigma: 0.00022, payout_pct: 85 },
+  { symbol: 'EURCAD_OTC', price: 1.50280, precision: 5, sigma: 0.00019, payout_pct: 85 },
+  { symbol: 'EURAUD_OTC', price: 1.64890, precision: 5, sigma: 0.00020, payout_pct: 85 },
+  { symbol: 'GBPAUD_OTC', price: 1.96620, precision: 5, sigma: 0.00021, payout_pct: 85 },
+  { symbol: 'GBPCAD_OTC', price: 1.79210, precision: 5, sigma: 0.00020, payout_pct: 85 },
+  { symbol: 'AUDCAD_OTC', price: 0.91120, precision: 5, sigma: 0.00018, payout_pct: 85 },
+  { symbol: 'AUDJPY_OTC', price: 101.250, precision: 3, sigma: 0.00019, payout_pct: 85 },
+  { symbol: 'CADJPY_OTC', price: 111.120, precision: 3, sigma: 0.00019, payout_pct: 85 },
+  { symbol: 'NZDJPY_OTC', price: 92.050, precision: 3, sigma: 0.00019, payout_pct: 85 },
 
   // Cripto OTC (8) - Alta volatilidade, barras de impulso e sombras dinâmicas
-  { symbol: 'BTCUSD_OTC', price: 64850.00, precision: 2, sigma: 0.00065 },
-  { symbol: 'ETHUSD_OTC', price: 3450.00, precision: 2, sigma: 0.00075 },
-  { symbol: 'SOLUSD_OTC', price: 152.40, precision: 2, sigma: 0.00090 },
-  { symbol: 'BNBUSD_OTC', price: 585.00, precision: 2, sigma: 0.00055 },
-  { symbol: 'XRPUSD_OTC', price: 0.5420, precision: 4, sigma: 0.00085 },
-  { symbol: 'ADAUSD_OTC', price: 0.3540, precision: 4, sigma: 0.00085 },
-  { symbol: 'DOGEUSD_OTC', price: 0.1240, precision: 4, sigma: 0.00110 },
-  { symbol: 'AVAXUSD_OTC', price: 28.40, precision: 2, sigma: 0.00095 },
+  { symbol: 'BTCUSD_OTC', price: 64850.00, precision: 2, sigma: 0.00065, payout_pct: 85 },
+  { symbol: 'ETHUSD_OTC', price: 3450.00, precision: 2, sigma: 0.00075, payout_pct: 85 },
+  { symbol: 'SOLUSD_OTC', price: 152.40, precision: 2, sigma: 0.00090, payout_pct: 85 },
+  { symbol: 'BNBUSD_OTC', price: 585.00, precision: 2, sigma: 0.00055, payout_pct: 85 },
+  { symbol: 'XRPUSD_OTC', price: 0.5420, precision: 4, sigma: 0.00085, payout_pct: 85 },
+  { symbol: 'ADAUSD_OTC', price: 0.3540, precision: 4, sigma: 0.00085, payout_pct: 85 },
+  { symbol: 'DOGEUSD_OTC', price: 0.1240, precision: 4, sigma: 0.00110, payout_pct: 85 },
+  { symbol: 'AVAXUSD_OTC', price: 28.40, precision: 2, sigma: 0.00095, payout_pct: 85 },
 
   // Commodities OTC (4) - Tendências orgânicas e volatilidade média
-  { symbol: 'XAUUSD_OTC', price: 2652.80, precision: 2, sigma: 0.00030 },
-  { symbol: 'XAGUSD_OTC', price: 31.750, precision: 3, sigma: 0.00045 },
-  { symbol: 'USOIL_OTC', price: 72.40, precision: 2, sigma: 0.00040 },
-  { symbol: 'UKOIL_OTC', price: 76.20, precision: 2, sigma: 0.00040 },
+  { symbol: 'XAUUSD_OTC', price: 2652.80, precision: 2, sigma: 0.00030, payout_pct: 85 },
+  { symbol: 'XAGUSD_OTC', price: 31.750, precision: 3, sigma: 0.00045, payout_pct: 85 },
+  { symbol: 'USOIL_OTC', price: 72.40, precision: 2, sigma: 0.00040, payout_pct: 85 },
+  { symbol: 'UKOIL_OTC', price: 76.20, precision: 2, sigma: 0.00040, payout_pct: 85 },
 
   // Sintéticos (6) - Padrão Ouro Opções Binárias
-  { symbol: 'VOL_10', price: 100.5420, precision: 4, sigma: 0.00015 },
-  { symbol: 'VOL_25', price: 250.8410, precision: 4, sigma: 0.00030 },
-  { symbol: 'VOL_50', price: 500.1250, precision: 4, sigma: 0.00060 },
-  { symbol: 'VOL_75', price: 750.3200, precision: 4, sigma: 0.00085 },
-  { symbol: 'VOL_100', price: 1000.4500, precision: 4, sigma: 0.00110 },
-  { symbol: 'CRASH_BOOM_100', price: 1000.8200, precision: 4, sigma: 0.00130 },
+  { symbol: 'VOL_10', price: 100.5420, precision: 4, sigma: 0.00015, payout_pct: 85 },
+  { symbol: 'VOL_25', price: 250.8410, precision: 4, sigma: 0.00030, payout_pct: 85 },
+  { symbol: 'VOL_50', price: 500.1250, precision: 4, sigma: 0.00060, payout_pct: 85 },
+  { symbol: 'VOL_75', price: 750.3200, precision: 4, sigma: 0.00085, payout_pct: 85 },
+  { symbol: 'VOL_100', price: 1000.4500, precision: 4, sigma: 0.00110, payout_pct: 85 },
+  { symbol: 'CRASH_BOOM_100', price: 1000.8200, precision: 4, sigma: 0.00130, payout_pct: 85 },
 ];
 
 const SYMBOL_ALIASES = {
@@ -763,6 +763,7 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
     const rawSymbol = indexMatch[2];
     const symbol = resolveSymbol(rawSymbol);
     const state = assetState.get(symbol);
+    const assetConfig = ASSETS_CONFIG.find(a => a.symbol === symbol);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       symbol: rawSymbol,
@@ -770,7 +771,7 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
       status: state ? (state.paused ? 'PAUSED' : 'ACTIVE') : 'ACTIVE',
       name: state ? state.name : symbol,
       precision: state ? state.precision : 4,
-      payout_pct: 85
+      payout_pct: assetConfig ? assetConfig.payout_pct : 85
     }));
     return;
   }
@@ -2708,12 +2709,15 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
             dbClient = await pgPool.connect();
             await dbClient.query('BEGIN');
 
+            const assetConfig = ASSETS_CONFIG.find(a => a.symbol === dbSymbol);
+            const payoutPct = assetConfig ? assetConfig.payout_pct : 85;
+
             await dbClient.query(`
               INSERT INTO contracts (
                 id, user_id, symbol, direction, status, stake_minor, entry_price,
-                idempotency_key, opened_at, expires_at, created_at
-              ) VALUES ($1, $2, $3, $4, 'OPEN', $5, $6, $7, NOW(), $8, NOW())
-            `, [contractId, authData.sub, dbSymbol, direction === 'DOWN' ? 'DOWN' : 'UP', stake, entryPrice, idempotencyKey, expiresAt]);
+                idempotency_key, opened_at, expires_at, created_at, payout_pct
+              ) VALUES ($1, $2, $3, $4, 'OPEN', $5, $6, $7, NOW(), $8, NOW(), $9)
+            `, [contractId, authData.sub, dbSymbol, direction === 'DOWN' ? 'DOWN' : 'UP', stake, entryPrice, idempotencyKey, expiresAt, payoutPct]);
 
             const outboxPayload = JSON.stringify({
               contract_id: contractId,
@@ -2794,7 +2798,8 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
             const won = (isUp && exitPrice > entryPrice) || (!isUp && exitPrice < entryPrice);
             const draw = exitPrice === entryPrice;
             const result = won ? 'WIN' : draw ? 'DRAW' : 'LOSS';
-            const payoutMinor = won ? Math.round(stake * 1.85) : draw ? stake : 0;
+            const payoutPct = target.payout_pct || 85;
+            const payoutMinor = won ? Math.round(stake * (1 + payoutPct / 100)) : draw ? stake : 0;
 
             target.status = 'SETTLED';
             target.result = result;
