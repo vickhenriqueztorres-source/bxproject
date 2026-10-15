@@ -8,17 +8,53 @@ export const OpenContractSchema = z.object({
 // ==========================================
 // FASE 2: TIPOS E SCHEMAS REGIONAIS
 // ==========================================
-export const PHASE2_COUNTRIES = ["BR", "MX", "CO", "AR", "CL", "PE"];
+export const PHASE2_COUNTRIES = [
+    // Já implementados (6)
+    "BR", "MX", "CO", "AR", "CL", "PE",
+    // Novos — Alta prioridade (2)
+    "VE", // Venezuela — Bolívar Digital (VES)
+    "EC", // Equador — Dolarizado (USD)
+    // Novos — Média prioridade (6)
+    "GT", // Guatemala — Quetzal (GTQ)
+    "BO", // Bolívia — Boliviano (BOB)
+    "DO", // Rep. Dominicana — Peso (DOP)
+    "HN", // Honduras — Lempira (HNL)
+    "PY", // Paraguai — Guarani (PYG)
+    "NI", // Nicarágua — Córdoba (NIO)
+    // Novos — Baixa prioridade (4)
+    "SV", // El Salvador — Dolarizado (USD)
+    "CR", // Costa Rica — Colón (CRC)
+    "PA", // Panamá — Dolarizado (USD)
+    "UY", // Uruguai — Peso (UYU)
+]; // Total: 18 países
 export const CountryCodeSchema = z.enum(PHASE2_COUNTRIES);
-export const PHASE2_DISPLAY_CURRENCIES = ["BRL", "MXN", "COP", "ARS", "CLP", "PEN"];
+export const PHASE2_DISPLAY_CURRENCIES = [
+    "BRL", "MXN", "COP", "ARS", "CLP", "PEN", // Já implementados
+    "VES", "GTQ", "BOB", "DOP", "HNL", // Novos (5)
+    "PYG", "NIO", "CRC", "UYU" // Novos (4) - USD usado por EC/SV/PA
+]; // Total: 15 moedas
 export const DisplayCurrencyCodeSchema = z.enum(PHASE2_DISPLAY_CURRENCIES);
 export const COUNTRY_STAKE_LIMITS = {
+    // Já implementados (6)
     BR: { min_stake_minor: 100, max_stake_minor: 10000 },
     MX: { min_stake_minor: 100, max_stake_minor: 10000 },
     CO: { min_stake_minor: 100, max_stake_minor: 10000 },
     AR: { min_stake_minor: 100, max_stake_minor: 10000 },
     CL: { min_stake_minor: 100, max_stake_minor: 10000 },
-    PE: { min_stake_minor: 100, max_stake_minor: 10000 }
+    PE: { min_stake_minor: 100, max_stake_minor: 10000 },
+    // Novos (12)
+    VE: { min_stake_minor: 100, max_stake_minor: 10000 },
+    EC: { min_stake_minor: 100, max_stake_minor: 10000 },
+    GT: { min_stake_minor: 100, max_stake_minor: 10000 },
+    BO: { min_stake_minor: 100, max_stake_minor: 10000 },
+    DO: { min_stake_minor: 100, max_stake_minor: 10000 },
+    HN: { min_stake_minor: 100, max_stake_minor: 10000 },
+    PY: { min_stake_minor: 100, max_stake_minor: 10000 },
+    NI: { min_stake_minor: 100, max_stake_minor: 10000 },
+    SV: { min_stake_minor: 100, max_stake_minor: 10000 },
+    CR: { min_stake_minor: 100, max_stake_minor: 10000 },
+    PA: { min_stake_minor: 100, max_stake_minor: 10000 },
+    UY: { min_stake_minor: 100, max_stake_minor: 10000 }
 };
 export const CountrySchema = z.object({
     code: CountryCodeSchema,

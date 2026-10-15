@@ -37,36 +37,36 @@ export interface CandleDTO {
     close: string;
     volume: number;
 }
-export declare const PHASE2_COUNTRIES: readonly ["BR", "MX", "CO", "AR", "CL", "PE"];
+export declare const PHASE2_COUNTRIES: readonly ["BR", "MX", "CO", "AR", "CL", "PE", "VE", "EC", "GT", "BO", "DO", "HN", "PY", "NI", "SV", "CR", "PA", "UY"];
 export type CountryCode = typeof PHASE2_COUNTRIES[number];
-export declare const CountryCodeSchema: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE"]>;
-export declare const PHASE2_DISPLAY_CURRENCIES: readonly ["BRL", "MXN", "COP", "ARS", "CLP", "PEN"];
+export declare const CountryCodeSchema: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE", "VE", "EC", "GT", "BO", "DO", "HN", "PY", "NI", "SV", "CR", "PA", "UY"]>;
+export declare const PHASE2_DISPLAY_CURRENCIES: readonly ["BRL", "MXN", "COP", "ARS", "CLP", "PEN", "VES", "GTQ", "BOB", "DOP", "HNL", "PYG", "NIO", "CRC", "UYU"];
 export type DisplayCurrencyCode = typeof PHASE2_DISPLAY_CURRENCIES[number];
-export declare const DisplayCurrencyCodeSchema: z.ZodEnum<["BRL", "MXN", "COP", "ARS", "CLP", "PEN"]>;
+export declare const DisplayCurrencyCodeSchema: z.ZodEnum<["BRL", "MXN", "COP", "ARS", "CLP", "PEN", "VES", "GTQ", "BOB", "DOP", "HNL", "PYG", "NIO", "CRC", "UYU"]>;
 export declare const COUNTRY_STAKE_LIMITS: Record<CountryCode, {
     min_stake_minor: number;
     max_stake_minor: number;
 }>;
 export declare const CountrySchema: z.ZodObject<{
-    code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE"]>;
+    code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE", "VE", "EC", "GT", "BO", "DO", "HN", "PY", "NI", "SV", "CR", "PA", "UY"]>;
     name: z.ZodString;
-    default_currency: z.ZodEnum<["BRL", "MXN", "COP", "ARS", "CLP", "PEN"]>;
+    default_currency: z.ZodEnum<["BRL", "MXN", "COP", "ARS", "CLP", "PEN", "VES", "GTQ", "BOB", "DOP", "HNL", "PYG", "NIO", "CRC", "UYU"]>;
     default_locale: z.ZodString;
     is_active: z.ZodBoolean;
     min_stake_minor: z.ZodOptional<z.ZodNumber>;
     max_stake_minor: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE" | "VE" | "EC" | "GT" | "BO" | "DO" | "HN" | "PY" | "NI" | "SV" | "CR" | "PA" | "UY";
     name: string;
-    default_currency: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN";
+    default_currency: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN" | "VES" | "GTQ" | "BOB" | "DOP" | "HNL" | "PYG" | "NIO" | "CRC" | "UYU";
     default_locale: string;
     is_active: boolean;
     min_stake_minor?: number | undefined;
     max_stake_minor?: number | undefined;
 }, {
-    code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE" | "VE" | "EC" | "GT" | "BO" | "DO" | "HN" | "PY" | "NI" | "SV" | "CR" | "PA" | "UY";
     name: string;
-    default_currency: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN";
+    default_currency: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN" | "VES" | "GTQ" | "BOB" | "DOP" | "HNL" | "PYG" | "NIO" | "CRC" | "UYU";
     default_locale: string;
     is_active: boolean;
     min_stake_minor?: number | undefined;
@@ -74,37 +74,37 @@ export declare const CountrySchema: z.ZodObject<{
 }>;
 export type CountryDTO = z.infer<typeof CountrySchema>;
 export declare const DisplayCurrencySchema: z.ZodObject<{
-    code: z.ZodEnum<["BRL", "MXN", "COP", "ARS", "CLP", "PEN"]>;
+    code: z.ZodEnum<["BRL", "MXN", "COP", "ARS", "CLP", "PEN", "VES", "GTQ", "BOB", "DOP", "HNL", "PYG", "NIO", "CRC", "UYU"]>;
     symbol: z.ZodString;
     name: z.ZodString;
     decimals: z.ZodNumber;
     exchange_rate_to_usd: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     symbol: string;
-    code: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN";
+    code: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN" | "VES" | "GTQ" | "BOB" | "DOP" | "HNL" | "PYG" | "NIO" | "CRC" | "UYU";
     name: string;
     decimals: number;
     exchange_rate_to_usd: string;
 }, {
     symbol: string;
-    code: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN";
+    code: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN" | "VES" | "GTQ" | "BOB" | "DOP" | "HNL" | "PYG" | "NIO" | "CRC" | "UYU";
     name: string;
     decimals: number;
     exchange_rate_to_usd: string;
 }>;
 export type DisplayCurrencyDTO = z.infer<typeof DisplayCurrencySchema>;
 export declare const CountryFeatureFlagSchema: z.ZodObject<{
-    country_code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE"]>;
+    country_code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE", "VE", "EC", "GT", "BO", "DO", "HN", "PY", "NI", "SV", "CR", "PA", "UY"]>;
     flag_key: z.ZodString;
     enabled: z.ZodBoolean;
     metadata: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
 }, "strip", z.ZodTypeAny, {
-    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE" | "VE" | "EC" | "GT" | "BO" | "DO" | "HN" | "PY" | "NI" | "SV" | "CR" | "PA" | "UY";
     flag_key: string;
     enabled: boolean;
     metadata?: Record<string, unknown> | undefined;
 }, {
-    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE" | "VE" | "EC" | "GT" | "BO" | "DO" | "HN" | "PY" | "NI" | "SV" | "CR" | "PA" | "UY";
     flag_key: string;
     enabled: boolean;
     metadata?: Record<string, unknown> | undefined;
@@ -152,7 +152,7 @@ export type KYCTier = z.infer<typeof KYCTierSchema>;
 export declare const KYCProfileSchema: z.ZodObject<{
     id: z.ZodOptional<z.ZodString>;
     user_id: z.ZodString;
-    country_code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE"]>;
+    country_code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE", "VE", "EC", "GT", "BO", "DO", "HN", "PY", "NI", "SV", "CR", "PA", "UY"]>;
     document_type: z.ZodOptional<z.ZodString>;
     document_number: z.ZodOptional<z.ZodString>;
     status: z.ZodEnum<["NOT_STARTED", "UNVERIFIED", "PENDING", "APPROVED", "REJECTED"]>;
@@ -163,7 +163,7 @@ export declare const KYCProfileSchema: z.ZodObject<{
     metadata: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
 }, "strip", z.ZodTypeAny, {
     status: "NOT_STARTED" | "UNVERIFIED" | "PENDING" | "APPROVED" | "REJECTED";
-    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE" | "VE" | "EC" | "GT" | "BO" | "DO" | "HN" | "PY" | "NI" | "SV" | "CR" | "PA" | "UY";
     user_id: string;
     tier: "TIER_0" | "TIER_1";
     deposit_limit_minor: number;
@@ -175,7 +175,7 @@ export declare const KYCProfileSchema: z.ZodObject<{
     rejection_reason?: string | undefined;
 }, {
     status: "NOT_STARTED" | "UNVERIFIED" | "PENDING" | "APPROVED" | "REJECTED";
-    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE" | "VE" | "EC" | "GT" | "BO" | "DO" | "HN" | "PY" | "NI" | "SV" | "CR" | "PA" | "UY";
     user_id: string;
     metadata?: Record<string, unknown> | undefined;
     id?: string | undefined;
@@ -189,7 +189,7 @@ export declare const KYCProfileSchema: z.ZodObject<{
 export type KYCProfileDTO = z.infer<typeof KYCProfileSchema>;
 export declare const PaymentMethodSchema: z.ZodObject<{
     id: z.ZodOptional<z.ZodString>;
-    country_code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE"]>;
+    country_code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE", "VE", "EC", "GT", "BO", "DO", "HN", "PY", "NI", "SV", "CR", "PA", "UY"]>;
     method_code: z.ZodString;
     name: z.ZodString;
     type: z.ZodString;
@@ -199,7 +199,7 @@ export declare const PaymentMethodSchema: z.ZodObject<{
     type: string;
     name: string;
     is_active: boolean;
-    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE" | "VE" | "EC" | "GT" | "BO" | "DO" | "HN" | "PY" | "NI" | "SV" | "CR" | "PA" | "UY";
     method_code: string;
     id?: string | undefined;
     config?: Record<string, unknown> | undefined;
@@ -207,7 +207,7 @@ export declare const PaymentMethodSchema: z.ZodObject<{
     type: string;
     name: string;
     is_active: boolean;
-    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE" | "VE" | "EC" | "GT" | "BO" | "DO" | "HN" | "PY" | "NI" | "SV" | "CR" | "PA" | "UY";
     method_code: string;
     id?: string | undefined;
     config?: Record<string, unknown> | undefined;
@@ -215,18 +215,18 @@ export declare const PaymentMethodSchema: z.ZodObject<{
 export type PaymentMethodDTO = z.infer<typeof PaymentMethodSchema>;
 export declare const PaymentMethodSpecSchema: z.ZodObject<{
     id: z.ZodOptional<z.ZodString>;
-    country_code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE"]>;
+    country_code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE", "VE", "EC", "GT", "BO", "DO", "HN", "PY", "NI", "SV", "CR", "PA", "UY"]>;
     method: z.ZodEnum<["pix", "spei", "pse", "mercado_pago", "khipu", "yape"]>;
     enabled: z.ZodDefault<z.ZodBoolean>;
     created_at: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE" | "VE" | "EC" | "GT" | "BO" | "DO" | "HN" | "PY" | "NI" | "SV" | "CR" | "PA" | "UY";
     enabled: boolean;
     method: "pix" | "spei" | "pse" | "mercado_pago" | "khipu" | "yape";
     id?: string | undefined;
     created_at?: string | undefined;
 }, {
-    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE" | "VE" | "EC" | "GT" | "BO" | "DO" | "HN" | "PY" | "NI" | "SV" | "CR" | "PA" | "UY";
     method: "pix" | "spei" | "pse" | "mercado_pago" | "khipu" | "yape";
     enabled?: boolean | undefined;
     id?: string | undefined;
@@ -236,8 +236,8 @@ export type PaymentMethodSpecDTO = z.infer<typeof PaymentMethodSpecSchema>;
 export declare const PaymentIntentSchema: z.ZodObject<{
     id: z.ZodOptional<z.ZodString>;
     user_id: z.ZodString;
-    country_code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE"]>;
-    currency: z.ZodEnum<["BRL", "MXN", "COP", "ARS", "CLP", "PEN"]>;
+    country_code: z.ZodEnum<["BR", "MX", "CO", "AR", "CL", "PE", "VE", "EC", "GT", "BO", "DO", "HN", "PY", "NI", "SV", "CR", "PA", "UY"]>;
+    currency: z.ZodEnum<["BRL", "MXN", "COP", "ARS", "CLP", "PEN", "VES", "GTQ", "BOB", "DOP", "HNL", "PYG", "NIO", "CRC", "UYU"]>;
     amount_minor: z.ZodNumber;
     method: z.ZodString;
     status: z.ZodDefault<z.ZodEnum<["PENDING", "COMPLETED", "CANCELLED", "REJECTED"]>>;
@@ -245,19 +245,19 @@ export declare const PaymentIntentSchema: z.ZodObject<{
     created_at: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     status: "CANCELLED" | "PENDING" | "REJECTED" | "COMPLETED";
-    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE" | "VE" | "EC" | "GT" | "BO" | "DO" | "HN" | "PY" | "NI" | "SV" | "CR" | "PA" | "UY";
     user_id: string;
     method: string;
-    currency: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN";
+    currency: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN" | "VES" | "GTQ" | "BOB" | "DOP" | "HNL" | "PYG" | "NIO" | "CRC" | "UYU";
     amount_minor: number;
     id?: string | undefined;
     created_at?: string | undefined;
     psp_reference?: string | undefined;
 }, {
-    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE";
+    country_code: "BR" | "MX" | "CO" | "AR" | "CL" | "PE" | "VE" | "EC" | "GT" | "BO" | "DO" | "HN" | "PY" | "NI" | "SV" | "CR" | "PA" | "UY";
     user_id: string;
     method: string;
-    currency: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN";
+    currency: "BRL" | "MXN" | "COP" | "ARS" | "CLP" | "PEN" | "VES" | "GTQ" | "BOB" | "DOP" | "HNL" | "PYG" | "NIO" | "CRC" | "UYU";
     amount_minor: number;
     status?: "CANCELLED" | "PENDING" | "REJECTED" | "COMPLETED" | undefined;
     id?: string | undefined;
