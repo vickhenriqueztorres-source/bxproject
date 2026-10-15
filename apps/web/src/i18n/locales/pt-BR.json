@@ -171,5 +171,35 @@
     "failure": "Não foi possível concluir a simulação. Você pode tentar novamente.",
     "amount": "Valor simulado",
     "fee": "Não se aplica na simulação"
+  },
+  "arena": {
+    "you": "Você",
+    "volatilityIndex": "Índice de Volatilidade",
+    "roomBronze": "Sala Bronze",
+    "roomSilver": "Sala Prata",
+    "roomGold": "Sala Ouro",
+    "classic": "Clássico",
+    "turbo": "Turbo"
+  },
+  "result": {
+    "win": "Você ganhou!",
+    "loss": "Você perdeu",
+    "draw": "Empate"
+  },
+  "contract": {
+    "pending": "Pendente",
+    "active": "Ativo",
+    "finished": "Finalizado",
+    "endsIn": "Termina em"
+  },
+  "mood": {
+    "buy": "Compra",
+    "sell": "Venda",
+    "neutral": "Neutro"
+  },
+  "error": {
+    "insufficientBalance": "Saldo insuficiente",
+    "serverError": "Erro no servidor",
+    "networkError": "Erro de conexão"
   }
 }

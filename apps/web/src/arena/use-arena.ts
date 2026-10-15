@@ -38,6 +38,7 @@ import {
 import { tradingFeedManager } from '../feed/TradingFeedManager';
 import type { Tick } from '../feed/protocol';
 import { AuthService } from '../auth/auth-service';
+import { useUiLanguage } from '../i18n';
 
 export type Stage = 'lobby' | 'countdown' | 'running' | 'settling' | 'ended';
 
@@ -285,10 +286,13 @@ export function useArena(options?: UseArenaOptions) {
     }));
   }, []);
 
+  const uiLang = useUiLanguage('pt');
+  const isEs = uiLang === 'es';
+
   const userName = useMemo(() => {
     const session = AuthService.getSession();
-    return session?.user?.name || 'Você';
-  }, []);
+    return session?.user?.name || (isEs ? 'Tú' : 'Você');
+  }, [isEs]);
 
   const standings = useCallback((): Standing[] => {
     const s = store.current;

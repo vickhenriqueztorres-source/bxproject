@@ -69,7 +69,8 @@ export type Locale =
 
 export type ActiveDisplayCurrency = DisplayCurrencyCode | "USD";
 
-function buildCatalog(common: any, auth: any, wallet: any, contracts: any, admin: any) {
+function buildCatalog(common: any, auth: any, wallet: any, contracts: any, admin: any, lang: "pt" | "es" = "es") {
+  const isPt = lang === "pt";
   return {
     common,
     auth,
@@ -92,19 +93,84 @@ function buildCatalog(common: any, auth: any, wallet: any, contracts: any, admin
     currencies: common.currencies,
     tabs: common.tabs,
     trade: contracts,
-    withdraw_demo: wallet.withdraw_demo
+    withdraw_demo: wallet.withdraw_demo,
+    arena: isPt
+      ? {
+          you: "Você",
+          volatilityIndex: "Índice de Volatilidade",
+          roomBronze: "Sala Bronze",
+          roomSilver: "Sala Prata",
+          roomGold: "Sala Ouro",
+          classic: "Clássico",
+          turbo: "Turbo"
+        }
+      : {
+          you: "Tú",
+          volatilityIndex: "Índice de Volatilidad",
+          roomBronze: "Sala Bronce",
+          roomSilver: "Sala Plata",
+          roomGold: "Sala Oro",
+          classic: "Clásico",
+          turbo: "Turbo"
+        },
+    result: isPt
+      ? {
+          win: "Você ganhou!",
+          loss: "Você perdeu",
+          draw: "Empate"
+        }
+      : {
+          win: "¡Ganaste!",
+          loss: "Perdiste",
+          draw: "Empate"
+        },
+    contract: isPt
+      ? {
+          pending: "Pendente",
+          active: "Ativo",
+          finished: "Finalizado",
+          endsIn: "Termina em"
+        }
+      : {
+          pending: "Pendiente",
+          active: "Activo",
+          finished: "Finalizado",
+          endsIn: "Termina en"
+        },
+    mood: isPt
+      ? {
+          buy: "Compra",
+          sell: "Venda",
+          neutral: "Neutro"
+        }
+      : {
+          buy: "Compra",
+          sell: "Venta",
+          neutral: "Neutral"
+        },
+    error: isPt
+      ? {
+          insufficientBalance: "Saldo insuficiente",
+          serverError: "Erro no servidor",
+          networkError: "Erro de conexão"
+        }
+      : {
+          insufficientBalance: "Saldo insuficiente",
+          serverError: "Error del servidor",
+          networkError: "Error de conexión"
+        }
   };
 }
 
-const defaultEsCatalog = buildCatalog(esMXCommon, esMXAuth, esMXWallet, esMXContracts, esMXAdmin);
+const defaultEsCatalog = buildCatalog(esMXCommon, esMXAuth, esMXWallet, esMXContracts, esMXAdmin, "es");
 
 const catalogs: Record<string, any> = {
-  "pt-BR": buildCatalog(ptBRCommon, ptBRAuth, ptBRWallet, ptBRContracts, ptBRAdmin),
+  "pt-BR": buildCatalog(ptBRCommon, ptBRAuth, ptBRWallet, ptBRContracts, ptBRAdmin, "pt"),
   "es-MX": defaultEsCatalog,
-  "es-CO": buildCatalog(esCOCommon, esCOAuth, esCOWallet, esCOContracts, esCOAdmin),
-  "es-AR": buildCatalog(esARCommon, esARAuth, esARWallet, esARContracts, esARAdmin),
-  "es-CL": buildCatalog(esCLCommon, esCLAuth, esCLWallet, esCLContracts, esCLAdmin),
-  "es-PE": buildCatalog(esPECommon, esPEAuth, esPEWallet, esPEContracts, esPEAdmin),
+  "es-CO": buildCatalog(esCOCommon, esCOAuth, esCOWallet, esCOContracts, esCOAdmin, "es"),
+  "es-AR": buildCatalog(esARCommon, esARAuth, esARWallet, esARContracts, esARAdmin, "es"),
+  "es-CL": buildCatalog(esCLCommon, esCLAuth, esCLWallet, esCLContracts, esCLAdmin, "es"),
+  "es-PE": buildCatalog(esPECommon, esPEAuth, esPEWallet, esPEContracts, esPEAdmin, "es"),
   "es-VE": defaultEsCatalog,
   "es-EC": defaultEsCatalog,
   "es-GT": defaultEsCatalog,

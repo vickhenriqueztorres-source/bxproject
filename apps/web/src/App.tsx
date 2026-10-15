@@ -59,6 +59,7 @@ const symbol = candidate && /^[A-Z0-9_]{3,32}$/.test(candidate)
 
 function Dashboard({ user, symbol }: { user: User; symbol: string }) {
   const { navigate } = useRouter();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [announcement, setAnnouncement] = useState('');
   const [settledToast, setSettledToast] = useState<{
@@ -198,7 +199,7 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
           symbol: resolvedSymbol,
           direction: resolvedDirection,
         });
-        setAnnouncement(isWin ? `¡Ganaste! ${formatted}` : `Perdiste ${formatted}`);
+        setAnnouncement(isWin ? `${t('result.win')} ${formatted}` : `${t('result.loss')} ${formatted}`);
       } else {
         const result = event.result === 'WIN' ? 'WIN' : event.result === 'DRAW' ? 'DRAW' : 'LOSS';
         setAnnouncement(`Contrato ${result}: ${formatMinor(event.payout_minor ?? 0)}`);
@@ -207,7 +208,7 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
       void queryClient.invalidateQueries({ queryKey: ['contract', event.contract_id] });
       void queryClient.invalidateQueries({ queryKey: ['wallet'] });
     }
-  }, [queryClient, soundEnabled, activeSymbol, contracts.data]);
+  }, [queryClient, soundEnabled, activeSymbol, contracts.data, t]);
 
   useEffect(() => {
     if (isGuestMode()) {

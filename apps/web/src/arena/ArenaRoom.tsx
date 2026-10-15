@@ -79,7 +79,9 @@ export function ChartHeader({ arena }: { arena: ArenaApi }) {
       className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2"
     >
       <div className="flex items-center gap-3">
-        <span className="text-sm font-semibold">{asset.name}</span>
+        <span className="text-sm font-semibold">
+          {isEs ? asset.name.replace('Índice de Volatilidade', 'Índice de Volatilidad') : asset.name}
+        </span>
         <span
           className={cn(
             'font-mono text-sm font-semibold tabular-nums',
