@@ -1,0 +1,45 @@
+TAP version 13
+# {"runId":"b005100d-3305-4ac0-99e2-095db93783c9","container":"qa-chart-b005100d-3305-4ac0-99e2-095db93783c9","image":"postgres:16-alpine","imageId":"sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea","publishedHost":"127.0.0.1","publishedPort":32768,"environment":"ephemeral"}
+# Subtest: [DB-11][AC-GRAF-00-1] ordered 0001+0010 migrations work on a new database
+not ok 1 - [DB-11][AC-GRAF-00-1] ordered 0001+0010 migrations work on a new database
+  ---
+  duration_ms: 22201.0024
+  type: 'test'
+  location: 'D:\\brokerproject\\tests\\integration\\chart-durability-baseline.oracle.test.mjs:62:1'
+  failureType: 'testCodeFailure'
+  error: 'SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    D:\brokerproject\node_modules\.pnpm\pg-pool@3.14.0_pg@8.23.1\node_modules\pg-pool\index.js:45:11
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    async schemaFixture (file:///D:/brokerproject/tests/integration/chart-durability-baseline.oracle.test.mjs:40:5)
+    async TestContext.<anonymous> (file:///D:/brokerproject/tests/integration/chart-durability-baseline.oracle.test.mjs:63:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: [M-02][AC-GRAF-00-2] 20 writers sharing one head produce exactly one confirmed effect
+not ok 2 - [M-02][AC-GRAF-00-2] 20 writers sharing one head produce exactly one confirmed effect
+  ---
+  duration_ms: 14.3256
+  type: 'test'
+  location: 'D:\\brokerproject\\tests\\integration\\chart-durability-baseline.oracle.test.mjs:76:1'
+  failureType: 'testCodeFailure'
+  error: 'SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    D:\brokerproject\node_modules\.pnpm\pg-pool@3.14.0_pg@8.23.1\node_modules\pg-pool\index.js:45:11
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    async schemaFixture (file:///D:/brokerproject/tests/integration/chart-durability-baseline.oracle.test.mjs:40:5)
+    async TestContext.<anonymous> (file:///D:/brokerproject/tests/integration/chart-durability-baseline.oracle.test.mjs:77:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 27683.3599

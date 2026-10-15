@@ -321,6 +321,7 @@ export function ArenaBar({ arena }: { arena: ArenaApi }) {
   return (
     <header
       data-testid="arena-bar"
+      style={{ flexShrink: 0 }}
       className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-3 border-b border-border bg-background px-4 py-3"
     >
       <div className="flex items-center gap-3">

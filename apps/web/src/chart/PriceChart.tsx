@@ -8,7 +8,7 @@ import {
   type ISeriesApi,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import { fetchHistoricalCandlesChunk, type Candle, type Contract } from '../api/client';
+import { getCandles, fetchHistoricalCandlesChunk, type Candle, type Contract } from '../api/client';
 import type { Tick } from '../feed/protocol';
 import { formatMinor, formatCurrencyBinmax } from '../lib/money';
 import {
@@ -284,6 +284,27 @@ export function PriceChart({
     }
   }, [candles, symbol]);
 
+  // Busca velas dedicadas reais quando o timeframe for alterado (ex: '5s', '15s', '30s', '5m')
+  useEffect(() => {
+    if (timeframe === '1m') return;
+    let cancelled = false;
+    const fetchTimeframeCandles = async () => {
+      try {
+        const tfData = await getCandles(symbol, timeframe, 1440);
+        if (!cancelled && tfData && tfData.length > 0 && renderContext.current.symbol === symbol) {
+          setInternalCandles(tfData);
+          setInternalSymbol(symbol);
+        }
+      } catch {
+        // Fallback resiliente: resampleCandles cuidará da exibição das velas 1m já carregadas
+      }
+    };
+    void fetchTimeframeCandles();
+    return () => {
+      cancelled = true;
+    };
+  }, [timeframe, symbol]);
+
   // Ferramentas Gráficas e Indicadores Técnicos
   const [indicators, setIndicators] = useState<IndicatorConfig[]>(DEFAULT_INDICATORS);
   const [drawings, setDrawings] = useState<DrawingItem[]>(() => loadSafeDrawings(symbol));
@@ -518,7 +539,12 @@ export function PriceChart({
 
           isLoadingHistoryRef.current = true;
           try {
-            const olderBars = await fetchHistoricalCandlesChunk(symbol, oldestEpoch, 1000);
+            const olderBars = await fetchHistoricalCandlesChunk(
+              symbol,
+              oldestEpoch,
+              1000,
+              renderContext.current.timeframe
+            );
             if (cancelled || renderContext.current.symbol !== symbol) return;
             if (!olderBars || olderBars.length === 0) {
               hasMoreHistoryRef.current = false;
@@ -1539,6 +1565,7 @@ export function PriceChart({
         isBinmax={isBinmax}
         pricePrecision={polish ? getAxisPrecision(symbol) : undefined}
         locale={polish ? POLISH_CHART_LOCALE : undefined}
+        timezone={typeof Intl !== 'undefined' && Intl.DateTimeFormat ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'America/Sao_Paulo'}
         onChartReady={handleChartReady}
         onChartDispose={handleChartDispose}
         onDimensionsChange={setDimensions}

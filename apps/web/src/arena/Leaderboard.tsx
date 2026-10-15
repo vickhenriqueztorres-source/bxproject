@@ -19,7 +19,7 @@ import { useUiLanguage } from '../i18n';
 
 const MEDAL = ['text-bonus', 'text-foreground', 'text-bonus/60'];
 const VIEW_FILTERS = [
-  { limit: 5, label: 'Top 5', tier: null },
+  { limit: 5, label: 'Top 5', tier: 'TOP_3' as PayoutTier },
   { limit: 10, label: 'Top 10', tier: 'TOP_10' as PayoutTier },
   { limit: 20, label: 'Top 20', tier: 'TOP_20' as PayoutTier },
   { limit: 30, label: 'Top 30', tier: 'TOP_30' as PayoutTier },
@@ -31,17 +31,29 @@ function Row({
   prize,
   isCutoffRow,
   isEs,
+  stickyBottom = false,
 }: {
   s: Standing;
   rank: number;
   prize: number | null;
   isCutoffRow?: boolean;
   isEs: boolean;
+  stickyBottom?: boolean;
 }) {
   const you = s.kind === 'you';
   return (
     <tr
       data-testid={`leaderboard-row-${s.id}`}
+      style={
+        stickyBottom
+          ? {
+              position: 'sticky',
+              bottom: 0,
+              zIndex: 2,
+              backgroundColor: 'var(--tournament-purple-surface, #1a0b2e)',
+            }
+          : undefined
+      }
       className={cn(
         'border-t border-border',
         you && 'bg-arena-surface',
@@ -50,7 +62,7 @@ function Row({
     >
       <td
         className={cn(
-          'py-1.5 pl-3',
+          'py-2.5 pl-3',
           you && 'shadow-[inset_2px_0_0_var(--tournament-purple-glow)]'
         )}
       >
@@ -64,7 +76,7 @@ function Row({
           <span className="font-mono text-xs text-muted-foreground tabular-nums">{rank}</span>
         )}
       </td>
-      <td className="py-1.5">
+      <td className="py-2.5">
         <span className="flex min-w-0 items-center gap-2">
           {s.kind === 'bot' ? (
             <span className="flex size-5 items-center justify-center rounded bg-bonus/15">
@@ -91,14 +103,14 @@ function Row({
       </td>
       <td
         style={{ whiteSpace: 'nowrap', paddingLeft: '10px', paddingRight: '10px' }}
-        className="py-1.5 px-2.5 text-right font-mono font-semibold whitespace-nowrap tabular-nums"
+        className="py-2.5 px-2.5 text-right font-mono font-semibold whitespace-nowrap tabular-nums"
       >
         {formatPoints(s.points)}
       </td>
       <td
         data-testid={`leaderboard-prize-${s.id}`}
         style={{ whiteSpace: 'nowrap', paddingLeft: '10px', paddingRight: '12px' }}
-        className="py-1.5 pl-2.5 pr-3 text-right font-mono text-muted-foreground whitespace-nowrap tabular-nums"
+        className="py-2.5 pl-2.5 pr-3 text-right font-mono text-muted-foreground whitespace-nowrap tabular-nums"
       >
         {prize !== null ? <span className="text-foreground">{formatUsd(prize)}</span> : '—'}
       </td>
@@ -151,8 +163,8 @@ export function Leaderboard({
     : Math.min(99, Math.max(10, Math.round((you.points / Math.max(1, cutoffHuman.points)) * 100)));
 
   return (
-    <div className="flex flex-col gap-2.5" data-testid="arena-leaderboard">
-      <div className="flex items-center justify-between gap-2">
+    <div className="flex min-h-0 flex-col gap-4" data-testid="arena-leaderboard">
+      <div className="flex shrink-0 items-center justify-between gap-2">
         <span
           style={{ whiteSpace: 'nowrap' }}
           className="text-xs font-semibold text-muted-foreground whitespace-nowrap"
@@ -175,7 +187,8 @@ export function Leaderboard({
                 key={f.limit}
                 type="button"
                 data-testid={`leaderboard-filter-top-${f.limit}`}
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
                   setViewLimit(f.limit);
                   if (f.tier) {
                     arena.preview.setTier(f.tier);
@@ -207,15 +220,24 @@ export function Leaderboard({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border">
+      <div
+        data-testid="leaderboard-table-card"
+        style={{
+          border: '1px solid var(--border, #1c232c)',
+          borderRadius: '12px',
+          overflow: 'hidden',
+          flexShrink: 0,
+        }}
+        className="overflow-hidden rounded-xl border border-border"
+      >
         <div
           data-testid="leaderboard-table-scroll"
-          className="thin-scroll"
           style={{
-            maxHeight: '235px',
-            overflowY: 'auto',
+            maxHeight: viewLimit > 5 ? '300px' : 'none',
+            overflowY: viewLimit > 5 ? 'auto' : 'visible',
             overflowX: 'hidden',
           }}
+          className="thin-scroll"
         >
           <table className="w-full text-sm">
             <caption className="sr-only">
@@ -230,26 +252,26 @@ export function Leaderboard({
                 zIndex: 2,
                 backgroundColor: 'var(--surface, #0f1318)',
               }}
-              className="sticky top-0 bg-surface text-left text-[11px] tracking-wide text-muted-foreground uppercase"
+              className="bg-surface text-left text-[11px] tracking-wide text-muted-foreground uppercase"
             >
               <tr>
-                <th scope="col" className="w-10 py-1.5 pl-3 font-medium whitespace-nowrap">
+                <th scope="col" className="w-10 py-2 pl-3 font-medium whitespace-nowrap">
                   #
                 </th>
-                <th scope="col" className="py-1.5 font-medium whitespace-nowrap">
+                <th scope="col" className="py-2 font-medium whitespace-nowrap">
                   Trader
                 </th>
                 <th
                   scope="col"
                   style={{ whiteSpace: 'nowrap', paddingLeft: '10px', paddingRight: '10px' }}
-                  className="py-1.5 px-2.5 text-right font-medium whitespace-nowrap"
+                  className="py-2 px-2.5 text-right font-medium whitespace-nowrap"
                 >
                   {isEs ? 'Puntos' : 'Pontos'}
                 </th>
                 <th
                   scope="col"
                   style={{ whiteSpace: 'nowrap', paddingLeft: '10px', paddingRight: '12px' }}
-                  className="py-1.5 pl-2.5 pr-3 text-right font-medium whitespace-nowrap"
+                  className="py-2 pl-2.5 pr-3 text-right font-medium whitespace-nowrap"
                 >
                   {isEs ? 'Premio' : 'Prêmio'}
                 </th>
@@ -280,7 +302,13 @@ export function Leaderboard({
                       ···
                     </td>
                   </tr>
-                  <Row s={you} rank={youIndex + 1} prize={prizeOf(you)} isEs={isEs} />
+                  <Row
+                    s={you}
+                    rank={youIndex + 1}
+                    prize={prizeOf(you)}
+                    isEs={isEs}
+                    stickyBottom={viewLimit > 5}
+                  />
                 </>
               )}
             </tbody>
@@ -292,7 +320,7 @@ export function Leaderboard({
       <div
         data-testid="leaderboard-bubble-radar"
         className={cn(
-          'flex flex-col gap-1.5 rounded-xl border p-2.5',
+          'flex flex-col gap-2 rounded-xl border p-3.5',
           inTheMoney
             ? 'border-primary/30 bg-primary/5'
             : 'border-arena-border bg-arena-surface/70'
@@ -340,7 +368,7 @@ export function Leaderboard({
       <div
         data-testid="leaderboard-bot-challenge"
         className={cn(
-          'flex gap-2.5 rounded-xl border p-2.5',
+          'flex gap-3 rounded-xl border p-3.5',
           !ahead ? 'border-bonus/30 bg-bonus/5' : 'border-primary/30 bg-primary/5'
         )}
       >

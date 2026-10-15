@@ -99,10 +99,10 @@ const GridCell = React.memo(function GridCell({
     };
   }, [symbol]);
 
-  // Fetch candle history for this cell's symbol
+  // Fetch candle history for this cell's symbol (isolated by interval '1m')
   const candlesQuery = useQuery({
-    queryKey: ['candles', symbol],
-    queryFn: () => getCandles(symbol),
+    queryKey: ['candles', symbol, '1m'],
+    queryFn: () => getCandles(symbol, '1m'),
     staleTime: 60_000,
   });
 
@@ -339,6 +339,7 @@ export function MultiChartGrid({
   });
   const [maxSkewMs, setMaxSkewMs] = useState(0);
   const cellEventTimes = useRef(new Map<string, number>());
+  const customizedCellsRef = useRef(new Set<number>());
 
   const visibleCellsCount = Math.min(layout === '1x1' ? 1 : layout === '2x1' ? 2 : layout === '2x2' ? 4 : 6, MAX_CHARTS);
 
@@ -361,10 +362,11 @@ export function MultiChartGrid({
       const next = [...prev];
       const visibleCount = visibleCellsCount;
 
-      // 1. Se openTabs estiver definido, preenche as células a partir de openTabs
+      // 1. Se openTabs estiver definido, preenche as células não customizadas a partir de openTabs
       if (openTabs && openTabs.length > 0) {
         const distinct = availableSymbols.filter((s) => !openTabs.includes(s));
         for (let i = 0; i < MAX_CHARTS; i++) {
+          if (customizedCellsRef.current.has(i) && next[i]?.symbol) continue;
           const sym = i < openTabs.length ? openTabs[i] : distinct[i - openTabs.length] || 'EURUSD_OTC';
           next[i] = { id: `cell-${i}`, symbol: sym };
         }
@@ -419,6 +421,7 @@ export function MultiChartGrid({
   const noopFocus = useCallback(() => {}, []);
 
   const handleCellSymbolChange = useCallback((cellIndex: number, newSymbol: string) => {
+    customizedCellsRef.current.add(cellIndex);
     setCells((prev) => {
       const next = [...prev];
       next[cellIndex] = { ...next[cellIndex], symbol: newSymbol };

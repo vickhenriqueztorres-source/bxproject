@@ -20,7 +20,7 @@ export declare const TIER_WEIGHTS_BPS: Record<PayoutTier, number[]>;
  * Distribuição exata de prêmios em centavos inteiros usando algoritmo Hare-Niemeyer (Maior Resto) em BigInt.
  * Garante matematicamente que a soma dos prêmios é 100% igual a totalPoolCents (saldo final do Escrow = 0).
  */
-export declare function calculateExactPrizeDistribution(totalPoolCents: number, tier: PayoutTier, eligibleWinnersCount: number): number[];
+export declare function calculateExactPrizeDistribution(totalPoolCents: number, tier: PayoutTier, eligibleWinnersCount?: number): number[];
 export declare class BlnkClient {
     private baseUrl;
     private timeoutMs;
@@ -66,6 +66,7 @@ export declare class BlnkClient {
      * Onboarding do usuário com criação de contas e US$ 10.000 demo (D-11, I-01)
      */
     onboardUser(userId: string): Promise<void>;
+    private recordIdempotentTransaction;
     /**
      * Reserva a stake do usuário movendo de available para reserved (I-03)
      */

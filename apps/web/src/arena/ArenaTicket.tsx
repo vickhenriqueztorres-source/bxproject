@@ -54,6 +54,7 @@ export function ArenaTicket({ arena }: { arena: ArenaApi }) {
   return (
     <div
       data-testid="arena-ticket"
+      style={{ flexShrink: 0 }}
       className="flex shrink-0 flex-col gap-3 border-t border-border bg-background p-3 sm:p-4"
     >
       <div className="flex flex-wrap items-end gap-3">

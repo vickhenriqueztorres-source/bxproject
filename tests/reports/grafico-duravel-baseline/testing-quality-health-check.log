@@ -1,0 +1,6 @@
+/mnt/d/brokerproject/.agents/skills/06-testing-quality/scripts/health-check.sh: line 5: set: pipefail: invalid option name
+/mnt/d/brokerproject/.agents/skills/06-testing-quality/scripts/health-check.sh: line 6: $'\r': command not found
+/mnt/d/brokerproject/.agents/skills/06-testing-quality/scripts/health-check.sh: line 8: cd: $'/mnt/d/brokerproject/.agents/skills/06-testing-quality\r/../..': No such file or directory
+/mnt/d/brokerproject/.agents/skills/06-testing-quality/scripts/health-check.sh: line 11: $'\r': command not found
+/mnt/d/brokerproject/.agents/skills/06-testing-quality/scripts/health-check.sh: line 20: syntax error near unexpected token `$'do\r''
+/mnt/d/brokerproject/.agents/skills/06-testing-quality/scripts/health-check.sh: line 20: `  for candidate in services apps tests; do'

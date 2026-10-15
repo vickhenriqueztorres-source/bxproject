@@ -3,11 +3,25 @@
 
 BEGIN;
 
--- Remover os novos indices se nao houverem contratos atrelados
-DELETE FROM index_state WHERE symbol IN ('VOL_10', 'VOL_25', 'VOL_50', 'VOL_75', 'VOL_100', 'CRASH_BOOM_100');
-DELETE FROM indices WHERE symbol IN ('VOL_10', 'VOL_25', 'VOL_50', 'VOL_75', 'VOL_100', 'CRASH_BOOM_100');
+SET LOCAL lock_timeout = '1s';
+SET LOCAL statement_timeout = '10s';
+LOCK TABLE indices, index_state, ticks, candles, contracts IN SHARE ROW EXCLUSIVE MODE;
 
--- Limpar referencia de alias nos legados
-UPDATE indices SET params = params - 'alias_canonical' WHERE symbol LIKE 'SYNTH_%';
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM index_state s JOIN indices i USING(symbol)
+             WHERE i.seeded_by_0050 AND s.last_sequence > 0)
+     OR EXISTS (SELECT 1 FROM ticks t JOIN indices i USING(symbol) WHERE i.seeded_by_0050)
+     OR EXISTS (SELECT 1 FROM candles c JOIN indices i USING(symbol) WHERE i.seeded_by_0050)
+     OR EXISTS (SELECT 1 FROM contracts c JOIN indices i USING(symbol) WHERE i.seeded_by_0050)
+  THEN
+    RAISE EXCEPTION '0050 rollback refused: canonical symbol has durable activity';
+  END IF;
+END $$;
+
+DELETE FROM index_state WHERE symbol IN (SELECT symbol FROM indices WHERE seeded_by_0050);
+DELETE FROM indices WHERE seeded_by_0050;
+
+ALTER TABLE indices DROP COLUMN seeded_by_0050;
 
 COMMIT;

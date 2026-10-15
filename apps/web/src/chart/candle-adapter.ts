@@ -139,12 +139,18 @@ export function resampleCandles(
 
   const stepSec = timeframeSeconds(timeframe);
 
-  // Caso 1: 1m ou 5m (agregação por bucket temporal se for 5m ou se a entrada contiver barras sub-minuto)
-  if (timeframe === '1m' && !hasSubMinuteInput) {
-    return unique;
+  // Se a entrada contiver apenas 1 barra e o timestamp não estiver alinhado a 60s
+  if (!hasSubMinuteInput && unique.length === 1 && (unique[0].time % 60 !== 0)) {
+    hasSubMinuteInput = true;
   }
 
-  if (timeframe === '1m' || timeframe === '5m') {
+  // Caso 1: Se a entrada já contiver barras sub-minuto reais OU se o timeframe for >= 1m
+  // Agrega de forma determinística por bucket temporal sem fatiamento sintético
+  if (hasSubMinuteInput || stepSec >= 60) {
+    if (timeframe === '1m' && !hasSubMinuteInput) {
+      return unique;
+    }
+
     const bucketsMap = new Map<number, CandlestickData<UTCTimestamp>>();
     for (const c of unique) {
       const bucketTime = (Math.floor(c.time / stepSec) * stepSec) as UTCTimestamp;
@@ -166,8 +172,8 @@ export function resampleCandles(
     return Array.from(bucketsMap.values()).sort((a, b) => a.time - b.time);
   }
 
-  // Caso 3: Sub-minuto ('5s', '15s', '30s')
-  // Desmembra cada vela de 1m em fatias contíguas e matematicamente consistentes
+  // Caso 2: Fallback automático de segurança para sub-minuto ('5s', '15s', '30s')
+  // Desmembra cada vela de 1m em fatias contíguas quando a entrada só tem barras de 1m
   const result: CandlestickData<UTCTimestamp>[] = [];
   const slicesPerMinute = 60 / stepSec; // 5s -> 12, 15s -> 4, 30s -> 2
 

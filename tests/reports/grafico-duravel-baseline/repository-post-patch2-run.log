@@ -1,0 +1,157 @@
+TAP version 13
+# {"runId":"b3c2d6d2-8ffa-4744-b0e7-a41b6aed9c02","container":"qa-chart-b3c2d6d2-8ffa-4744-b0e7-a41b6aed9c02","image":"postgres:16-alpine","imageId":"sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea","publishedHost":"127.0.0.1","publishedPort":32768,"environment":"ephemeral"}
+# Subtest: [M-03][AC-GRAF-00-5] a committed tick and outbox survive a new PostgreSQL client
+ok 1 - [M-03][AC-GRAF-00-5] a committed tick and outbox survive a new PostgreSQL client
+  ---
+  duration_ms: 28041.827
+  type: 'test'
+  ...
+# Subtest: [M-02][AC-GRAF-00-2] replaying the same head twice commits exactly one effect
+ok 2 - [M-02][AC-GRAF-00-2] replaying the same head twice commits exactly one effect
+  ---
+  duration_ms: 192.0054
+  type: 'test'
+  ...
+# Subtest: [M-03][AC-GRAF-00-7] a real index_state trigger failure rolls back tick, state and outbox
+ok 3 - [M-03][AC-GRAF-00-7] a real index_state trigger failure rolls back tick, state and outbox
+  ---
+  duration_ms: 161.1417
+  type: 'test'
+  ...
+# Subtest: [M-03][AC-GRAF-00-7] a real ticks trigger failure rolls back tick, state and outbox
+ok 4 - [M-03][AC-GRAF-00-7] a real ticks trigger failure rolls back tick, state and outbox
+  ---
+  duration_ms: 166.6363
+  type: 'test'
+  ...
+# Subtest: [M-03][AC-GRAF-00-7] a real outbox_events trigger failure rolls back tick, state and outbox
+ok 5 - [M-03][AC-GRAF-00-7] a real outbox_events trigger failure rolls back tick, state and outbox
+  ---
+  duration_ms: 156.4412
+  type: 'test'
+  ...
+# Subtest: [M-04][AC-GRAF-00-6] a prev_hash mismatch is rejected without a partial write
+ok 6 - [M-04][AC-GRAF-00-6] a prev_hash mismatch is rejected without a partial write
+  ---
+  duration_ms: 174.5535
+  type: 'test'
+  ...
+# Subtest: [M-04][AC-GRAF-00-6] a hash mismatch is rejected without a partial write
+ok 7 - [M-04][AC-GRAF-00-6] a hash mismatch is rejected without a partial write
+  ---
+  duration_ms: 138.3665
+  type: 'test'
+  ...
+# Subtest: [M-04][AC-GRAF-00-6] a sequence mismatch is rejected without a partial write
+ok 8 - [M-04][AC-GRAF-00-6] a sequence mismatch is rejected without a partial write
+  ---
+  duration_ms: 157.3548
+  type: 'test'
+  ...
+# Subtest: [M-04][AC-GRAF-00-4] hashes of confirmed concurrent ticks match their actual sequences
+ok 9 - [M-04][AC-GRAF-00-4] hashes of confirmed concurrent ticks match their actual sequences
+  ---
+  duration_ms: 381.2569
+  type: 'test'
+  ...
+# Subtest: [M-02][AC-GRAF-00-2] 20 writers sharing one head produce exactly one confirmed effect
+ok 10 - [M-02][AC-GRAF-00-2] 20 writers sharing one head produce exactly one confirmed effect
+  ---
+  duration_ms: 374.2287
+  type: 'test'
+  ...
+# {"accepted":1,"rejected":19,"failures":[{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"},{"message":"TICK_PREV_HASH_MISMATCH"}]}
+# Subtest: [M-04][AC-GRAF-00-8] noncanonical price 100.01 is rejected before persistence
+ok 11 - [M-04][AC-GRAF-00-8] noncanonical price 100.01 is rejected before persistence
+  ---
+  duration_ms: 163.5916
+  type: 'test'
+  ...
+# Subtest: [M-04][AC-GRAF-00-8] noncanonical price 100.0000001 is rejected before persistence
+ok 12 - [M-04][AC-GRAF-00-8] noncanonical price 100.0000001 is rejected before persistence
+  ---
+  duration_ms: 135.9839
+  type: 'test'
+  ...
+# Subtest: [M-04][AC-GRAF-00-8] noncanonical price NaN is rejected before persistence
+ok 13 - [M-04][AC-GRAF-00-8] noncanonical price NaN is rejected before persistence
+  ---
+  duration_ms: 186.4318
+  type: 'test'
+  ...
+# Subtest: [M-04][AC-GRAF-00-8] noncanonical price Infinity is rejected before persistence
+ok 14 - [M-04][AC-GRAF-00-8] noncanonical price Infinity is rejected before persistence
+  ---
+  duration_ms: 176.6184
+  type: 'test'
+  ...
+# Subtest: [M-04][AC-GRAF-00-8] noncanonical price -100.000000 is rejected before persistence
+ok 15 - [M-04][AC-GRAF-00-8] noncanonical price -100.000000 is rejected before persistence
+  ---
+  duration_ms: 187.3379
+  type: 'test'
+  ...
+# Subtest: [M-04][AC-GRAF-00-8] noncanonical price 0.000000 is rejected before persistence
+ok 16 - [M-04][AC-GRAF-00-8] noncanonical price 0.000000 is rejected before persistence
+  ---
+  duration_ms: 183.6213
+  type: 'test'
+  ...
+# Subtest: [M-02][M-04][AC-GRAF-00-9] competing symbols retain independent heads and outbox payloads
+ok 17 - [M-02][M-04][AC-GRAF-00-9] competing symbols retain independent heads and outbox payloads
+  ---
+  duration_ms: 472.8591
+  type: 'test'
+  ...
+# Subtest: [M-03][R-03][AC-GRAF-00-10] terminating the transaction backend rolls back and permits recovery
+ok 18 - [M-03][R-03][AC-GRAF-00-10] terminating the transaction backend rolls back and permits recovery
+  ---
+  duration_ms: 178.3274
+  type: 'test'
+  ...
+# terminated PostgreSQL PID 138; rollback checked through independent client
+# Subtest: [S-05][AC-GRAF-00-11] unknown symbol QA_UNKNOWN cannot mutate another symbol
+ok 19 - [S-05][AC-GRAF-00-11] unknown symbol QA_UNKNOWN cannot mutate another symbol
+  ---
+  duration_ms: 156.4823
+  type: 'test'
+  ...
+# Subtest: [S-05][AC-GRAF-00-11] unknown symbol QA'; DROP TABLE ticks;-- cannot mutate another symbol
+ok 20 - [S-05][AC-GRAF-00-11] unknown symbol QA'; DROP TABLE ticks;-- cannot mutate another symbol
+  ---
+  duration_ms: 144.6588
+  type: 'test'
+  ...
+# Subtest: [M-04][AC-GRAF-00-12] a hash bound to another price cannot be persisted
+ok 21 - [M-04][AC-GRAF-00-12] a hash bound to another price cannot be persisted
+  ---
+  duration_ms: 153.9145
+  type: 'test'
+  ...
+# Subtest: [M-04][AC-GRAF-00-12] a hash bound to another timestamp cannot be persisted
+ok 22 - [M-04][AC-GRAF-00-12] a hash bound to another timestamp cannot be persisted
+  ---
+  duration_ms: 158.5583
+  type: 'test'
+  ...
+# Subtest: [M-04][AC-GRAF-00-12] a hash bound to another symbol cannot be persisted
+ok 23 - [M-04][AC-GRAF-00-12] a hash bound to another symbol cannot be persisted
+  ---
+  duration_ms: 182.7839
+  type: 'test'
+  ...
+# Subtest: [M-04][AC-GRAF-00-13] an invalid timestamp is rejected explicitly before writing
+ok 24 - [M-04][AC-GRAF-00-13] an invalid timestamp is rejected explicitly before writing
+  ---
+  duration_ms: 153.054
+  type: 'test'
+  ...
+1..24
+# tests 24
+# suites 0
+# pass 24
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 36321.4701

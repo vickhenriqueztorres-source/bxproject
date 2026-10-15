@@ -317,6 +317,24 @@ const IsolatedChartHostComponent = forwardRef<IsolatedChartHandle, IsolatedChart
           rightOffset: 12,
           barSpacing: 10,
           shiftVisibleRangeOnNewBar: true,
+          tickMarkFormatter: (time: any, _tickMarkType: any, localeStr: string) => {
+            try {
+              const tsMs = typeof time === 'number' ? time * 1000 : (typeof time?.timestamp === 'number' ? time.timestamp * 1000 : 0);
+              if (!tsMs) return '';
+              const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
+              const loc = localeStr || locale || 'pt-BR';
+              const date = new Date(tsMs);
+              return new Intl.DateTimeFormat(loc, {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: isSubMinuteTimeframe(timeframe) ? '2-digit' : undefined,
+                hour12: false,
+                timeZone: tz,
+              }).format(date);
+            } catch {
+              return '';
+            }
+          },
         },
         crosshair: {
           vertLine: { color: isBinmax ? '#8A92A1' : '#4d6994', width: 1 },
@@ -681,7 +699,7 @@ const IsolatedChartHostComponent = forwardRef<IsolatedChartHandle, IsolatedChart
     useEffect(() => {
       if (isDisposedRef.current || !chartRef.current || (!locale && !timezone)) return;
       const activeLocale = locale || 'pt-BR';
-      const activeTz = timezone || 'America/Sao_Paulo';
+      const activeTz = timezone || (typeof Intl !== 'undefined' && Intl.DateTimeFormat ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'America/Sao_Paulo');
       try {
         chartRef.current.applyOptions({
           localization: {
@@ -711,11 +729,29 @@ const IsolatedChartHostComponent = forwardRef<IsolatedChartHandle, IsolatedChart
               }
             },
           },
+          timeScale: {
+            tickMarkFormatter: (time: any, _tickMarkType: any, localeStr: string) => {
+              try {
+                const tsMs = typeof time === 'number' ? time * 1000 : (typeof time?.timestamp === 'number' ? time.timestamp * 1000 : 0);
+                if (!tsMs) return '';
+                const date = new Date(tsMs);
+                return new Intl.DateTimeFormat(localeStr || activeLocale, {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: isSubMinuteTimeframe(timeframe) ? '2-digit' : undefined,
+                  hour12: false,
+                  timeZone: activeTz,
+                }).format(date);
+              } catch {
+                return '';
+              }
+            },
+          },
         });
       } catch {
         // Ignora se mock de gráfico em teste unitário não suportar localization
       }
-    }, [locale, timezone, precision]);
+    }, [locale, timezone, precision, timeframe]);
 
     // 5. Wake-up Auto-Resync na retomada de abas em segundo plano
     useEffect(() => {

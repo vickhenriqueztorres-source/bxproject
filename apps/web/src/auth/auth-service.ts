@@ -7,6 +7,8 @@
  * 3. Falha fechada quando a API não confirma cadastro, login ou recuperação
  */
 
+import { resolveApiUrl } from '../api/config';
+
 export interface AuthUser {
   id: string;
   name: string;
@@ -77,7 +79,7 @@ export class AuthService {
     // Cadastro só conclui quando a API confirma a identidade.
     let response: Response;
     try {
-      response = await fetch('/api/v1/auth/register', {
+      response = await fetch(resolveApiUrl('/v1/auth/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password, country })
@@ -142,7 +144,7 @@ export class AuthService {
     // Login só conclui quando a API confirma as credenciais.
     let response: Response;
     try {
-      response = await fetch('/api/v1/auth/login', {
+      response = await fetch(resolveApiUrl('/v1/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -204,7 +206,7 @@ export class AuthService {
 
     let response: Response;
     try {
-      response = await fetch('/api/v1/auth/recovery/request', {
+      response = await fetch(resolveApiUrl('/v1/auth/recovery/request'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -231,7 +233,7 @@ export class AuthService {
 
     let response: Response;
     try {
-      response = await fetch('/api/v1/auth/recovery/reset', {
+      response = await fetch(resolveApiUrl('/v1/auth/recovery/reset'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, new_password: newPassword })
@@ -257,7 +259,7 @@ export class AuthService {
   public static async verifyEmail(params: { code?: string; token?: string; email?: string }): Promise<{ success: boolean; user?: AuthUser; message?: string }> {
     let response: Response;
     try {
-      response = await fetch('/api/v1/auth/verify-email', {
+      response = await fetch(resolveApiUrl('/v1/auth/verify-email'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params)
@@ -278,7 +280,7 @@ export class AuthService {
   public static async resendVerification(email: string): Promise<{ success: boolean; message?: string }> {
     let response: Response;
     try {
-      response = await fetch('/api/v1/auth/resend-verification', {
+      response = await fetch(resolveApiUrl('/v1/auth/resend-verification'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -338,7 +340,7 @@ export class AuthService {
       throw new Error('Sessão expirada. Inicie sessão novamente.');
     }
 
-    const response = await fetch('/api/v1/auth/me', {
+    const response = await fetch(resolveApiUrl('/v1/auth/me'), {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${session.token}`,
@@ -384,7 +386,7 @@ export class AuthService {
       throw new Error('Sessão expirada. Inicie sessão novamente.');
     }
 
-    const response = await fetch('/api/v1/auth/me', {
+    const response = await fetch(resolveApiUrl('/v1/auth/me'), {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${session.token}`,
@@ -435,7 +437,7 @@ export class AuthService {
       throw new Error('Sessão expirada. Inicie sessão novamente.');
     }
 
-    const response = await fetch('/api/v1/auth/password', {
+    const response = await fetch(resolveApiUrl('/v1/auth/password'), {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${session.token}`,

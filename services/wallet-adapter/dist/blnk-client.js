@@ -21,7 +21,7 @@ exports.TIER_WEIGHTS_BPS = {
  * Distribuição exata de prêmios em centavos inteiros usando algoritmo Hare-Niemeyer (Maior Resto) em BigInt.
  * Garante matematicamente que a soma dos prêmios é 100% igual a totalPoolCents (saldo final do Escrow = 0).
  */
-function calculateExactPrizeDistribution(totalPoolCents, tier, eligibleWinnersCount) {
+function calculateExactPrizeDistribution(totalPoolCents, tier, eligibleWinnersCount = exports.TIER_WEIGHTS_BPS[tier]?.length ?? 0) {
     if (!Number.isSafeInteger(totalPoolCents) || totalPoolCents < 0) {
         throw new Error("INVALID_MINOR_AMOUNT: totalPoolCents must be non-negative integer");
     }
@@ -272,11 +272,21 @@ class BlnkClient {
             }
         }
     }
+    async recordIdempotentTransaction(payload) {
+        try {
+            await this.recordTransaction(payload);
+        }
+        catch (err) {
+            if (!err.message?.includes("409") && !err.message?.includes("conflict") && !err.message?.includes("CONFLICT")) {
+                throw err;
+            }
+        }
+    }
     /**
      * Reserva a stake do usuário movendo de available para reserved (I-03)
      */
     async reserveStake(userId, contractId, stakeMinor) {
-        await this.recordTransaction({
+        await this.recordIdempotentTransaction({
             amount: stakeMinor,
             precision: 100,
             currency: "USD",
@@ -291,7 +301,7 @@ class BlnkClient {
      * Reverte reserva de stake em caso de cancelamento da ordem
      */
     async releaseReservedStake(userId, contractId, stakeMinor) {
-        await this.recordTransaction({
+        await this.recordIdempotentTransaction({
             amount: stakeMinor,
             precision: 100,
             currency: "USD",
@@ -310,7 +320,7 @@ class BlnkClient {
         const userAvailable = `@user_${userId}:available`;
         if (result === "LOSS") {
             // Perda: move a stake reservada para a conta de receita da casa
-            await this.recordTransaction({
+            await this.recordIdempotentTransaction({
                 amount: stakeMinor,
                 precision: 100,
                 currency: "USD",
@@ -324,7 +334,7 @@ class BlnkClient {
         else if (result === "WIN") {
             // Vitória: 
             // 1. Devolve a stake reservada de volta para a carteira disponível
-            await this.recordTransaction({
+            await this.recordIdempotentTransaction({
                 amount: stakeMinor,
                 precision: 100,
                 currency: "USD",
@@ -337,7 +347,7 @@ class BlnkClient {
             // 2. Transfere o lucro (payout - stake) da conta da casa para o usuário
             const profitMinor = payoutMinor - stakeMinor;
             if (profitMinor > 0) {
-                await this.recordTransaction({
+                await this.recordIdempotentTransaction({
                     amount: profitMinor,
                     precision: 100,
                     currency: "USD",
@@ -351,7 +361,7 @@ class BlnkClient {
         }
         else if (result === "DRAW") {
             // Empate: devolve a stake integralmente
-            await this.recordTransaction({
+            await this.recordIdempotentTransaction({
                 amount: stakeMinor,
                 precision: 100,
                 currency: "USD",

@@ -181,18 +181,20 @@ export const BUY_INS = [
   { cents: 2_500, label: 'Sala Ouro', rivals: 45, defaultTier: 'TOP_30' as PayoutTier, image: '/tournaments/gold.png' },
 ] as const;
 
-/** Basis points (sum = 10_000 = 100.00%) for each PayoutTier. */
+/** Basis points (sum = 10_000 = 100.00%) for each PayoutTier (unified with @broker/wallet-adapter). */
 export const TIER_WEIGHTS_BPS: Record<PayoutTier, readonly number[]> = {
   TOP_3: [5000, 3000, 2000],
-  TOP_10: [2800, 1800, 1200, 900, 800, 700, 600, 500, 400, 300],
+  TOP_10: [3500, 2000, 1200, 700, 700, 380, 380, 380, 380, 380],
   TOP_20: [
-    2200, 1400, 1000, 750, 650, 500, 450, 400, 350, 300,
-    250, 230, 220, 210, 200, 190, 180, 180, 170, 170,
+    2500, 1500, 1000, 500, 500,
+    300, 300, 300, 300, 300,
+    250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
   ],
   TOP_30: [
-    1800, 1200, 850, 650, 550, 450, 400, 350, 300, 250,
-    220, 210, 200, 190, 180, 170, 160, 160, 150, 150,
-    150, 150, 150, 140, 140, 140, 140, 140, 130, 130,
+    2000, 1200, 800,
+    400, 400, 400, 400, 400, 400, 400,
+    200, 200, 200, 200, 200, 200, 200, 200, 200, 200,
+    120, 120, 120, 120, 120, 120, 120, 120, 120, 120,
   ],
 };
 
@@ -229,21 +231,41 @@ export function splitEntry(cents: number) {
   return { rake, pool };
 }
 
-/** Winners get truncated cents; the residual goes back to the house so escrow closes at zero. */
+/** Hare-Niemeyer exact cent distribution for Top 3 podium (escrow closes at zero). */
 export function podiumPrizes(poolCents: number) {
-  const prizes = ARENA.podium.map((w) => Math.floor(poolCents * w));
-  return { prizes, residual: poolCents - prizes.reduce((a, b) => a + b, 0) };
+  const { prizes, residual } = tierPrizes(poolCents, 'TOP_3');
+  return { prizes, residual };
 }
 
-/** Hare-Niemeyer exact cent distribution across Top 3 / Top 10 / Top 20 / Top 30. */
+/** Hare-Niemeyer exact cent distribution across Top 3 / Top 10 / Top 20 / Top 30 using BigInt. */
 export function tierPrizes(poolCents: number, tier: PayoutTier = 'TOP_3') {
   const bps = TIER_WEIGHTS_BPS[tier];
-  const weights = bps.map((b) => b / 10_000);
-  const prizes = largestRemainder(poolCents, weights);
-  const distributed = prizes.reduce((a, b) => a + b, 0);
+  const safePool = Math.max(0, Math.floor(poolCents));
+  const poolBig = BigInt(safePool);
+  const sumBig = BigInt(bps.reduce((acc, w) => acc + w, 0));
+
+  const prizes: number[] = [];
+  const remainders: { index: number; rem: bigint }[] = [];
+  let distributed = 0;
+
+  for (let i = 0; i < bps.length; i++) {
+    const numerator = poolBig * BigInt(bps[i]);
+    const floorVal = Number(numerator / sumBig);
+    const remVal = numerator % sumBig;
+    prizes.push(floorVal);
+    remainders.push({ index: i, rem: remVal });
+    distributed += floorVal;
+  }
+
+  const leftover = safePool - distributed;
+  remainders.sort((a, b) => (b.rem > a.rem ? 1 : b.rem < a.rem ? -1 : a.index - b.index));
+  for (let i = 0; i < leftover; i++) {
+    prizes[remainders[i].index] += 1;
+  }
+
   return {
     prizes,
-    residual: Math.max(0, Math.floor(poolCents) - distributed),
+    residual: 0,
     cutoffRank: bps.length,
     weightsBps: bps,
   };

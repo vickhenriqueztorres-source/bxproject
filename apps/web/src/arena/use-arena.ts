@@ -102,6 +102,36 @@ export interface UseArenaOptions {
 const COUNTDOWN_MS = 5_000;
 const SETTLE_MS = 2_500;
 const BATCH_MS = 250;
+const ROOM_TOURNAMENT_IDS = ['tour_blitz_500', 'tour_blitz_1000', 'tour_blitz_2500'] as const;
+
+async function arenaApiFetch<T = Record<string, unknown>>(
+  path: string,
+  init?: RequestInit
+): Promise<T | null> {
+  if (typeof fetch !== 'function') return null;
+  try {
+    const baseUrl =
+      (typeof import.meta !== 'undefined' &&
+        (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_URL) ||
+      '';
+    const session = AuthService.getSession();
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+      ...((init?.headers as Record<string, string>) || {}),
+    };
+    if (session?.token) {
+      headers['authorization'] = `Bearer ${session.token}`;
+    }
+    const res = await fetch(`${baseUrl}${path}`, {
+      ...init,
+      headers,
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
 
 export function mapArenaPositionsToContracts(positions: Position[], symbol: string): Contract[] {
   return positions.map((p) => ({
@@ -184,6 +214,7 @@ export function useArena(options?: UseArenaOptions) {
   // Feed real do tradingFeedManager + fallback determinístico de candles
   const [candles, setCandles] = useState<ApiCandle[]>(() => generateSeedCandles('VOL_100', 120));
   const [liveTick, setLiveTick] = useState<Tick | null>(null);
+  const liveTickRef = useRef<Tick | null>(null);
   const [isStale, setIsStale] = useState<boolean>(false);
   const priceRef = useRef<number>(asset.basePrice);
   const candlesRef = useRef<ApiCandle[]>(candles);
@@ -225,6 +256,7 @@ export function useArena(options?: UseArenaOptions) {
       if (Number.isFinite(p) && p > 0) {
         priceRef.current = p;
       }
+      liveTickRef.current = incoming;
       setLiveTick(incoming);
     });
 
@@ -387,11 +419,13 @@ export function useArena(options?: UseArenaOptions) {
       const now = Date.now();
 
       // Caso não haja WebSocket ativo enviando ticks, avança micro-variação determinística para liquidação ao vivo
-      const deltaReturn = (rand.current() - 0.498) * asset.volatility * 0.35;
-      priceRef.current = Math.max(
-        asset.basePrice * 0.2,
-        Number((priceRef.current * (1 + deltaReturn)).toFixed(asset.digits))
-      );
+      if (!liveTickRef.current) {
+        const deltaReturn = (rand.current() - 0.498) * asset.volatility * 0.35;
+        priceRef.current = Math.max(
+          asset.basePrice * 0.2,
+          Number((priceRef.current * (1 + deltaReturn)).toFixed(asset.digits))
+        );
+      }
 
       if (s.stage === 'countdown') {
         if (now >= s.countdownEndsAt) {
@@ -480,8 +514,24 @@ export function useArena(options?: UseArenaOptions) {
       ];
       store.current = fresh;
       bump();
+
+      const tournamentId = ROOM_TOURNAMENT_IDS[safeIndex] ?? ROOM_TOURNAMENT_IDS[0];
+      void arenaApiFetch<{
+        participant?: { current_t_balance_minor?: number };
+        tournament?: { prize_pool_minor?: number };
+      }>(`/api/v1/arena/tournaments/${tournamentId}/join`, {
+        method: 'POST',
+        headers: { 'idempotency-key': `join_${tournamentId}_${now}` },
+        body: JSON.stringify({ display_name: userName }),
+      }).then((res) => {
+        if (!res || store.current !== fresh) return;
+        if (typeof res.tournament?.prize_pool_minor === 'number' && res.tournament.prize_pool_minor > 0) {
+          fresh.poolCents = res.tournament.prize_pool_minor;
+        }
+        bump();
+      });
     },
-    [bump]
+    [bump, userName]
   );
 
   const place = useCallback(
@@ -516,7 +566,7 @@ export function useArena(options?: UseArenaOptions) {
       }
       s.points = round2(s.points - stake);
       s.reachedAt = now;
-      s.positions.push({
+      const position: Position = {
         id: `t${now}-${s.positions.length}`,
         assetId: asset.id,
         symbol: asset.symbol,
@@ -527,8 +577,30 @@ export function useArena(options?: UseArenaOptions) {
         openedAt: now,
         expiresAt: now + expirySec * 1_000,
         account: 'practice',
-      });
+      };
+      s.positions.push(position);
       bump();
+
+      const tournamentId = ROOM_TOURNAMENT_IDS[s.roomIndex] ?? ROOM_TOURNAMENT_IDS[0];
+      void arenaApiFetch<{
+        order?: { id?: string; entry_price?: number };
+      }>(`/api/v1/arena/tournaments/${tournamentId}/trades`, {
+        method: 'POST',
+        body: JSON.stringify({
+          symbol: asset.symbol,
+          direction: direction === 'up' ? 'UP' : 'DOWN',
+          stake_t_minor: Math.round(stake * 100),
+          duration_seconds: expirySec,
+        }),
+      }).then((res) => {
+        if (!res?.order) return;
+        const officialEntry = Number(res.order.entry_price);
+        if (Number.isFinite(officialEntry) && officialEntry > 0) {
+          position.openPrice = officialEntry;
+          bump();
+        }
+      });
+
       return { ok: true };
     },
     [asset, bump, getCurrentPrice]
@@ -572,6 +644,12 @@ export function useArena(options?: UseArenaOptions) {
           amountCents: ARENA.rebuyPriceCents,
           poolCents: splitEntry(ARENA.rebuyPriceCents).pool,
           at: now,
+        });
+        const tournamentId = ROOM_TOURNAMENT_IDS[s.roomIndex] ?? ROOM_TOURNAMENT_IDS[0];
+        void arenaApiFetch(`/api/v1/arena/tournaments/${tournamentId}/rebuy`, {
+          method: 'POST',
+          headers: { 'idempotency-key': `rebuy_${tournamentId}_${now}` },
+          body: JSON.stringify({}),
         });
         return { ok: true };
       } finally {

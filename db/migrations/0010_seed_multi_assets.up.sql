@@ -3,12 +3,48 @@
 
 BEGIN;
 
+SET LOCAL lock_timeout = '1s';
+SET LOCAL statement_timeout = '10s';
+
+-- 0001 has a legacy configuration shape. Expand it before seeding the
+-- catalog; existing prices, sequence, hash, status and contracts stay intact.
+ALTER TABLE indices ADD COLUMN IF NOT EXISTS params jsonb;
+ALTER TABLE indices ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT NOW();
+ALTER TABLE indices ADD COLUMN IF NOT EXISTS seeded_by_0010 boolean NOT NULL DEFAULT false;
+ALTER TABLE index_state ADD COLUMN IF NOT EXISTS last_ts timestamptz;
+
+UPDATE indices
+SET params = jsonb_build_object(
+  'initial_price', last_price::text,
+  'sigma', volatility,
+  'precision', 6,
+  'payout_pct', 85
+)
+FROM index_state
+WHERE indices.symbol = index_state.symbol AND indices.params IS NULL;
+
+UPDATE index_state
+SET last_ts = COALESCE(
+  (SELECT MAX(ts) FROM ticks WHERE ticks.symbol = index_state.symbol),
+  index_state.updated_at
+)
+WHERE last_ts IS NULL;
+
+-- Defaults satisfy the legacy NOT NULL columns while catalog rows are added.
+-- The exact catalog values are copied into them below, before COMMIT.
+ALTER TABLE indices ALTER COLUMN base_price SET DEFAULT 1;
+ALTER TABLE indices ALTER COLUMN volatility SET DEFAULT 0;
+ALTER TABLE indices ALTER COLUMN mean_reversion_speed SET DEFAULT 0;
+
+CREATE TEMP TABLE seed_0010_existing_symbols ON COMMIT DROP AS
+SELECT symbol FROM indices;
+
 INSERT INTO indices (symbol, name, params, status) VALUES (
   'EURUSD_OTC',
   'EUR/USD (OTC)',
   '{"sigma": 0.00015, "precision": 5, "payout_pct": 85, "initial_price": "1.08540"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -25,7 +61,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'GBP/USD (OTC)',
   '{"sigma": 0.00018, "precision": 5, "payout_pct": 85, "initial_price": "1.29420"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -42,7 +78,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'USD/JPY (OTC)',
   '{"sigma": 0.00016, "precision": 3, "payout_pct": 85, "initial_price": "151.850"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -59,7 +95,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'USD/CHF (OTC)',
   '{"sigma": 0.00014, "precision": 5, "payout_pct": 85, "initial_price": "0.88450"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -76,7 +112,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'AUD/USD (OTC)',
   '{"sigma": 0.00016, "precision": 5, "payout_pct": 85, "initial_price": "0.65820"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -93,7 +129,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'USD/CAD (OTC)',
   '{"sigma": 0.00015, "precision": 5, "payout_pct": 85, "initial_price": "1.38540"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -110,7 +146,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'NZD/USD (OTC)',
   '{"sigma": 0.00017, "precision": 5, "payout_pct": 85, "initial_price": "0.59820"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -127,7 +163,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'EUR/GBP (OTC)',
   '{"sigma": 0.00013, "precision": 5, "payout_pct": 85, "initial_price": "0.83850"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -144,7 +180,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'EUR/JPY (OTC)',
   '{"sigma": 0.00018, "precision": 3, "payout_pct": 85, "initial_price": "164.820"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -161,7 +197,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'GBP/JPY (OTC)',
   '{"sigma": 0.0002, "precision": 3, "payout_pct": 85, "initial_price": "196.540"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -178,7 +214,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'EUR/CAD (OTC)',
   '{"sigma": 0.00016, "precision": 5, "payout_pct": 85, "initial_price": "1.48520"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -195,7 +231,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'EUR/AUD (OTC)',
   '{"sigma": 0.00017, "precision": 5, "payout_pct": 85, "initial_price": "1.64890"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -212,7 +248,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'GBP/AUD (OTC)',
   '{"sigma": 0.00019, "precision": 5, "payout_pct": 85, "initial_price": "1.96600"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -229,7 +265,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'GBP/CAD (OTC)',
   '{"sigma": 0.00018, "precision": 5, "payout_pct": 85, "initial_price": "1.79350"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -246,7 +282,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'AUD/CAD (OTC)',
   '{"sigma": 0.00015, "precision": 5, "payout_pct": 85, "initial_price": "0.91180"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -263,7 +299,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'AUD/JPY (OTC)',
   '{"sigma": 0.00018, "precision": 3, "payout_pct": 85, "initial_price": "99.950"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -280,7 +316,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'CAD/JPY (OTC)',
   '{"sigma": 0.00017, "precision": 3, "payout_pct": 85, "initial_price": "109.610"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -297,7 +333,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'NZD/JPY (OTC)',
   '{"sigma": 0.00018, "precision": 3, "payout_pct": 85, "initial_price": "90.840"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -314,7 +350,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'BTC/USD (OTC)',
   '{"sigma": 0.00035, "precision": 2, "payout_pct": 85, "initial_price": "64500.00"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -331,7 +367,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'ETH/USD (OTC)',
   '{"sigma": 0.00045, "precision": 2, "payout_pct": 85, "initial_price": "3450.00"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -348,7 +384,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'SOL/USD (OTC)',
   '{"sigma": 0.0006, "precision": 2, "payout_pct": 85, "initial_price": "155.40"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -365,7 +401,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'BNB/USD (OTC)',
   '{"sigma": 0.0004, "precision": 2, "payout_pct": 85, "initial_price": "580.50"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -382,7 +418,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'XRP/USD (OTC)',
   '{"sigma": 0.00055, "precision": 4, "payout_pct": 85, "initial_price": "0.5480"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -399,7 +435,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'ADA/USD (OTC)',
   '{"sigma": 0.0006, "precision": 4, "payout_pct": 85, "initial_price": "0.3540"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -416,7 +452,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'DOGE/USD (OTC)',
   '{"sigma": 0.00075, "precision": 4, "payout_pct": 85, "initial_price": "0.1145"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -433,7 +469,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'AVAX/USD (OTC)',
   '{"sigma": 0.00065, "precision": 2, "payout_pct": 85, "initial_price": "28.50"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -450,7 +486,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'Gold Spot (OTC)',
   '{"sigma": 0.0002, "precision": 2, "payout_pct": 85, "initial_price": "2650.50"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -467,7 +503,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'Silver Spot (OTC)',
   '{"sigma": 0.0003, "precision": 3, "payout_pct": 85, "initial_price": "31.850"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -484,7 +520,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'WTI Crude Oil (OTC)',
   '{"sigma": 0.00035, "precision": 2, "payout_pct": 85, "initial_price": "71.40"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -501,7 +537,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'Brent Crude Oil (OTC)',
   '{"sigma": 0.00035, "precision": 2, "payout_pct": 85, "initial_price": "75.20"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -518,7 +554,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'Volatility 10 Index',
   '{"sigma": 0.0001, "precision": 4, "payout_pct": 85, "initial_price": "100.0000"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -535,7 +571,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'Volatility 25 Index',
   '{"sigma": 0.00018, "precision": 4, "payout_pct": 85, "initial_price": "150.0000"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -552,7 +588,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'Volatility 50 Index',
   '{"sigma": 0.00025, "precision": 4, "payout_pct": 85, "initial_price": "125.0000"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -569,7 +605,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'Volatility 75 Index',
   '{"sigma": 0.00035, "precision": 4, "payout_pct": 85, "initial_price": "250.0000"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -586,7 +622,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'Volatility 100 Index',
   '{"sigma": 0.0005, "precision": 4, "payout_pct": 85, "initial_price": "500.0000"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -603,7 +639,7 @@ INSERT INTO indices (symbol, name, params, status) VALUES (
   'Crash/Boom 100 Index',
   '{"sigma": 0.0004, "precision": 4, "payout_pct": 85, "initial_price": "1000.0000"}'::jsonb,
   'ACTIVE'
-) ON CONFLICT (symbol) DO UPDATE SET params = EXCLUDED.params, status = 'ACTIVE';
+) ON CONFLICT (symbol) DO NOTHING;
 
 INSERT INTO index_state (symbol, last_sequence, last_price, last_hash, last_ts, lease_epoch)
 VALUES (
@@ -616,6 +652,15 @@ VALUES (
 ) ON CONFLICT (symbol) DO NOTHING;
 
 -- V-01: Garantia de imutabilidade do campo precision apos o primeiro tick
+UPDATE indices
+SET base_price = (indices.params->>'initial_price')::numeric,
+    volatility = (indices.params->>'sigma')::numeric,
+    mean_reversion_speed = 0,
+    seeded_by_0010 = true
+WHERE NOT EXISTS (
+  SELECT 1 FROM seed_0010_existing_symbols old WHERE old.symbol = indices.symbol
+);
+
 CREATE OR REPLACE FUNCTION indices_precision_immutable_guard() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE last_seq bigint;

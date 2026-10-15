@@ -357,9 +357,6 @@ export const I18nProvider: React.FC<{ children: React.ReactNode; initialLocale?:
       return `$ ${usdAmount.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
 
-    // Hook para buscar taxas atualizadas (implementado abaixo)
-    const { rates: liveRates } = useExchangeRates();
-
     const defaultRates: Record<DisplayCurrencyCode, number> = {
       BRL: 5.50,
       MXN: 19.50,
@@ -369,8 +366,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode; initialLocale?:
       PEN: 3.75
     };
 
-    // Usa taxa atualizada se disponível, senão fallback para estática
-    const rate = liveRates[currency as DisplayCurrencyCode] || defaultRates[currency as DisplayCurrencyCode] || 1.0;
+    const rate = defaultRates[currency as DisplayCurrencyCode] || 1.0;
     const converted = convertUSDMinorToDisplay(minorUSD, rate, currency as DisplayCurrencyCode, locale);
     return converted.formatted;
   };
@@ -426,42 +422,5 @@ export function useUiLanguage(defaultLang: "pt" | "es" = "es"): "pt" | "es" {
     return defaultLang;
   }
   return context.locale.startsWith("pt") ? "pt" : "es";
-}
-
-// Hook para buscar taxas de câmbio atualizadas do backend
-function useExchangeRates() {
-  const [rates, setRates] = useState<Record<string, number>>({});
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchRates = async () => {
-      try {
-        const res = await fetch('http://localhost:3001/api/currencies');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        const data = await res.json();
-        const newRates: Record<string, number> = {};
-        let latestUpdate = '';
-
-        data.forEach((item: { code: string; rate: number; updated_at: string }) => {
-          newRates[item.code] = item.rate;
-          if (item.updated_at > latestUpdate) latestUpdate = item.updated_at;
-        });
-
-        setRates(newRates);
-        setUpdatedAt(latestUpdate);
-      } catch (err) {
-        console.warn('[useExchangeRates] Failed to fetch, using fallback:', err);
-        // Mantém taxas estáticas como fallback
-      }
-    };
-
-    fetchRates();
-    const interval = setInterval(fetchRates, 5 * 60 * 1000); // 5 min
-
-    return () => clearInterval(interval);
-  }, []);
-
-  return { rates, updatedAt };
 }
 

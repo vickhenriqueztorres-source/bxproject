@@ -85,8 +85,13 @@ export interface ArenaTradeOrder {
   symbol: string;
   direction: "UP" | "DOWN";
   stake_t_minor: number;
+  entry_price?: number | null;
+  entry_tick_sequence?: number | null;
+  exit_price?: number | null;
+  exit_tick_sequence?: number | null;
   opened_at: Date;
   expires_at: Date;
+  settled_at?: Date | null;
   status: "OPEN" | "SETTLED";
   result?: "WIN" | "LOSS" | "DRAW";
   base_profit_t_minor?: number;
@@ -407,6 +412,466 @@ export class TournamentArenaService {
     };
   }
 
+  public hasDatabasePool(): boolean {
+    return Boolean(this.pool);
+  }
+
+  private async persistRealBalanceToDb(userId: string): Promise<void> {
+    if (!this.pool) return;
+    const bal = this.ensureUserRealBalanceState(userId);
+    await this.pool.query(
+      `INSERT INTO arena_real_balances (
+         user_id, available_minor, reserved_minor, bonus_margin_minor, updated_at
+       ) VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (user_id) DO UPDATE SET
+         available_minor = EXCLUDED.available_minor,
+         reserved_minor = EXCLUDED.reserved_minor,
+         bonus_margin_minor = EXCLUDED.bonus_margin_minor,
+         updated_at = NOW()`,
+      [userId, bal.available_minor, bal.reserved_minor, bal.bonus_margin_minor]
+    );
+  }
+
+  private async persistWalletTransactionToDb(tx: RealWalletTransaction): Promise<void> {
+    if (!this.pool) return;
+    await this.pool.query(
+      `INSERT INTO arena_wallet_transactions (
+         id, user_id, type, method, amount_minor, fee_minor, status,
+         destination_account, idempotency_key, metadata, created_at, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12)
+       ON CONFLICT (id) DO UPDATE SET
+         status = EXCLUDED.status,
+         updated_at = EXCLUDED.updated_at`,
+      [
+        tx.id,
+        tx.user_id,
+        tx.type,
+        tx.method,
+        tx.amount_minor,
+        tx.fee_minor,
+        tx.status,
+        tx.destination_account ?? null,
+        tx.idempotency_key,
+        JSON.stringify(tx.metadata ?? {}),
+        tx.created_at,
+        tx.updated_at
+      ]
+    );
+  }
+
+  private async persistTournamentToDb(t: ArenaTournament): Promise<void> {
+    if (!this.pool) return;
+    await this.pool.query(
+      `INSERT INTO arena_tournaments (
+         id, code, title, symbol, payout_tier, status,
+         buy_in_minor, rebuy_price_minor, max_rebuys_per_user, max_stake_pct,
+         initial_t_balance_minor, house_rake_bps, prize_pool_bps,
+         guaranteed_pool_minor, current_pool_minor,
+         ghost_bot_enabled, ghost_bot_name, ghost_bot_score_minor,
+         starts_at, freeze_rebuys_at, freeze_trades_at, ends_at, settled_at, created_at
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6,
+         $7, $8, $9, $10,
+         $11, $12, $13,
+         $14, $15,
+         $16, $17, $18,
+         $19, $20, $21, $22, $23, $24
+       )
+       ON CONFLICT (id) DO UPDATE SET
+         status = EXCLUDED.status,
+         current_pool_minor = EXCLUDED.current_pool_minor,
+         ghost_bot_score_minor = EXCLUDED.ghost_bot_score_minor,
+         starts_at = EXCLUDED.starts_at,
+         freeze_rebuys_at = EXCLUDED.freeze_rebuys_at,
+         freeze_trades_at = EXCLUDED.freeze_trades_at,
+         ends_at = EXCLUDED.ends_at,
+         settled_at = EXCLUDED.settled_at`,
+      [
+        t.id,
+        t.code,
+        t.title,
+        t.symbol,
+        t.payout_tier,
+        t.status,
+        t.buy_in_minor,
+        t.rebuy_price_minor,
+        t.max_rebuys_per_user,
+        t.max_stake_pct,
+        t.initial_t_balance_minor,
+        t.house_rake_bps,
+        t.prize_pool_bps,
+        t.guaranteed_pool_minor,
+        t.current_pool_minor,
+        t.ghost_bot_enabled,
+        t.ghost_bot_name,
+        t.ghost_bot_score_minor,
+        t.starts_at,
+        t.freeze_rebuys_at,
+        t.freeze_trades_at,
+        t.ends_at,
+        t.settled_at ?? null,
+        t.created_at
+      ]
+    );
+  }
+
+  private async persistParticipantToDb(p: ArenaParticipant): Promise<void> {
+    if (!this.pool) return;
+    await this.pool.query(
+      `INSERT INTO arena_participants (
+         id, tournament_id, user_id, display_name, country_code,
+         is_synthetic_seed, seed_archetype, device_fingerprint, ip_address,
+         current_t_balance_minor, reserved_t_stake_minor, rebuy_count,
+         consecutive_wins, streak_bonus_earned_minor, total_trades, winning_trades,
+         tie_breaker_seq, final_rank, prize_won_minor, bonus_won_minor,
+         beat_ghost_bot, collusion_flagged, status, last_trade_at, created_at, updated_at
+       ) VALUES (
+         $1, $2, $3, $4, $5,
+         $6, $7, $8, $9,
+         $10, $11, $12,
+         $13, $14, $15, $16,
+         $17, $18, $19, $20,
+         $21, $22, $23, $24, $25, $26
+       )
+       ON CONFLICT (tournament_id, user_id) DO UPDATE SET
+         current_t_balance_minor = EXCLUDED.current_t_balance_minor,
+         reserved_t_stake_minor = EXCLUDED.reserved_t_stake_minor,
+         rebuy_count = EXCLUDED.rebuy_count,
+         consecutive_wins = EXCLUDED.consecutive_wins,
+         streak_bonus_earned_minor = EXCLUDED.streak_bonus_earned_minor,
+         total_trades = EXCLUDED.total_trades,
+         winning_trades = EXCLUDED.winning_trades,
+         tie_breaker_seq = EXCLUDED.tie_breaker_seq,
+         final_rank = EXCLUDED.final_rank,
+         prize_won_minor = EXCLUDED.prize_won_minor,
+         bonus_won_minor = EXCLUDED.bonus_won_minor,
+         beat_ghost_bot = EXCLUDED.beat_ghost_bot,
+         collusion_flagged = EXCLUDED.collusion_flagged,
+         status = EXCLUDED.status,
+         last_trade_at = EXCLUDED.last_trade_at,
+         updated_at = EXCLUDED.updated_at`,
+      [
+        p.id,
+        p.tournament_id,
+        p.user_id,
+        p.display_name,
+        p.country_code,
+        p.is_synthetic_seed,
+        p.seed_archetype ?? null,
+        p.device_fingerprint,
+        p.ip_address ?? null,
+        p.current_t_balance_minor,
+        p.reserved_t_stake_minor,
+        p.rebuy_count,
+        p.consecutive_wins,
+        p.streak_bonus_earned_minor,
+        p.total_trades,
+        p.winning_trades,
+        p.tie_breaker_seq,
+        p.final_rank ?? null,
+        p.prize_won_minor,
+        p.bonus_won_minor,
+        p.beat_ghost_bot,
+        p.collusion_flagged,
+        p.status,
+        p.last_trade_at ?? null,
+        p.created_at,
+        p.updated_at
+      ]
+    );
+  }
+
+  private async persistLedgerEventToDb(params: {
+    tournamentId: string;
+    userId: string;
+    eventType: "BUY_IN" | "REBUY" | "OVERLAY_INJECTION" | "PRIZE_PAYOUT" | "BONUS_GRANT";
+    grossAmountMinor: number;
+    rakeAmountMinor?: number;
+    escrowAmountMinor?: number;
+    blnkRakeRef?: string | null;
+    blnkEscrowRef?: string | null;
+    idempotencyKey: string;
+  }): Promise<void> {
+    if (!this.pool) return;
+    await this.pool.query(
+      `INSERT INTO arena_ledger_events (
+         id, tournament_id, user_id, event_type,
+         gross_amount_minor, rake_amount_minor, escrow_amount_minor,
+         currency, blnk_rake_ref, blnk_escrow_ref, idempotency_key
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'USD', $8, $9, $10)
+       ON CONFLICT (idempotency_key) DO NOTHING`,
+      [
+        crypto.randomUUID(),
+        params.tournamentId,
+        params.userId,
+        params.eventType,
+        params.grossAmountMinor,
+        params.rakeAmountMinor ?? 0,
+        params.escrowAmountMinor ?? 0,
+        params.blnkRakeRef ?? null,
+        params.blnkEscrowRef ?? null,
+        params.idempotencyKey
+      ]
+    );
+  }
+
+  private async persistTradeOrderToDb(order: ArenaTradeOrder): Promise<void> {
+    if (!this.pool) return;
+    await this.pool.query(
+      `INSERT INTO arena_trade_orders (
+         id, tournament_id, participant_id, user_id, symbol, direction,
+         stake_t_minor, entry_price, entry_tick_sequence, exit_price, exit_tick_sequence,
+         opened_at, expires_at, settled_at, status, result,
+         base_profit_t_minor, streak_bonus_t_minor, ip_address, device_fingerprint
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6,
+         $7, $8, $9, $10, $11,
+         $12, $13, $14, $15, $16,
+         $17, $18, $19, $20
+       )
+       ON CONFLICT (id) DO UPDATE SET
+         exit_price = EXCLUDED.exit_price,
+         exit_tick_sequence = EXCLUDED.exit_tick_sequence,
+         settled_at = EXCLUDED.settled_at,
+         status = EXCLUDED.status,
+         result = EXCLUDED.result,
+         base_profit_t_minor = EXCLUDED.base_profit_t_minor,
+         streak_bonus_t_minor = EXCLUDED.streak_bonus_t_minor`,
+      [
+        order.id,
+        order.tournament_id,
+        order.participant_id,
+        order.user_id,
+        order.symbol,
+        order.direction,
+        order.stake_t_minor,
+        order.entry_price ?? null,
+        order.entry_tick_sequence ?? null,
+        order.exit_price ?? null,
+        order.exit_tick_sequence ?? null,
+        order.opened_at,
+        order.expires_at,
+        order.settled_at ?? null,
+        order.status,
+        order.result ?? null,
+        order.base_profit_t_minor ?? 0,
+        order.streak_bonus_t_minor ?? 0,
+        order.ip_address ?? null,
+        order.device_fingerprint ?? null
+      ]
+    );
+  }
+
+  private async persistBonusGrantToDb(grant: UserBonusGrant): Promise<void> {
+    if (!this.pool) return;
+    await this.pool.query(
+      `INSERT INTO user_bonus_grants (
+         id, user_id, source_type, tournament_id,
+         bonus_amount_minor, required_rollover_minor, completed_volume_minor,
+         status, blnk_grant_ref, blnk_release_ref, expires_at, created_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       ON CONFLICT (id) DO UPDATE SET
+         completed_volume_minor = EXCLUDED.completed_volume_minor,
+         status = EXCLUDED.status,
+         blnk_release_ref = EXCLUDED.blnk_release_ref`,
+      [
+        grant.id,
+        grant.user_id,
+        grant.source_type,
+        grant.tournament_id ?? null,
+        grant.bonus_amount_minor,
+        grant.required_rollover_minor,
+        grant.completed_volume_minor,
+        grant.status,
+        grant.blnk_grant_ref,
+        grant.blnk_release_ref ?? null,
+        grant.expires_at,
+        grant.created_at
+      ]
+    );
+  }
+
+  /**
+   * Hidrata o estado de torneios, participantes, saldos reais, transações, bônus e ordens
+   * a partir do PostgreSQL após inicialização/restart do servidor.
+   */
+  public async hydrateFromDatabase(): Promise<void> {
+    if (!this.pool) return;
+
+    const balRes = await this.pool.query(
+      `SELECT user_id, available_minor, reserved_minor, bonus_margin_minor FROM arena_real_balances`
+    );
+    for (const row of balRes.rows) {
+      TournamentArenaService.realBalances.set(String(row.user_id), {
+        available_minor: Number(row.available_minor),
+        reserved_minor: Number(row.reserved_minor),
+        bonus_margin_minor: Number(row.bonus_margin_minor)
+      });
+    }
+
+    const txRes = await this.pool.query(`SELECT * FROM arena_wallet_transactions ORDER BY created_at ASC`);
+    for (const row of txRes.rows) {
+      const tx: RealWalletTransaction = {
+        id: String(row.id),
+        user_id: String(row.user_id),
+        type: row.type,
+        method: row.method,
+        amount_minor: Number(row.amount_minor),
+        fee_minor: Number(row.fee_minor),
+        status: row.status,
+        destination_account: row.destination_account ?? undefined,
+        idempotency_key: String(row.idempotency_key),
+        metadata: typeof row.metadata === "object" && row.metadata !== null ? row.metadata : {},
+        created_at: new Date(row.created_at),
+        updated_at: new Date(row.updated_at)
+      };
+      TournamentArenaService.walletTransactions.set(tx.id, tx);
+      const prefix = tx.type === "DEPOSIT" ? "dep_req" : "wdr_req";
+      TournamentArenaService.idempotencyMap.set(`${prefix}:${tx.user_id}:${tx.idempotency_key}`, tx);
+    }
+
+    const bonusRes = await this.pool.query(`SELECT * FROM user_bonus_grants ORDER BY created_at ASC`);
+    for (const row of bonusRes.rows) {
+      const grant: UserBonusGrant = {
+        id: String(row.id),
+        user_id: String(row.user_id),
+        source_type: row.source_type,
+        tournament_id: row.tournament_id ? String(row.tournament_id) : undefined,
+        bonus_amount_minor: Number(row.bonus_amount_minor),
+        required_rollover_minor: Number(row.required_rollover_minor),
+        completed_volume_minor: Number(row.completed_volume_minor),
+        status: row.status,
+        blnk_grant_ref: String(row.blnk_grant_ref),
+        blnk_release_ref: row.blnk_release_ref ? String(row.blnk_release_ref) : undefined,
+        expires_at: new Date(row.expires_at),
+        created_at: new Date(row.created_at)
+      };
+      const list = TournamentArenaService.bonusGrantsByUser.get(grant.user_id) ?? [];
+      if (!list.some((g) => g.id === grant.id)) {
+        list.push(grant);
+      }
+      TournamentArenaService.bonusGrantsByUser.set(grant.user_id, list);
+    }
+
+    const tourRes = await this.pool.query(`SELECT * FROM arena_tournaments ORDER BY created_at ASC`);
+    for (const row of tourRes.rows) {
+      const t: ArenaTournament = {
+        id: String(row.id),
+        code: String(row.code),
+        title: String(row.title),
+        symbol: String(row.symbol),
+        payout_tier: row.payout_tier as PayoutTier,
+        status: row.status as TournamentStatus,
+        buy_in_minor: Number(row.buy_in_minor),
+        rebuy_price_minor: Number(row.rebuy_price_minor),
+        max_rebuys_per_user: Number(row.max_rebuys_per_user),
+        max_stake_pct: Number(row.max_stake_pct),
+        initial_t_balance_minor: Number(row.initial_t_balance_minor),
+        house_rake_bps: Number(row.house_rake_bps),
+        prize_pool_bps: Number(row.prize_pool_bps),
+        guaranteed_pool_minor: Number(row.guaranteed_pool_minor),
+        current_pool_minor: Number(row.current_pool_minor),
+        ghost_bot_enabled: Boolean(row.ghost_bot_enabled),
+        ghost_bot_name: String(row.ghost_bot_name),
+        ghost_bot_score_minor: Number(row.ghost_bot_score_minor),
+        starts_at: new Date(row.starts_at),
+        freeze_rebuys_at: new Date(row.freeze_rebuys_at),
+        freeze_trades_at: new Date(row.freeze_trades_at),
+        ends_at: new Date(row.ends_at),
+        settled_at: row.settled_at ? new Date(row.settled_at) : null,
+        created_at: new Date(row.created_at)
+      };
+      TournamentArenaService.tournaments.set(t.id, t);
+      if (!TournamentArenaService.participantsByTournament.has(t.id)) {
+        TournamentArenaService.participantsByTournament.set(t.id, new Map());
+      }
+      if (!TournamentArenaService.openTradesByTournament.has(t.id)) {
+        TournamentArenaService.openTradesByTournament.set(t.id, new Map());
+      }
+    }
+
+    const partRes = await this.pool.query(`SELECT * FROM arena_participants ORDER BY tie_breaker_seq ASC`);
+    for (const row of partRes.rows) {
+      const p: ArenaParticipant = {
+        id: String(row.id),
+        tournament_id: String(row.tournament_id),
+        user_id: String(row.user_id),
+        display_name: String(row.display_name),
+        country_code: String(row.country_code),
+        is_synthetic_seed: Boolean(row.is_synthetic_seed),
+        seed_archetype: row.seed_archetype ?? null,
+        device_fingerprint: String(row.device_fingerprint),
+        ip_address: row.ip_address ?? undefined,
+        current_t_balance_minor: Number(row.current_t_balance_minor),
+        reserved_t_stake_minor: Number(row.reserved_t_stake_minor),
+        rebuy_count: Number(row.rebuy_count),
+        consecutive_wins: Number(row.consecutive_wins),
+        streak_bonus_earned_minor: Number(row.streak_bonus_earned_minor),
+        total_trades: Number(row.total_trades),
+        winning_trades: Number(row.winning_trades),
+        tie_breaker_seq: Number(row.tie_breaker_seq),
+        final_rank: row.final_rank !== null ? Number(row.final_rank) : null,
+        prize_won_minor: Number(row.prize_won_minor),
+        bonus_won_minor: Number(row.bonus_won_minor),
+        beat_ghost_bot: Boolean(row.beat_ghost_bot),
+        collusion_flagged: Boolean(row.collusion_flagged),
+        status: row.status,
+        last_trade_at: row.last_trade_at ? new Date(row.last_trade_at) : null,
+        created_at: new Date(row.created_at),
+        updated_at: new Date(row.updated_at)
+      };
+      let map = TournamentArenaService.participantsByTournament.get(p.tournament_id);
+      if (!map) {
+        map = new Map();
+        TournamentArenaService.participantsByTournament.set(p.tournament_id, map);
+      }
+      map.set(p.user_id, p);
+      await this.syncParticipantToRedisZset(p.tournament_id, p);
+    }
+
+    const ordersRes = await this.pool.query(`SELECT * FROM arena_trade_orders ORDER BY opened_at ASC`);
+    for (const row of ordersRes.rows) {
+      const order: ArenaTradeOrder = {
+        id: String(row.id),
+        tournament_id: String(row.tournament_id),
+        participant_id: String(row.participant_id),
+        user_id: String(row.user_id),
+        symbol: String(row.symbol),
+        direction: row.direction,
+        stake_t_minor: Number(row.stake_t_minor),
+        entry_price: row.entry_price !== null && row.entry_price !== undefined ? Number(row.entry_price) : null,
+        entry_tick_sequence:
+          row.entry_tick_sequence !== null && row.entry_tick_sequence !== undefined
+            ? Number(row.entry_tick_sequence)
+            : null,
+        exit_price: row.exit_price !== null && row.exit_price !== undefined ? Number(row.exit_price) : null,
+        exit_tick_sequence:
+          row.exit_tick_sequence !== null && row.exit_tick_sequence !== undefined
+            ? Number(row.exit_tick_sequence)
+            : null,
+        opened_at: new Date(row.opened_at),
+        expires_at: new Date(row.expires_at),
+        settled_at: row.settled_at ? new Date(row.settled_at) : null,
+        status: row.status,
+        result: row.result ?? undefined,
+        base_profit_t_minor: Number(row.base_profit_t_minor ?? 0),
+        streak_bonus_t_minor: Number(row.streak_bonus_t_minor ?? 0),
+        ip_address: row.ip_address ?? undefined,
+        device_fingerprint: row.device_fingerprint ?? undefined
+      };
+      let map = TournamentArenaService.openTradesByTournament.get(order.tournament_id);
+      if (!map) {
+        map = new Map();
+        TournamentArenaService.openTradesByTournament.set(order.tournament_id, map);
+      }
+      map.set(order.id, order);
+    }
+  }
+
+  public getWalletTransaction(txId: string): RealWalletTransaction | undefined {
+    return TournamentArenaService.walletTransactions.get(txId);
+  }
+
   // =========================================================================
   // 1. OPERAÇÕES DE CAIXA REAL (DEPÓSITO, SAQUE 2-ETAPAS E TRAVA DE ROLLOVER)
   // =========================================================================
@@ -452,6 +917,7 @@ export class TournamentArenaService {
 
       TournamentArenaService.walletTransactions.set(tx.id, tx);
       TournamentArenaService.idempotencyMap.set(idemKey, tx);
+      await this.persistWalletTransactionToDb(tx);
       return { transaction: tx, isDuplicate: false };
     });
   }
@@ -480,6 +946,8 @@ export class TournamentArenaService {
       tx.status = "COMPLETED";
       tx.updated_at = new Date();
 
+      await this.persistRealBalanceToDb(tx.user_id);
+      await this.persistWalletTransactionToDb(tx);
       return { transaction: tx, isDuplicate: false };
     });
   }
@@ -555,6 +1023,8 @@ export class TournamentArenaService {
 
       TournamentArenaService.walletTransactions.set(tx.id, tx);
       TournamentArenaService.idempotencyMap.set(idemKey, tx);
+      await this.persistRealBalanceToDb(userId);
+      await this.persistWalletTransactionToDb(tx);
       return { transaction: tx, isDuplicate: false };
     });
   }
@@ -577,6 +1047,8 @@ export class TournamentArenaService {
       bal.reserved_minor -= tx.amount_minor;
       tx.status = "COMPLETED";
       tx.updated_at = new Date();
+      await this.persistRealBalanceToDb(tx.user_id);
+      await this.persistWalletTransactionToDb(tx);
       return tx;
     });
   }
@@ -600,6 +1072,8 @@ export class TournamentArenaService {
       bal.available_minor += tx.amount_minor;
       tx.status = "CANCELLED";
       tx.updated_at = new Date();
+      await this.persistRealBalanceToDb(tx.user_id);
+      await this.persistWalletTransactionToDb(tx);
       return tx;
     });
   }
@@ -628,7 +1102,9 @@ export class TournamentArenaService {
           bal.bonus_margin_minor -= grant.bonus_amount_minor;
           bal.available_minor += grant.bonus_amount_minor;
         }
+        await this.persistBonusGrantToDb(grant);
       }
+      await this.persistRealBalanceToDb(userId);
       return grants;
     });
   }
@@ -661,7 +1137,7 @@ export class TournamentArenaService {
 
     const tournament: ArenaTournament = {
       id,
-      code: params.code || `ARENA_BLITZ_${Math.floor(100 + Math.random() * 900)}`,
+      code: params.code || `ARENA_BLITZ_${crypto.randomInt(100, 1000)}`,
       title: params.title,
       symbol: params.symbol,
       payout_tier: params.payoutTier || "TOP_10",
@@ -698,6 +1174,7 @@ export class TournamentArenaService {
     TournamentArenaService.tournaments.set(id, tournament);
     TournamentArenaService.participantsByTournament.set(id, new Map());
     TournamentArenaService.openTradesByTournament.set(id, new Map());
+    await this.persistTournamentToDb(tournament);
 
     return tournament;
   }
@@ -821,6 +1298,20 @@ export class TournamentArenaService {
       };
 
       participants.set(userId, participant);
+      await this.persistRealBalanceToDb(userId);
+      await this.persistTournamentToDb(tournament);
+      await this.persistParticipantToDb(participant);
+      await this.persistLedgerEventToDb({
+        tournamentId,
+        userId,
+        eventType: "BUY_IN",
+        grossAmountMinor: tournament.buy_in_minor,
+        rakeAmountMinor: split.rakeMinor,
+        escrowAmountMinor: split.escrowMinor,
+        blnkRakeRef: split.rakeRef ?? null,
+        blnkEscrowRef: split.escrowRef ?? null,
+        idempotencyKey: idempotencyKey || `join:${tournamentId}:${userId}`
+      });
       await this.syncParticipantToRedisZset(tournamentId, participant);
 
       return {
@@ -846,7 +1337,7 @@ export class TournamentArenaService {
     escrowMinor: number;
     newPoolMinor: number;
   }> {
-    const { tournamentId, userId, nowMs = Date.now() } = params;
+    const { tournamentId, userId, idempotencyKey, nowMs = Date.now() } = params;
     const tournament = TournamentArenaService.tournaments.get(tournamentId);
     if (!tournament) {
       throw new Error("TOURNAMENT_NOT_FOUND: Tournament does not exist");
@@ -904,6 +1395,20 @@ export class TournamentArenaService {
       participant.tie_breaker_seq += 1;
       participant.updated_at = new Date();
 
+      await this.persistRealBalanceToDb(userId);
+      await this.persistTournamentToDb(tournament);
+      await this.persistParticipantToDb(participant);
+      await this.persistLedgerEventToDb({
+        tournamentId,
+        userId,
+        eventType: "REBUY",
+        grossAmountMinor: tournament.rebuy_price_minor,
+        rakeAmountMinor: split.rakeMinor,
+        escrowAmountMinor: split.escrowMinor,
+        blnkRakeRef: split.rakeRef ?? null,
+        blnkEscrowRef: split.escrowRef ?? null,
+        idempotencyKey: idempotencyKey || `rebuy:${tournamentId}:${userId}:${nextAttempt}`
+      });
       await this.syncParticipantToRedisZset(tournamentId, participant);
 
       return {
@@ -1014,8 +1519,23 @@ export class TournamentArenaService {
 
       participants.set(syntheticUserId, participant);
       breakdown[template.archetype] += 1;
+      await this.persistRealBalanceToDb(syntheticUserId);
+      await this.persistParticipantToDb(participant);
+      await this.persistLedgerEventToDb({
+        tournamentId,
+        userId: syntheticUserId,
+        eventType: "BUY_IN",
+        grossAmountMinor: tournament.buy_in_minor,
+        rakeAmountMinor: split.rakeMinor,
+        escrowAmountMinor: split.escrowMinor,
+        blnkRakeRef: split.rakeRef ?? null,
+        blnkEscrowRef: split.escrowRef ?? null,
+        idempotencyKey: `seed_join:${tournamentId}:${syntheticUserId}`
+      });
       await this.syncParticipantToRedisZset(tournamentId, participant);
     }
+
+    await this.persistTournamentToDb(tournament);
 
     return {
       seededCount: participants.size,
@@ -1113,10 +1633,42 @@ export class TournamentArenaService {
           ) {
             participant.collusion_flagged = true;
             const otherParticipant = participants.get(existingOrder.user_id);
-            if (otherParticipant) otherParticipant.collusion_flagged = true;
+            if (otherParticipant) {
+              otherParticipant.collusion_flagged = true;
+              await this.persistParticipantToDb(otherParticipant);
+            }
+            await this.persistParticipantToDb(participant);
             throw new Error(
               "COLLUSION_MIRROR_TRADE_DETECTED: Simultaneous opposite trades from identical IP address blocked"
             );
+          }
+        }
+      }
+
+      let entryPrice: number | null = null;
+      let entryTickSequence: number | null = null;
+      if (this.pool) {
+        const tickRes = await this.pool.query(
+          `SELECT sequence, price FROM ticks
+           WHERE symbol = $1 AND ts <= $2
+           ORDER BY ts DESC, sequence DESC
+           LIMIT 1`,
+          [symbol, new Date(nowMs)]
+        );
+        if (tickRes.rows.length > 0) {
+          entryPrice = Number(tickRes.rows[0].price);
+          entryTickSequence = Number(tickRes.rows[0].sequence);
+        } else {
+          const fallbackTickRes = await this.pool.query(
+            `SELECT sequence, price FROM ticks
+             WHERE symbol = $1
+             ORDER BY sequence DESC
+             LIMIT 1`,
+            [symbol]
+          );
+          if (fallbackTickRes.rows.length > 0) {
+            entryPrice = Number(fallbackTickRes.rows[0].price);
+            entryTickSequence = Number(fallbackTickRes.rows[0].sequence);
           }
         }
       }
@@ -1134,6 +1686,8 @@ export class TournamentArenaService {
         symbol,
         direction,
         stake_t_minor: stakeTMinor,
+        entry_price: entryPrice,
+        entry_tick_sequence: entryTickSequence,
         opened_at: new Date(nowMs),
         expires_at: new Date(expiresAtMs),
         status: "OPEN",
@@ -1142,18 +1696,26 @@ export class TournamentArenaService {
       };
 
       openTrades.set(order.id, order);
+      await this.persistParticipantToDb(participant);
+      await this.persistTradeOrderToDb(order);
       await this.syncParticipantToRedisZset(tournamentId, participant);
       return order;
     });
   }
 
+  public getArenaTradeOrder(tournamentId: string, tradeId: string): ArenaTradeOrder | undefined {
+    return TournamentArenaService.openTradesByTournament.get(tournamentId)?.get(tradeId);
+  }
+
   /**
-   * Liquida uma ordem de torneio aplicando a regra do Momentum Streak 3x (+15% bônus sobre o lucro)
+   * Liquida uma ordem de torneio aplicando:
+   * - Captura oficial do primeiro tick no PostgreSQL onde ts >= expires_at (quando conectado ao banco)
+   * - Regra do Momentum Streak 3x (+15% bônus sobre o lucro)
    */
   async settleArenaTrade(params: {
     tournamentId: string;
     tradeId: string;
-    result: "WIN" | "LOSS" | "DRAW";
+    result?: "WIN" | "LOSS" | "DRAW";
     payoutPct?: number;
   }): Promise<{
     order: ArenaTradeOrder;
@@ -1162,7 +1724,7 @@ export class TournamentArenaService {
     streakBonusMinor: number;
     zsetScore: number;
   }> {
-    const { tournamentId, tradeId, result, payoutPct = 85 } = params;
+    const { tournamentId, tradeId, payoutPct = 85 } = params;
     const tournament = TournamentArenaService.tournaments.get(tournamentId);
     if (!tournament) {
       throw new Error("TOURNAMENT_NOT_FOUND: Tournament does not exist");
@@ -1192,13 +1754,48 @@ export class TournamentArenaService {
         };
       }
 
+      let resolvedResult: "WIN" | "LOSS" | "DRAW" = params.result ?? "LOSS";
+      let exitPrice: number | null = null;
+      let exitTickSequence: number | null = null;
+
+      if (this.pool) {
+        const tickRes = await this.pool.query(
+          `SELECT sequence, price FROM ticks
+           WHERE symbol = $1 AND ts >= $2
+           ORDER BY ts ASC, sequence ASC
+           LIMIT 1`,
+          [order.symbol, order.expires_at]
+        );
+
+        if (tickRes.rows.length > 0) {
+          exitPrice = Number(tickRes.rows[0].price);
+          exitTickSequence = Number(tickRes.rows[0].sequence);
+          const entryPrice =
+            order.entry_price !== null && order.entry_price !== undefined
+              ? Number(order.entry_price)
+              : exitPrice;
+          const diff = exitPrice - entryPrice;
+          if (Math.abs(diff) < 1e-9) {
+            resolvedResult = "DRAW";
+          } else if (order.direction === "UP") {
+            resolvedResult = diff > 0 ? "WIN" : "LOSS";
+          } else {
+            resolvedResult = diff < 0 ? "WIN" : "LOSS";
+          }
+        } else if (order.entry_tick_sequence !== null && order.entry_tick_sequence !== undefined) {
+          throw new Error(
+            "ARENA_SETTLEMENT_TICK_NOT_AVAILABLE: Official settlement tick (ts >= expires_at) not yet available"
+          );
+        }
+      }
+
       participant.reserved_t_stake_minor -= order.stake_t_minor;
       participant.total_trades += 1;
 
       let baseProfitMinor = 0;
       let streakBonusMinor = 0;
 
-      if (result === "WIN") {
+      if (resolvedResult === "WIN") {
         participant.consecutive_wins += 1;
         participant.winning_trades += 1;
         baseProfitMinor = Math.floor((order.stake_t_minor * payoutPct) / 100);
@@ -1211,7 +1808,7 @@ export class TournamentArenaService {
 
         participant.current_t_balance_minor +=
           order.stake_t_minor + baseProfitMinor + streakBonusMinor;
-      } else if (result === "LOSS") {
+      } else if (resolvedResult === "LOSS") {
         participant.consecutive_wins = 0;
         if (
           participant.current_t_balance_minor < 1000 &&
@@ -1219,7 +1816,7 @@ export class TournamentArenaService {
         ) {
           participant.status = "BUSTED";
         }
-      } else if (result === "DRAW") {
+      } else if (resolvedResult === "DRAW") {
         // Empate técnico devolve a stake e NÃO quebra o streak de vitórias!
         participant.current_t_balance_minor += order.stake_t_minor;
       }
@@ -1233,10 +1830,15 @@ export class TournamentArenaService {
       participant.updated_at = new Date();
 
       order.status = "SETTLED";
-      order.result = result;
+      order.result = resolvedResult;
+      order.exit_price = exitPrice;
+      order.exit_tick_sequence = exitTickSequence;
+      order.settled_at = new Date();
       order.base_profit_t_minor = baseProfitMinor;
       order.streak_bonus_t_minor = streakBonusMinor;
 
+      await this.persistParticipantToDb(participant);
+      await this.persistTradeOrderToDb(order);
       const zsetScore = await this.syncParticipantToRedisZset(tournamentId, participant);
 
       return {
@@ -1247,6 +1849,29 @@ export class TournamentArenaService {
         zsetScore
       };
     });
+  }
+
+  /**
+   * Varre todas as ordens OPEN cujo expires_at <= nowMs e as liquida usando o primeiro tick oficial ts >= expires_at.
+   */
+  public async sweepExpiredArenaTrades(nowMs: number = Date.now()): Promise<number> {
+    let settledCount = 0;
+    for (const [tournamentId, tradesMap] of TournamentArenaService.openTradesByTournament.entries()) {
+      for (const order of tradesMap.values()) {
+        if (order.status !== "OPEN") continue;
+        if (order.expires_at.getTime() > nowMs) continue;
+        try {
+          await this.settleArenaTrade({
+            tournamentId,
+            tradeId: order.id
+          });
+          settledCount += 1;
+        } catch {
+          // Se o tick oficial ts >= expires_at ainda não chegou no banco, aguarda próximo ciclo
+        }
+      }
+    }
+    return settledCount;
   }
 
   private async syncParticipantToRedisZset(
@@ -1444,6 +2069,16 @@ export class TournamentArenaService {
       overlayInjectedMinor = tournament.guaranteed_pool_minor - tournament.current_pool_minor;
       await this.blnkClient.provisionTournamentOverlay(tournament.id, overlayInjectedMinor);
       tournament.current_pool_minor += overlayInjectedMinor;
+      await this.persistLedgerEventToDb({
+        tournamentId: tournament.id,
+        userId: "SYSTEM_OVERLAY",
+        eventType: "OVERLAY_INJECTION",
+        grossAmountMinor: overlayInjectedMinor,
+        rakeAmountMinor: 0,
+        escrowAmountMinor: overlayInjectedMinor,
+        blnkEscrowRef: `overlay:${tournament.id}`,
+        idempotencyKey: `overlay:${tournament.id}`
+      });
     }
 
     const eligible = GhostBenchmarkEngine.filterEligibleWinners(
@@ -1489,6 +2124,17 @@ export class TournamentArenaService {
       p.prize_won_minor = d.prizeMinor;
       const bal = this.ensureUserRealBalanceState(d.userId);
       bal.available_minor += d.prizeMinor;
+      await this.persistRealBalanceToDb(d.userId);
+      await this.persistLedgerEventToDb({
+        tournamentId: tournament.id,
+        userId: d.userId,
+        eventType: "PRIZE_PAYOUT",
+        grossAmountMinor: d.prizeMinor,
+        rakeAmountMinor: 0,
+        escrowAmountMinor: d.prizeMinor,
+        blnkEscrowRef: d.reference,
+        idempotencyKey: d.reference
+      });
       enrichedDistributions.push({
         userId: d.userId,
         displayName: p.display_name,
@@ -1537,11 +2183,25 @@ export class TournamentArenaService {
         list.push(grant);
         TournamentArenaService.bonusGrantsByUser.set(p.user_id, list);
         bonusGrants.push(grant);
+        await this.persistRealBalanceToDb(p.user_id);
+        await this.persistBonusGrantToDb(grant);
+        await this.persistLedgerEventToDb({
+          tournamentId: tournament.id,
+          userId: p.user_id,
+          eventType: "BONUS_GRANT",
+          grossAmountMinor: bonusAmountMinor,
+          rakeAmountMinor: 0,
+          escrowAmountMinor: 0,
+          blnkEscrowRef: grant.blnk_grant_ref,
+          idempotencyKey: grant.blnk_grant_ref
+        });
       }
+      await this.persistParticipantToDb(p);
     }
 
     tournament.status = "SETTLED";
     tournament.settled_at = new Date();
+    await this.persistTournamentToDb(tournament);
 
     return {
       tournament,
@@ -1573,6 +2233,7 @@ export class TournamentArenaService {
     tournament.freeze_trades_at = new Date(newEndsAt.getTime() - 60 * 1000);
     tournament.ends_at = newEndsAt;
     tournament.status = computeTournamentStateAt(tournament, nowMs);
+    void this.persistTournamentToDb(tournament);
 
     return tournament;
   }

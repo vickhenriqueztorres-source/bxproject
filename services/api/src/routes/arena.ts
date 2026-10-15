@@ -13,14 +13,25 @@ export const arenaRoutes: FastifyPluginAsync = async (server) => {
 
   function mapArenaError(reply: any, err: any) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("BONUS_ROLLOVER_INCOMPLETE")) {
-      return reply.status(403).send({ error: "BONUS_ROLLOVER_INCOMPLETE", message: msg });
+    if (msg.includes("BONUS_ROLLOVER_INCOMPLETE") || msg.includes("FORBIDDEN_BOLA") || msg.includes("PRODUCTION_FORBIDDEN")) {
+      const code = msg.split(":")[0].trim();
+      return reply.status(403).send({ error: code, message: msg });
     }
-    if (msg.includes("IDEMPOTENCY_KEY_CONFLICT") || msg.includes("SYBIL_DEVICE_CONFLICT")) {
-      const code = msg.includes("SYBIL_DEVICE_CONFLICT") ? "SYBIL_DEVICE_CONFLICT" : "IDEMPOTENCY_KEY_CONFLICT";
+    if (
+      msg.includes("IDEMPOTENCY_KEY_CONFLICT") ||
+      msg.includes("SYBIL_DEVICE_CONFLICT") ||
+      msg.includes("ARENA_SETTLEMENT_TICK_NOT_AVAILABLE") ||
+      msg.includes("TOURNAMENT_HAS_OPEN_TRADES")
+    ) {
+      const code = msg.split(":")[0].trim();
       return reply.status(409).send({ error: code, message: msg });
     }
-    if (msg.includes("TOURNAMENT_NOT_FOUND") || msg.includes("PARTICIPANT_NOT_FOUND") || msg.includes("TRANSACTION_NOT_FOUND")) {
+    if (
+      msg.includes("TOURNAMENT_NOT_FOUND") ||
+      msg.includes("PARTICIPANT_NOT_FOUND") ||
+      msg.includes("TRANSACTION_NOT_FOUND") ||
+      msg.includes("TRADE_NOT_FOUND")
+    ) {
       return reply.status(404).send({ error: "NOT_FOUND", message: msg });
     }
     if (
@@ -81,9 +92,21 @@ export const arenaRoutes: FastifyPluginAsync = async (server) => {
   });
 
   server.post("/api/v1/wallet/real/deposit/confirm", { preHandler: authPreHandler }, async (request, reply) => {
+    const user = (request as any).user;
+    if (!user) return reply.status(401).send({ error: "UNAUTHORIZED" });
+
     const body = (request.body || {}) as { tx_id?: string };
+    const txId = String(body.tx_id || "");
+    const existingTx = arenaService.getWalletTransaction(txId);
+    if (existingTx && existingTx.user_id !== user.id && user.role !== "ADMIN") {
+      return reply.status(403).send({
+        error: "FORBIDDEN_BOLA",
+        message: "FORBIDDEN_BOLA: Cannot confirm deposit belonging to another user"
+      });
+    }
+
     try {
-      const res = await arenaService.confirmRealDeposit({ txId: String(body.tx_id || "") });
+      const res = await arenaService.confirmRealDeposit({ txId });
       return reply.status(200).send(res);
     } catch (err) {
       return mapArenaError(reply, err);
@@ -121,6 +144,17 @@ export const arenaRoutes: FastifyPluginAsync = async (server) => {
     "/api/v1/wallet/real/withdraw/:txId/complete",
     { preHandler: authPreHandler },
     async (request, reply) => {
+      const user = (request as any).user;
+      if (!user) return reply.status(401).send({ error: "UNAUTHORIZED" });
+
+      const existingTx = arenaService.getWalletTransaction(request.params.txId);
+      if (existingTx && existingTx.user_id !== user.id && user.role !== "ADMIN") {
+        return reply.status(403).send({
+          error: "FORBIDDEN_BOLA",
+          message: "FORBIDDEN_BOLA: Cannot complete withdrawal belonging to another user"
+        });
+      }
+
       try {
         const tx = await arenaService.completeRealWithdrawal(request.params.txId);
         return reply.status(200).send({ transaction: tx });
@@ -134,6 +168,17 @@ export const arenaRoutes: FastifyPluginAsync = async (server) => {
     "/api/v1/wallet/real/withdraw/:txId/cancel",
     { preHandler: authPreHandler },
     async (request, reply) => {
+      const user = (request as any).user;
+      if (!user) return reply.status(401).send({ error: "UNAUTHORIZED" });
+
+      const existingTx = arenaService.getWalletTransaction(request.params.txId);
+      if (existingTx && existingTx.user_id !== user.id && user.role !== "ADMIN") {
+        return reply.status(403).send({
+          error: "FORBIDDEN_BOLA",
+          message: "FORBIDDEN_BOLA: Cannot cancel withdrawal belonging to another user"
+        });
+      }
+
       try {
         const tx = await arenaService.cancelRealWithdrawal(request.params.txId);
         return reply.status(200).send({ transaction: tx });
@@ -152,6 +197,13 @@ export const arenaRoutes: FastifyPluginAsync = async (server) => {
   });
 
   const spawnHandler = async (request: any, reply: any) => {
+    if (process.env.NODE_ENV === "production") {
+      return reply.status(403).send({
+        error: "PRODUCTION_FORBIDDEN",
+        message: "PRODUCTION_FORBIDDEN: Dev tournament spawn is disabled in production"
+      });
+    }
+
     const body = (request.body || {}) as {
       title?: string;
       symbol?: string;
@@ -192,6 +244,13 @@ export const arenaRoutes: FastifyPluginAsync = async (server) => {
   server.post("/api/v1/tournaments/dev/spawn", spawnHandler);
 
   const fastForwardHandler = async (request: any, reply: any) => {
+    if (process.env.NODE_ENV === "production") {
+      return reply.status(403).send({
+        error: "PRODUCTION_FORBIDDEN",
+        message: "PRODUCTION_FORBIDDEN: Dev fast-forward is disabled in production"
+      });
+    }
+
     const body = (request.body || {}) as { remaining_seconds?: number };
     try {
       const updated = arenaService.fastForwardTournamentClock(
@@ -293,12 +352,23 @@ export const arenaRoutes: FastifyPluginAsync = async (server) => {
     "/api/v1/arena/tournaments/:id/trades/:tradeId/settle",
     { preHandler: authPreHandler },
     async (request, reply) => {
+      const user = (request as any).user;
+      if (!user) return reply.status(401).send({ error: "UNAUTHORIZED" });
+
+      const existingOrder = arenaService.getArenaTradeOrder(request.params.id, request.params.tradeId);
+      if (existingOrder && existingOrder.user_id !== user.id && user.role !== "ADMIN") {
+        return reply.status(403).send({
+          error: "FORBIDDEN_BOLA",
+          message: "FORBIDDEN_BOLA: Cannot settle trade order belonging to another user"
+        });
+      }
+
       const body = (request.body || {}) as { result?: "WIN" | "LOSS" | "DRAW" };
       try {
         const res = await arenaService.settleArenaTrade({
           tournamentId: request.params.id,
           tradeId: request.params.tradeId,
-          result: body.result || "WIN"
+          result: arenaService.hasDatabasePool() ? undefined : (body.result || "WIN")
         });
         return reply.status(200).send(res);
       } catch (err) {
@@ -321,7 +391,11 @@ export const arenaRoutes: FastifyPluginAsync = async (server) => {
 
   server.post<{ Params: { id: string } }>(
     "/api/v1/arena/tournaments/:id/settle",
+    { preHandler: authPreHandler },
     async (request, reply) => {
+      const user = (request as any).user;
+      if (!user) return reply.status(401).send({ error: "UNAUTHORIZED" });
+
       try {
         const res = await arenaService.settleArenaTournament(request.params.id);
         return reply.status(200).send(res);

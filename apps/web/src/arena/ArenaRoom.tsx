@@ -75,7 +75,8 @@ export function ChartHeader({ arena }: { arena: ArenaApi }) {
   return (
     <div
       data-testid="arena-chart-header"
-      className="flex items-center justify-between gap-3 border-b border-border px-4 py-2"
+      style={{ flexShrink: 0 }}
+      className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2"
     >
       <div className="flex items-center gap-3">
         <span className="text-sm font-semibold">{asset.name}</span>
@@ -122,34 +123,37 @@ export function ArenaLive({
         display: 'flex',
         flexDirection: 'column',
         flex: '1 1 0%',
-        minHeight: 0,
         height: '100%',
         maxHeight: '100%',
+        minHeight: 0,
         overflow: 'hidden',
       }}
-      className="arena-root flex h-full max-h-full min-h-0 flex-1 flex-col overflow-hidden"
+      className="arena-root flex h-full max-h-full min-h-0 flex-col overflow-hidden"
     >
       <ArenaBar arena={arena} />
       <div
+        data-testid="arena-live-body"
         style={{
+          display: 'flex',
           flex: '1 1 0%',
           minHeight: 0,
-          height: '100%',
           maxHeight: '100%',
+          height: '100%',
           overflow: 'hidden',
         }}
         className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row"
       >
         <section
           aria-label="Gráfico e boleta"
+          data-testid="arena-chart-column"
           style={{
             display: 'flex',
             flexDirection: 'column',
             flex: '1 1 0%',
             minWidth: 0,
             minHeight: 0,
-            height: '100%',
             maxHeight: '100%',
+            height: '100%',
             overflow: 'hidden',
           }}
           className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
@@ -163,6 +167,7 @@ export function ArenaLive({
               flexDirection: 'column',
               flex: '1 1 0%',
               minHeight: 0,
+              maxHeight: '100%',
               overflow: 'hidden',
             }}
             className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background"
@@ -186,14 +191,14 @@ export function ArenaLive({
 
         <aside
           aria-label="Painel do torneio"
+          data-testid="arena-sidebar-panel"
           style={{
             display: 'flex',
             flexDirection: 'column',
             minHeight: 0,
-            height: '100%',
             maxHeight: '100%',
+            height: '100%',
             overflow: 'hidden',
-            flexShrink: 0,
           }}
           className="flex min-h-0 flex-col overflow-hidden border-t border-border bg-background lg:h-full lg:w-[380px] lg:shrink-0 lg:border-t-0 lg:border-l"
         >
@@ -247,15 +252,17 @@ export function ArenaLive({
           </div>
           <div
             id={`panel-${tab}`}
+            data-testid="arena-sidebar-tabpanel"
             role="tabpanel"
             aria-labelledby={`tab-${tab}`}
             style={{
               flex: '1 1 0%',
               minHeight: 0,
+              maxHeight: '100%',
               overflowY: 'auto',
               overflowX: 'hidden',
             }}
-            className="thin-scroll min-h-0 flex-1 overflow-y-auto p-3"
+            className="thin-scroll min-h-0 flex-1 overflow-y-auto p-4"
           >
             {tab === 'ranking' && <Leaderboard arena={arena} />}
             {tab === 'bot' && <GhostAudit arena={arena} />}
@@ -283,15 +290,14 @@ export function ArenaRoom(props: ArenaRoomProps = {}) {
       <div
         data-testid="arena-lobby-view"
         style={{
-          display: 'flex',
-          flexDirection: 'column',
           flex: '1 1 0%',
-          minHeight: 0,
           height: '100%',
           maxHeight: '100%',
-          overflow: 'hidden',
+          minHeight: 0,
+          overflowY: 'auto',
+          overflowX: 'hidden',
         }}
-        className="arena-root flex h-full max-h-full min-h-0 flex-1 flex-col overflow-hidden"
+        className="arena-root flex-1 h-full max-h-full min-h-0 overflow-y-auto overflow-x-hidden"
       >
         <ArenaLobby
           onJoin={arena.join}

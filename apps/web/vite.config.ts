@@ -37,5 +37,21 @@ export default defineConfig({
         ws: true
       }
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("lightweight-charts")) return "vendor-charts";
+          if (id.includes("gsap") || id.includes("lenis")) return "vendor-motion";
+          if (id.includes("oidc-client-ts") || id.includes("@tanstack/react-query")) return "vendor-auth-query";
+          if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("\\react\\") || id.includes("\\react-dom\\")) {
+            return "vendor-react";
+          }
+          return undefined;
+        }
+      }
+    }
   }
 });

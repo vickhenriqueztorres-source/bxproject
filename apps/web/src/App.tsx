@@ -75,7 +75,7 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
   const [timeZone, setTimeZone] = useState<'UTC-3' | 'UTC'>('UTC-3');
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const contracts = useQuery({ queryKey: ['contracts'], queryFn: () => getContracts(''), refetchInterval: 3000 });
+  const contracts = useQuery({ queryKey: ['contracts'], queryFn: () => getContracts(''), refetchInterval: 15_000 });
   const activeContractsCount = contracts.data?.filter((c) => c.status === 'OPEN').length ?? 0;
 
   const { portfolioTotalFormatted, todayProfitFormatted } = useMemo(() => {
@@ -119,7 +119,7 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
   }, [contracts.data]);
 
   const wallet = useQuery({ queryKey: ['wallet'], queryFn: getWallet,
-    retry: false, refetchInterval: 2000 });
+    retry: false, refetchInterval: 15_000 });
 
   useEffect(() => {
     if (wallet.data && Number.isSafeInteger(wallet.data.available_minor)) {
@@ -138,7 +138,7 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
 
   const index = useQuery({ queryKey: ['index', activeSymbol],
     queryFn: () => getIndex(activeSymbol), refetchInterval: 30_000 });
-  useQuery({ queryKey: ['candles', activeSymbol],
+  useQuery({ queryKey: ['candles', activeSymbol, '1m'],
     queryFn: () => getCandles(activeSymbol, '1m', 2880) });
   const onPrivate = useCallback((event: PrivateEvent) => {
     if (event.type === 'wallet_balance' && Number.isSafeInteger(event.available_minor)) {

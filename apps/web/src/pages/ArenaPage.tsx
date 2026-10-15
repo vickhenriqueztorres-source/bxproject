@@ -174,8 +174,9 @@ export function ArenaPage(props: ArenaRoomProps = {}) {
         </aside>
 
         <main
+          data-testid="arena-page-main"
           style={{
-            flex: 1,
+            flex: '1 1 0%',
             minWidth: 0,
             minHeight: 0,
             height: '100%',

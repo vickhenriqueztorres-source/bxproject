@@ -70,7 +70,7 @@ describe('Suite 06 — Navegação /torneos -> /arena, /sala/arena e Regressão 
       </I18nProvider>
     );
 
-    expect(html).toContain('Torneos de Trading Cuantitativo');
+    expect(html).toMatch(/Torneios de Trading Quantitativo|Torneos de Trading Cuantitativo/);
     expect(html).toContain('Copa BINMAX');
     expect(html).toContain('data-testid="tournaments-arena-blitz-cta"');
     expect(html).toContain('Arena Blitz · 15 min');

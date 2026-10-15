@@ -1,4 +1,5 @@
 import { accessToken, isGuestMode } from '../auth/oidc';
+import { resolveApiUrl, resolveWsUrl } from '../api/config';
 import { getAssetBasePrice } from '../catalog/assets';
 import { calculateFullJitterDelay, reconnectDelay } from './backoff';
 import { FeedCircuitBreaker, type CircuitState } from './circuit-breaker';
@@ -113,11 +114,7 @@ export class TradingFeedManager {
   private staleInterval: ReturnType<typeof setInterval> | null = null;
   private guestFallbackInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private wsUrl = (import.meta as any).env?.VITE_WS_URL ?? (
-    typeof window !== 'undefined' && window.location
-      ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
-      : 'ws://localhost:3001/ws'
-  )) {
+  constructor(private wsUrl = resolveWsUrl()) {
     this.startStaleChecker();
     this.startGuestFallback();
   }
@@ -571,10 +568,14 @@ export class TradingFeedManager {
 
     // Tenta via REST snapshot endpoint (Subetapa 4 / Regra 3: REST fallback pra símbolo stale)
     try {
-      const restBase = import.meta.env.VITE_API_URL ?? (
-        typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost:3001'
-      );
-      const res = await fetch(`${restBase}/api/v1/snapshot?symbol=${encodeURIComponent(symbol)}`);
+      const snapshotPath = `/v1/snapshot?symbol=${encodeURIComponent(symbol)}`;
+      const snapshotUrl =
+        typeof window !== 'undefined' && window.location && window.location.origin
+          ? resolveApiUrl(snapshotPath)
+          : resolveApiUrl(snapshotPath, {
+              VITE_API_URL: (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001',
+            });
+      const res = await fetch(snapshotUrl);
       if (this.closed || (hadSubscribersAtStart && !this.symbolSubscribers.has(symbol))) {
         this.symbolResyncing.delete(symbol);
         this.symbolTickBuffers.delete(symbol);

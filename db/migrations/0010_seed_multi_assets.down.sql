@@ -1,10 +1,24 @@
 -- Migration 0010_seed_multi_assets.down.sql
 BEGIN;
 
+SET LOCAL lock_timeout = '1s';
+SET LOCAL statement_timeout = '10s';
+
+-- Never remove a catalog asset or the precision guard after durable activity.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM ticks)
+     OR EXISTS (SELECT 1 FROM candles)
+     OR EXISTS (SELECT 1 FROM contracts)
+  THEN
+    RAISE EXCEPTION '0010 rollback refused: durable ticks, candles or contracts exist';
+  END IF;
+END $$;
+
 DROP TRIGGER IF EXISTS indices_precision_guard ON indices;
 DROP FUNCTION IF EXISTS indices_precision_immutable_guard();
 
-DELETE FROM index_state WHERE symbol IN (
+DELETE FROM index_state WHERE symbol IN (SELECT symbol FROM indices WHERE seeded_by_0010) AND symbol IN (
   'EURUSD_OTC',
   'GBPUSD_OTC',
   'USDJPY_OTC',
@@ -42,7 +56,7 @@ DELETE FROM index_state WHERE symbol IN (
   'SYNTH_CRASH_BOOM_100'
 );
 
-DELETE FROM indices WHERE symbol IN (
+DELETE FROM indices WHERE seeded_by_0010 AND symbol IN (
   'EURUSD_OTC',
   'GBPUSD_OTC',
   'USDJPY_OTC',
@@ -79,5 +93,8 @@ DELETE FROM indices WHERE symbol IN (
   'SYNTH_VOL_100',
   'SYNTH_CRASH_BOOM_100'
 );
+
+-- Keep compatibility columns: they may hold state written after 0010.
+ALTER TABLE indices DROP COLUMN seeded_by_0010;
 
 COMMIT;

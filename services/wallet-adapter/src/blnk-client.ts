@@ -41,7 +41,7 @@ export const TIER_WEIGHTS_BPS: Record<PayoutTier, number[]> = {
 export function calculateExactPrizeDistribution(
   totalPoolCents: number,
   tier: PayoutTier,
-  eligibleWinnersCount: number
+  eligibleWinnersCount: number = TIER_WEIGHTS_BPS[tier]?.length ?? 0
 ): number[] {
   if (!Number.isSafeInteger(totalPoolCents) || totalPoolCents < 0) {
     throw new Error("INVALID_MINOR_AMOUNT: totalPoolCents must be non-negative integer");
@@ -319,11 +319,21 @@ export class BlnkClient {
     }
   }
 
+  private async recordIdempotentTransaction(payload: BlnkTransactionPayload): Promise<void> {
+    try {
+      await this.recordTransaction(payload);
+    } catch (err: any) {
+      if (!err.message?.includes("409") && !err.message?.includes("conflict") && !err.message?.includes("CONFLICT")) {
+        throw err;
+      }
+    }
+  }
+
   /**
    * Reserva a stake do usuário movendo de available para reserved (I-03)
    */
   async reserveStake(userId: string, contractId: string, stakeMinor: number): Promise<void> {
-    await this.recordTransaction({
+    await this.recordIdempotentTransaction({
       amount: stakeMinor,
       precision: 100,
       currency: "USD",
@@ -339,7 +349,7 @@ export class BlnkClient {
    * Reverte reserva de stake em caso de cancelamento da ordem
    */
   async releaseReservedStake(userId: string, contractId: string, stakeMinor: number): Promise<void> {
-    await this.recordTransaction({
+    await this.recordIdempotentTransaction({
       amount: stakeMinor,
       precision: 100,
       currency: "USD",
@@ -366,7 +376,7 @@ export class BlnkClient {
 
     if (result === "LOSS") {
       // Perda: move a stake reservada para a conta de receita da casa
-      await this.recordTransaction({
+      await this.recordIdempotentTransaction({
         amount: stakeMinor,
         precision: 100,
         currency: "USD",
@@ -379,7 +389,7 @@ export class BlnkClient {
     } else if (result === "WIN") {
       // Vitória: 
       // 1. Devolve a stake reservada de volta para a carteira disponível
-      await this.recordTransaction({
+      await this.recordIdempotentTransaction({
         amount: stakeMinor,
         precision: 100,
         currency: "USD",
@@ -393,7 +403,7 @@ export class BlnkClient {
       // 2. Transfere o lucro (payout - stake) da conta da casa para o usuário
       const profitMinor = payoutMinor - stakeMinor;
       if (profitMinor > 0) {
-        await this.recordTransaction({
+        await this.recordIdempotentTransaction({
           amount: profitMinor,
           precision: 100,
           currency: "USD",
@@ -406,7 +416,7 @@ export class BlnkClient {
       }
     } else if (result === "DRAW") {
       // Empate: devolve a stake integralmente
-      await this.recordTransaction({
+      await this.recordIdempotentTransaction({
         amount: stakeMinor,
         precision: 100,
         currency: "USD",

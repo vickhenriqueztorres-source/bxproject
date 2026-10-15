@@ -2,6 +2,7 @@ import { accessToken, isGuestMode, signIn, userManager } from '../auth/oidc';
 import { ASSET_CATALOG, getAssetBasePrice } from '../catalog/assets';
 import { safeRandomUUID } from '../lib/uuid';
 import { tradingFeedManager } from '../feed/TradingFeedManager';
+import { resolveApiUrl } from './config';
 
 declare const globalThis: { process?: { env?: { NODE_ENV?: string } } };
 
@@ -10,7 +11,7 @@ export { getAssetBasePrice };
 export type Wallet = { currency: 'USD'; available_minor: number; reserved_minor: number };
 export type Index = { symbol: string; status: 'ACTIVE' | 'PAUSED' };
 export type Candle = { time: number; open: string; high: string; low: string;
-  close: string; volume: number };
+  close: string; volume: number; last_sequence?: number };
 export type Contract = { id: string; symbol: string; direction: 'UP' | 'DOWN';
   stake_minor: number | string; status: string; result: 'WIN' | 'LOSS' | 'DRAW' | null;
   payout_minor: number | string | null; expires_at: string; created_at: string;
@@ -122,7 +123,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   } catch {
     throw new ApiError(401, 'AUTH_REQUIRED');
   }
-  const send = (bearer: string) => fetch(`/api${path}`, { ...init,
+  const send = (bearer: string) => fetch(resolveApiUrl(path), { ...init,
     headers: { ...init.headers, Authorization: `Bearer ${bearer}` },
     signal: init.signal ?? AbortSignal.timeout(8000),
   });
@@ -153,7 +154,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 export const getWallet = async (): Promise<Wallet> => {
   if (isGuestMode()) {
     try {
-      const res = await fetch('/api/v1/wallet', { signal: AbortSignal.timeout(4000) });
+      const res = await fetch(resolveApiUrl('/v1/wallet'), { signal: AbortSignal.timeout(4000) });
       if (res.ok) return (await res.json()) as Wallet;
     } catch (_) {}
     const store = getStoredMock();
@@ -282,7 +283,7 @@ export const getCandles = async (
   limit: number = 2880,
   before?: number
 ): Promise<Candle[]> => {
-  const apiInterval = /^[1-9]\d{0,6}[mhd]$/.test(interval) ? interval : '1m';
+  const apiInterval = /^([5]|[13]5|30)s$|^[1-9]\d{0,6}[mhd]$/.test(interval) ? interval : '1m';
   const safeLimit = Math.min(Math.max(1, limit || 2880), 10080);
   const params = new URLSearchParams({
     symbol,
@@ -292,7 +293,8 @@ export const getCandles = async (
   if (before && Number.isFinite(before) && before > 0) {
     params.set('before', String(Math.floor(before)));
   }
-  const url = `/api/candles?${params.toString()}`;
+  const candlesPath = `/candles?${params.toString()}`;
+  const url = resolveApiUrl(candlesPath);
 
   // 1. Busca direta no endpoint público de velas (disponível tanto no gateway quanto em dev)
   try {
@@ -304,7 +306,9 @@ export const getCandles = async (
         if (isGuestMode()) {
           const store = getStoredMock();
           store.candles[`${symbol}:${interval}`] = data;
-          store.candles[symbol] = data;
+          if (interval === '1m') {
+            store.candles[symbol] = data;
+          }
           saveStoredMock(store);
         }
         return data as Candle[];
@@ -319,7 +323,7 @@ export const getCandles = async (
   // 2. Se for modo autenticado e a requisição direta falhar, tentar via cliente autenticado
   if (!isGuestMode()) {
     try {
-      const authData = await api<Candle[]>(url.replace('/api', ''));
+      const authData = await api<Candle[]>(candlesPath);
       if (Array.isArray(authData) && authData.length > 0 && isCandlesPriceAligned(authData, symbol)) {
         return authData;
       }
@@ -377,15 +381,16 @@ export const getCandles = async (
 export const fetchHistoricalCandlesChunk = async (
   symbol: string,
   beforeTimestamp: number,
-  count: number = 1000
+  count: number = 1000,
+  interval: string = '1m'
 ): Promise<Candle[]> => {
-  return getCandles(symbol, '1m', count, beforeTimestamp);
+  return getCandles(symbol, interval, count, beforeTimestamp);
 };
 
 export const getContracts = async (filter: string): Promise<Contract[]> => {
   if (isGuestMode()) {
     try {
-      const res = await fetch(`/api/v1/contracts?limit=100${filter ? `&result=${encodeURIComponent(filter)}` : ''}`, { signal: AbortSignal.timeout(4000) });
+      const res = await fetch(resolveApiUrl(`/v1/contracts?limit=100${filter ? `&result=${encodeURIComponent(filter)}` : ''}`), { signal: AbortSignal.timeout(4000) });
       if (res.ok) {
         const body = await res.json();
         return Array.isArray(body) ? body : (body.contracts || []);
@@ -402,7 +407,7 @@ export const getContracts = async (filter: string): Promise<Contract[]> => {
 export const getContract = async (id: string): Promise<Contract> => {
   if (isGuestMode()) {
     try {
-      const res = await fetch(`/api/v1/contracts/${encodeURIComponent(id)}`, { signal: AbortSignal.timeout(4000) });
+      const res = await fetch(resolveApiUrl(`/v1/contracts/${encodeURIComponent(id)}`), { signal: AbortSignal.timeout(4000) });
       if (res.ok) return await res.json();
     } catch (_) {}
     const store = getStoredMock();
@@ -442,7 +447,7 @@ export const openContract = async (
       if (targetExpiresAt) {
         contractBody.target_expires_at = targetExpiresAt;
       }
-      const res = await fetch('/api/v1/contracts', {
+      const res = await fetch(resolveApiUrl('/v1/contracts'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
         body: JSON.stringify(contractBody),
