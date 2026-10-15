@@ -50,6 +50,111 @@ try {
   console.warn('[Blnk] Adaptador Blnk não carregado:', bErr.message);
 }
 
+// ============================================================
+// EXCHANGE RATES AUTO-UPDATER
+// ============================================================
+const EXCHANGE_RATE_UPDATE_INTERVAL = 5 * 60 * 1000; // 5 min
+const CURRENCIES_TO_TRACK = ['BRL', 'MXN', 'COP', 'ARS', 'CLP', 'PEN'];
+
+let lastGoodRates = new Map(); // Fallback em memória
+
+async function fetchExchangeRates() {
+  console.log('[ExchangeRates] Fetching from external sources...');
+
+  try {
+    // FONTE 1: AwesomeAPI (Brasil, confiável, sem chave)
+    const pairs = CURRENCIES_TO_TRACK.map(c => `USD-${c}`).join(',');
+    const awesomeUrl = `https://economia.awesomeapi.com.br/json/last/${pairs}`;
+    const res1 = await fetch(awesomeUrl, { timeout: 5000 });
+
+    if (!res1.ok) throw new Error(`AwesomeAPI returned ${res1.status}`);
+    const awesome = await res1.json();
+
+    const rates1 = {};
+    for (const curr of CURRENCIES_TO_TRACK) {
+      const key = `USD${curr}`;
+      if (awesome[key]?.bid) {
+        rates1[curr] = parseFloat(awesome[key].bid);
+      }
+    }
+
+    // FONTE 2: Frankfurter (BCE, backup)
+    const frankfurterUrl = `https://api.frankfurter.app/latest?from=USD&to=${CURRENCIES_TO_TRACK.join(',')}`;
+    const res2 = await fetch(frankfurterUrl, { timeout: 5000 });
+
+    if (!res2.ok) throw new Error(`Frankfurter returned ${res2.status}`);
+    const frank = await res2.json();
+    const rates2 = frank.rates || {};
+
+    // VALIDAÇÃO CRUZADA: Diferença > 5% = alerta
+    const finalRates = {};
+    for (const curr of CURRENCIES_TO_TRACK) {
+      const r1 = rates1[curr];
+      const r2 = rates2[curr];
+
+      if (r1 && r2) {
+        const diff = Math.abs(r1 - r2) / Math.max(r1, r2);
+        if (diff > 0.05) {
+          console.warn(`[ExchangeRates] ${curr}: divergence ${(diff * 100).toFixed(1)}% (${r1} vs ${r2})`);
+          // Mantém última boa
+          if (lastGoodRates.has(curr)) {
+            finalRates[curr] = lastGoodRates.get(curr);
+          } else {
+            finalRates[curr] = (r1 + r2) / 2; // Média como fallback
+          }
+        } else {
+          finalRates[curr] = r1; // AwesomeAPI é fonte primária
+        }
+      } else if (r1) {
+        finalRates[curr] = r1;
+      } else if (r2) {
+        finalRates[curr] = r2;
+      } else {
+        console.warn(`[ExchangeRates] ${curr}: no data from both sources`);
+        if (lastGoodRates.has(curr)) {
+          finalRates[curr] = lastGoodRates.get(curr);
+        }
+      }
+    }
+
+    if (Object.keys(finalRates).length === 0) {
+      throw new Error('No rates fetched from any source');
+    }
+
+    // GRAVA NO POSTGRES
+    if (pgPool) {
+      const now = new Date().toISOString();
+      for (const [code, rate] of Object.entries(finalRates)) {
+        try {
+          await pgPool.query(
+            `INSERT INTO display_currencies (code, rate, updated_at)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (code) DO UPDATE SET rate = $2, updated_at = $3`,
+            [code, rate, now]
+          );
+          lastGoodRates.set(code, rate); // Atualiza memória
+        } catch (dbErr) {
+          console.warn(`[ExchangeRates] Failed to save ${code} to DB:`, dbErr.message);
+        }
+      }
+    }
+
+    console.log(`[ExchangeRates] ✅ Updated ${Object.keys(finalRates).length} rates`);
+
+  } catch (err) {
+    console.error('[ExchangeRates] ❌ Update failed:', err.message);
+    // Continua com última boa em memória
+  }
+}
+
+// INICIALIZA: Busca imediatamente
+fetchExchangeRates().catch(console.error);
+
+// LOOP: A cada 5 min
+setInterval(() => {
+  fetchExchangeRates().catch(console.error);
+}, EXCHANGE_RATE_UPDATE_INTERVAL);
+
 const memoryUsers = new Map();
 const memoryVerificationCodes = new Map();
 memoryUsers.set('demo@binmax.com', {
@@ -2013,6 +2118,61 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
         res.end(JSON.stringify({ error: 'BAD_REQUEST', message: 'Error en la solicitud de KYC' }));
       }
     });
+    return;
+  }
+
+  // GET /api/currencies — Retorna taxas de câmbio atualizadas
+  if (pathname === '/api/currencies' && req.method === 'GET') {
+    try {
+      // 1. POSTGRES (fonte primária)
+      if (pgPool) {
+        const result = await pgPool.query(
+          `SELECT code, rate, updated_at
+           FROM display_currencies
+           WHERE code = ANY($1)
+           ORDER BY code`,
+          [CURRENCIES_TO_TRACK]
+        );
+
+        if (result.rows.length > 0) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result.rows));
+          return;
+        }
+      }
+
+      // 2. MEMÓRIA (fallback se DB vazio)
+      if (lastGoodRates.size > 0) {
+        const now = new Date().toISOString();
+        const rates = Array.from(lastGoodRates.entries()).map(([code, rate]) => ({
+          code,
+          rate,
+          updated_at: now
+        }));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(rates));
+        return;
+      }
+
+      // 3. ESTÁTICO (último recurso)
+      const FALLBACK_RATES = {
+        BRL: 5.50, MXN: 19.50, COP: 4150,
+        ARS: 980, CLP: 940, PEN: 3.75
+      };
+      const now = new Date().toISOString();
+      const rates = Object.entries(FALLBACK_RATES).map(([code, rate]) => ({
+        code,
+        rate,
+        updated_at: now
+      }));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(rates));
+
+    } catch (err) {
+      console.error('[GET /api/currencies] Error:', err);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Failed to fetch exchange rates' }));
+    }
     return;
   }
 
