@@ -2639,12 +2639,8 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
 
         const contractId = crypto.randomUUID();
 
-        // 2. Reserva contábil no Blnk Ledger
-        if (blnk && authData && authData.sub) {
-          blnk.reserveStake(authData.sub, contractId, stake).catch(e => {
-            console.warn('[Blnk Reserve Warning]:', e.message);
-          });
-        }
+        // 2. Reserva contábil no Blnk Ledger (BUG-4: removida chamada paralela)
+        // A reserva agora é feita EXCLUSIVAMENTE via outbox worker (assíncrono e durável)
         const entryPrice = parseFloat(state.currentPrice);
 
         // Cálculo autêntico no servidor baseado no modo de expiração (Subetapa 9.1)
@@ -2779,13 +2775,9 @@ function aggregateCandlesToInterval(baseBars, intervalSec) {
         devContracts.unshift(newContract);
         if (resolveInFlight) resolveInFlight(newContract);
 
-        // Reserva contábil de stake no Blnk Ledger (I-02, I-03) disparada de forma assíncrona
+        // Reserva contábil de stake no Blnk Ledger (BUG-4: removida chamada paralela)
+        // A reserva agora é feita EXCLUSIVAMENTE via outbox worker (assíncrono, durável e com retry)
         // A garantia de consistência reside no evento atômico RESERVE_STAKE na outbox_events do PostgreSQL (Subetapa 9.2)
-        if (blnk && authData && authData.sub) {
-          blnk.reserveStake(authData.sub, contractId, stake).catch((reserveErr) => {
-            console.error('[Blnk Stake Reservation Async Error]', reserveErr.message);
-          });
-        }
 
         // Agendamento de Liquidação oficial contra o tick autêntico do símbolo (Subetapa 9.3)
         const settlementDelayMs = Math.max(1000, targetExpiryEpoch - Date.now());
