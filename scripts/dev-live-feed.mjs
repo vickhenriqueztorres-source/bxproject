@@ -3834,7 +3834,24 @@ async function bootstrapMarketState() {
       throw new Error(`BOOTSTRAP_MISSING_HEAD:${item.symbol}`);
     }
     if (FEATURE_UNIFIED_OU_ENGINE && typeof liveMarketStore.ensureHeadPriceContinuity === 'function') {
-      const sanitizedHeadPrice = sanitizeBootPrice(head.price, item.price, item.precision);
+      let lastClose = null;
+      try {
+        const lastCandles = await liveMarketStore.loadCandles(item.symbol, 1);
+        if (Array.isArray(lastCandles) && lastCandles.length > 0) {
+          const candidateClose = Number(lastCandles[lastCandles.length - 1].close);
+          if (
+            Number.isFinite(candidateClose) &&
+            candidateClose >= 0.7 * item.price &&
+            candidateClose <= 1.4 * item.price
+          ) {
+            lastClose = candidateClose;
+          }
+        }
+      } catch {}
+      const sanitizedHeadPrice = sanitizeBootPrice(head.price, item.price, item.precision, {
+        symbol: item.symbol,
+        lastClose,
+      });
       if (sanitizedHeadPrice !== Number(head.price).toFixed(item.precision)) {
         head = await liveMarketStore.ensureHeadPriceContinuity(item.symbol, sanitizedHeadPrice);
       }
