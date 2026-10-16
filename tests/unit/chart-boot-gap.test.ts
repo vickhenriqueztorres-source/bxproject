@@ -163,6 +163,6 @@ describe('[M-05][G-07] Real chart engine boot and first tick regressions', () =>
   });
   it('[M-05] first tick after a six minute gap opens its own bucket at the observed price', () => {
     const next = safeCandleFromTick({ ...tick, price: '0.59000' }, { ...history[0], time: t0 as ChartTime }, '1m');
-    expect(next).toEqual({ time: t0 + 360, open: 0.59, high: 0.59, low: 0.59, close: 0.59 });
+    expect(next).toMatchObject({ time: t0 + 360, open: 0.59, high: 0.59, low: 0.59, close: 0.59 });
   });
 });

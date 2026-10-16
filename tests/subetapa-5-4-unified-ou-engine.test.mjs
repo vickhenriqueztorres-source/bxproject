@@ -45,11 +45,11 @@ describe('Subetapa 5.4 - Motor Estocástico Unificado Ornstein-Uhlenbeck (H1-H6)
       anchorPrice
     );
 
-    // 2. Simula feed ao vivo subsequente (120 barras de 1m geradas por 60 ticks/s cada com Itô OU)
+    // 2. Simula feed ao vivo subsequente (720 barras de 1m geradas por 60 ticks/s cada com Itô OU)
     const liveGenerator = createPriceGenerator();
     let currentPrice = anchorPrice.toFixed(asset.precision);
     const liveBars = [];
-    const liveMinuteCount = 120;
+    const liveMinuteCount = 720;
 
     for (let m = 0; m < liveMinuteCount; m++) {
       const barTime = anchorMinuteSec + (m + 1) * 60;
@@ -73,8 +73,8 @@ describe('Subetapa 5.4 - Motor Estocástico Unificado Ornstein-Uhlenbeck (H1-H6)
       });
     }
 
-    // Compara últimos 120 do histórico com os 120 do ao vivo
-    const recentHistBars = histBars.slice(-120);
+    // Compara últimos 720 do histórico com os 720 do ao vivo
+    const recentHistBars = histBars.slice(-720);
     const stdHist = calculateReturnsStd(recentHistBars);
     const stdLive = calculateReturnsStd(liveBars);
 
@@ -112,7 +112,7 @@ describe('Subetapa 5.4 - Motor Estocástico Unificado Ornstein-Uhlenbeck (H1-H6)
     let currentPrice = anchorPrice.toFixed(asset.precision);
     const liveBars = [];
 
-    for (let m = 0; m < 120; m++) {
+    for (let m = 0; m < 720; m++) {
       const open = currentPrice;
       let high = parseFloat(currentPrice);
       let low = parseFloat(currentPrice);
@@ -131,7 +131,7 @@ describe('Subetapa 5.4 - Motor Estocástico Unificado Ornstein-Uhlenbeck (H1-H6)
       });
     }
 
-    const rangeHist = calculateMeanRange(histBars.slice(-120));
+    const rangeHist = calculateMeanRange(histBars.slice(-720));
     const rangeLive = calculateMeanRange(liveBars);
 
     const rangeRatio = rangeLive / rangeHist;

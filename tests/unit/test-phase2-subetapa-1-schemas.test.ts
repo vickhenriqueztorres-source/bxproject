@@ -13,8 +13,8 @@ import {
 } from '../../packages/shared/src/index.ts';
 
 describe('Subetapa 1: Validação de Schemas e Contratos Zod da Fase 2', () => {
-  it('1. Deve validar exatamente os 6 países autorizados da Fase 2', () => {
-    assert.strictEqual(PHASE2_COUNTRIES.length, 6, 'Devem existir exatamente 6 países autorizados');
+  it('1. Deve validar exatamente os países autorizados da Fase 2', () => {
+    assert.strictEqual(PHASE2_COUNTRIES.length, 18, 'Devem existir exatamente 18 países autorizados');
     const validCountries = ['BR', 'MX', 'CO', 'AR', 'CL', 'PE'];
     
     for (const code of validCountries) {
@@ -22,15 +22,15 @@ describe('Subetapa 1: Validação de Schemas e Contratos Zod da Fase 2', () => {
       assert.strictEqual(parsed.success, true, `País ${code} deve ser aceito`);
     }
 
-    const invalidCountries = ['US', 'DE', 'FR', 'ES', 'CN', 'RU', 'JP', 'GB'];
+    const invalidCountries = ['DE', 'FR', 'CN', 'RU', 'JP', 'GB'];
     for (const code of invalidCountries) {
       const parsed = CountryCodeSchema.safeParse(code);
       assert.strictEqual(parsed.success, false, `País ${code} deve ser estritamente rejeitado`);
     }
   });
 
-  it('2. Deve validar exatamente as 6 moedas de exibição da Fase 2', () => {
-    assert.strictEqual(PHASE2_DISPLAY_CURRENCIES.length, 6, 'Devem existir exatamente 6 moedas de exibição');
+  it('2. Deve validar exatamente as moedas de exibição da Fase 2', () => {
+    assert.strictEqual(PHASE2_DISPLAY_CURRENCIES.length, 15, 'Devem existir exatamente 15 moedas de exibição');
     const validCurrencies = ['BRL', 'MXN', 'COP', 'ARS', 'CLP', 'PEN'];
 
     for (const curr of validCurrencies) {
@@ -38,7 +38,7 @@ describe('Subetapa 1: Validação de Schemas e Contratos Zod da Fase 2', () => {
       assert.strictEqual(parsed.success, true, `Moeda ${curr} deve ser aceita`);
     }
 
-    const invalidCurrencies = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'CHF'];
+    const invalidCurrencies = ['GBP', 'JPY', 'CAD', 'CHF'];
     for (const curr of invalidCurrencies) {
       const parsed = DisplayCurrencyCodeSchema.safeParse(curr);
       assert.strictEqual(parsed.success, false, `Moeda ${curr} deve ser rejeitada como moeda de exibição regional`);

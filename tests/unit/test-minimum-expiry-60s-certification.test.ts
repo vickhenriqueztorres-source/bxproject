@@ -9,10 +9,10 @@ import {
 import { openContract, type Receipt } from '../../apps/web/src/api/client';
 import { ContractService } from '../../services/api/src/services/contract-service';
 
-let mockGuestMode = false;
+var mockGuestMode = false;
 
 vi.mock('../../apps/web/src/auth/oidc', () => ({
-  isGuestMode: () => mockGuestMode,
+  isGuestMode: () => Boolean(mockGuestMode),
   accessToken: async () => 'cert-auth-token-60s',
   signIn: vi.fn(),
   userManager: { signinSilent: vi.fn() },
