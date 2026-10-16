@@ -193,6 +193,237 @@ export function serializeContract(row) {
 }
 
 /**
+ * Regra de Fonte da Verdade (P0-1 Passo 2b/2c/2d):
+ * - Modo 1: BLNK_LEDGER (blnkEnabled === true e instância blnk válida):
+ *   O Blnk Ledger é a única fonte da verdade contábil (para DEMO e REAL).
+ *   NÃO debita nem credita users.demo_balance_minor localmente (zero débito/crédito duplo).
+ * - Modo 2: POSTGRES_DEMO_FALLBACK (blnkEnabled === false):
+ *   A coluna users.demo_balance_minor no PostgreSQL é a única fonte da verdade para contas DEMO.
+ *   Contas REAL são bloqueadas com 503 LEDGER_UNAVAILABLE.
+ */
+export function isBlnkLedgerActive(blnk, blnkEnabled) {
+  const resolvedFlag = typeof blnkEnabled === 'function' ? blnkEnabled() : blnkEnabled;
+  if (resolvedFlag === false) return false;
+  if (resolvedFlag === true) return Boolean(blnk);
+  return Boolean(blnk && typeof blnk.settleContract === 'function');
+}
+
+/**
+ * Executa a abertura atômica de contrato respeitando a fonte única da verdade (P0-1 Passo 2a/2b/2c):
+ * - Se conta REAL e Blnk desativado -> recusa imediatamente com 503 LEDGER_UNAVAILABLE.
+ * - Se Blnk ativo (BLNK_LEDGER) -> reserva no Blnk e persiste contrato + outbox PROCESSED sem tocar em users.demo_balance_minor.
+ * - Se Blnk desativado (POSTGRES_DEMO_FALLBACK) -> dentro da MESMA transação (BEGIN ... COMMIT) do INSERT INTO contracts,
+ *   executa UPDATE users SET demo_balance_minor = demo_balance_minor - $1 WHERE id = $2 AND demo_balance_minor >= $1 RETURNING demo_balance_minor.
+ *   Se rowCount === 0 -> ROLLBACK e retorna 400 INSUFFICIENT_BALANCE.
+ */
+export async function executeAtomicContractOpen({
+  pgPool,
+  blnk,
+  blnkEnabled = false,
+  contractId,
+  userId,
+  symbol,
+  direction,
+  stakeMinor,
+  payoutPct = 85,
+  entryPrice,
+  entryTickSequence,
+  entryTickHash,
+  idempotencyKey,
+  expiresAt,
+  accountType = 'DEMO',
+  onWalletMutated,
+}) {
+  const normalizedAccountType = String(accountType || 'DEMO').trim().toUpperCase();
+  const blnkActive = isBlnkLedgerActive(blnk, blnkEnabled);
+
+  // Passo 2c: Conta REAL exige Blnk Ledger ativo — jamais abrir contrato real sem ledger
+  if (normalizedAccountType === 'REAL' && !blnkActive) {
+    return {
+      ok: false,
+      statusCode: 503,
+      errorBody: {
+        code: 'LEDGER_UNAVAILABLE',
+        message: 'Blnk Ledger obrigatório para abertura de contrato em conta REAL',
+      },
+    };
+  }
+
+  let newSyncedBalanceMinor = undefined;
+
+  // Passo 2b: Modo BLNK_LEDGER — reserva no Blnk sem debitar users.demo_balance_minor localmente
+  if (userId && blnkActive) {
+    try {
+      let blnkBal;
+      try {
+        blnkBal = await blnk.getBalance(userId);
+      } catch (balErr) {
+        if (
+          String(balErr.message).includes('404') ||
+          String(balErr.message).includes('not found')
+        ) {
+          if (typeof blnk.onboardUser === 'function') {
+            await blnk.onboardUser(userId);
+          }
+          blnkBal = await blnk.getBalance(userId);
+        } else {
+          throw balErr;
+        }
+      }
+      if (!blnkBal || Number(blnkBal.available_minor) < stakeMinor) {
+        return {
+          ok: false,
+          statusCode: 400,
+          errorBody: {
+            code: 'INSUFFICIENT_BALANCE',
+            message: 'Saldo insuficiente no Blnk Ledger',
+          },
+        };
+      }
+      await blnk.reserveStake(userId, contractId, stakeMinor);
+      newSyncedBalanceMinor = Number(blnkBal.available_minor) - stakeMinor;
+      if (typeof onWalletMutated === 'function') {
+        onWalletMutated(userId, newSyncedBalanceMinor);
+      }
+    } catch (blnkReserveErr) {
+      if (
+        String(blnkReserveErr.message).includes('422') ||
+        String(blnkReserveErr.message).includes('INSUFFICIENT_BALANCE')
+      ) {
+        return {
+          ok: false,
+          statusCode: 400,
+          errorBody: {
+            code: 'INSUFFICIENT_BALANCE',
+            message: 'Saldo insuficiente no Blnk Ledger',
+          },
+        };
+      }
+      return {
+        ok: false,
+        statusCode: 503,
+        errorBody: {
+          code: 'LEDGER_UNAVAILABLE',
+          message: 'Blnk Ledger indisponível',
+        },
+      };
+    }
+  }
+
+  // Passo 2a: Persistência Atômica ACID no PostgreSQL (Débito sem Blnk + INSERT INTO contracts + Outbox na MESMA transação)
+  if (userId && pgPool) {
+    let dbClient = null;
+    try {
+      dbClient = await pgPool.connect();
+      await dbClient.query('BEGIN');
+
+      if (!blnkActive) {
+        const debitRes = await dbClient.query(
+          `UPDATE users
+           SET demo_balance_minor = demo_balance_minor - $1, updated_at = NOW()
+           WHERE id = $2 AND demo_balance_minor >= $1
+           RETURNING demo_balance_minor`,
+          [stakeMinor, userId]
+        );
+        if (debitRes.rowCount === 0) {
+          await dbClient.query('ROLLBACK');
+          return {
+            ok: false,
+            statusCode: 400,
+            errorBody: {
+              code: 'INSUFFICIENT_BALANCE',
+              message: 'Saldo insuficiente',
+            },
+          };
+        }
+        newSyncedBalanceMinor = Number(debitRes.rows[0].demo_balance_minor);
+      }
+
+      await dbClient.query(
+        `INSERT INTO contracts (
+          id, user_id, symbol, direction, status, stake_minor, entry_price,
+          idempotency_key, opened_at, expires_at, created_at, entry_tick_sequence
+        ) VALUES ($1, $2, $3, $4, 'OPEN', $5, $6, $7, NOW(), $8, NOW(), $9)`,
+        [
+          contractId,
+          userId,
+          symbol,
+          direction,
+          stakeMinor,
+          entryPrice,
+          idempotencyKey,
+          expiresAt,
+          entryTickSequence,
+        ]
+      );
+
+      const outboxPayload = JSON.stringify({
+        contract_id: contractId,
+        user_id: userId,
+        stake_minor: stakeMinor,
+        payout_pct: payoutPct,
+        symbol,
+        entry_price: entryPrice,
+        entry_tick_sequence: entryTickSequence,
+        entry_tick_hash: entryTickHash,
+        reference: `reserve:${contractId}`,
+      });
+
+      await dbClient.query(
+        `INSERT INTO outbox_events (event_type, payload, status, processed_at)
+         VALUES ('RESERVE_STAKE', $1::jsonb, 'PROCESSED', NOW())`,
+        [outboxPayload]
+      );
+
+      await dbClient.query('COMMIT');
+      if (!blnkActive && typeof onWalletMutated === 'function') {
+        onWalletMutated(userId, newSyncedBalanceMinor);
+      }
+      return {
+        ok: true,
+        persistedInDb: true,
+        newBalanceMinor: newSyncedBalanceMinor,
+      };
+    } catch (dbErr) {
+      if (dbClient) {
+        try {
+          await dbClient.query('ROLLBACK');
+        } catch (_) {}
+      }
+      if (userId && blnkActive && typeof blnk?.releaseReservedStake === 'function') {
+        try {
+          await blnk.releaseReservedStake(userId, contractId, stakeMinor);
+          if (typeof onWalletMutated === 'function') {
+            onWalletMutated(userId);
+          }
+        } catch (_) {}
+      }
+      return {
+        ok: false,
+        statusCode: 500,
+        dbError: dbErr,
+        errorBody: {
+          code: 'DB_TRANSACTION_FAILED',
+          message: 'Falha na gravação atômica do contrato',
+        },
+      };
+    } finally {
+      if (dbClient) {
+        try {
+          dbClient.release();
+        } catch (_) {}
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    persistedInDb: false,
+    newBalanceMinor: newSyncedBalanceMinor,
+  };
+}
+
+/**
  * Cria o coordenador resiliente de liquidação (Sweeper + Trigger Direto Idempotente).
  */
 export function createSettlementCoordinator({
@@ -202,6 +433,7 @@ export function createSettlementCoordinator({
   devWallet,
   pgPool,
   blnk,
+  blnkEnabled,
   wss,
   WebSocket,
   onWalletMutated,
@@ -341,10 +573,8 @@ export function createSettlementCoordinator({
           result = outcome.result;
           payoutMinor = outcome.payoutMinor;
 
-          const blnkConfigured = Boolean(
-            blnk && (!blnk.baseUrl || !String(blnk.baseUrl).endsWith(':1'))
-          );
-          if (blnkConfigured) {
+          const blnkActive = isBlnkLedgerActive(blnk, blnkEnabled);
+          if (blnkActive) {
             try {
               await blnk.settleContract(contractId, userId, result, stake, payoutMinor);
               const bal = await blnk.getBalance(userId);
@@ -379,6 +609,30 @@ export function createSettlementCoordinator({
             settledContractIdsCache.add(contractId);
             telemetry.duplicateSettlementPreventedTotal += 1;
             return { settled: false, reason: 'ALREADY_SETTLED_IN_DB' };
+          }
+
+          // Modo POSTGRES_DEMO_FALLBACK (!blnkActive): credita payoutMinor atomicamente na mesma transação
+          if (!blnkActive) {
+            if (payoutMinor > 0) {
+              const creditRes = await dbClient.query(
+                `UPDATE users
+                 SET demo_balance_minor = demo_balance_minor + $1, updated_at = NOW()
+                 WHERE id = $2
+                 RETURNING demo_balance_minor`,
+                [payoutMinor, userId]
+              );
+              if (creditRes.rows.length > 0) {
+                updatedUserBalance = Number(creditRes.rows[0].demo_balance_minor);
+              }
+            } else {
+              const balRes = await dbClient.query(
+                'SELECT demo_balance_minor FROM users WHERE id = $1',
+                [userId]
+              );
+              if (balRes.rows.length > 0) {
+                updatedUserBalance = Number(balRes.rows[0].demo_balance_minor);
+              }
+            }
           }
 
           const outboxPayload = JSON.stringify({

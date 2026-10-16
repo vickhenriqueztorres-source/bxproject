@@ -26,11 +26,18 @@ export async function startEphemeralFeed({
   redisUrl,
   port,
   blnkUrl = 'http://127.0.0.1:1',
+  blnkEnabled,
   jwtSecret = 'qa-ephemeral-feed-only',
 }) {
   assertNotProduction();
   port ??= await freeLoopbackPort();
   assert.notEqual(port, 3001);
+  const resolvedBlnkEnabled =
+    blnkEnabled !== undefined
+      ? String(blnkEnabled)
+      : blnkUrl && blnkUrl !== 'http://127.0.0.1:1'
+        ? 'true'
+        : 'false';
   let output = '';
   const child = spawn(process.execPath, [fileURLToPath(new URL('../../scripts/dev-live-feed.mjs', import.meta.url))], {
     cwd: fileURLToPath(new URL('../..', import.meta.url)),
@@ -38,7 +45,7 @@ export async function startEphemeralFeed({
       ...process.env,
       TARGET_ENV: 'ephemeral', NODE_ENV: 'test', DEV_FEED_PORT: String(port),
       DATABASE_URL: databaseUrl, REDIS_URL: redisUrl,
-      BLNK_URL: blnkUrl, JWT_SECRET: jwtSecret,
+      BLNK_URL: blnkUrl, BLNK_ENABLED: resolvedBlnkEnabled, JWT_SECRET: jwtSecret,
     },
     stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
   });

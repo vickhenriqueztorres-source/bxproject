@@ -11,6 +11,7 @@ import {
   recordTickInHistory,
   createSettlementCoordinator,
   serializeContract,
+  executeAtomicContractOpen,
 } from './lib/settlement-engine.mjs';
 import { createLiveMarketStore } from '../services/tick-engine/live-market-store.mjs';
 import { createWalletReadEngine } from './lib/wallet-read-engine.mjs';
@@ -69,18 +70,41 @@ try {
 
 let BlnkClient = null;
 let blnk = null;
-try {
-  const blnkModule = require('../services/wallet-adapter/dist/blnk-client.js');
-  BlnkClient = blnkModule.BlnkClient;
-  const BLNK_URL = process.env.BLNK_URL || 'http://127.0.0.1:5001';
-  blnk = new BlnkClient(BLNK_URL, 2500);
-  blnk.initializeLedgerAndHouseAccounts().then(() => {
-    console.log('[Blnk] Ledger e contas da casa inicializadas com sucesso.');
-  }).catch((err) => {
-    console.warn('[Blnk] Aviso na inicialização de contas da casa:', err.message);
-  });
-} catch (bErr) {
-  console.warn('[Blnk] Adaptador Blnk não carregado:', bErr.message);
+const BLNK_URL = process.env.BLNK_URL || 'http://127.0.0.1:5001';
+let blnkEnabled = String(process.env.BLNK_ENABLED || 'false').trim().toLowerCase() === 'true';
+
+if (blnkEnabled) {
+  try {
+    const blnkModule = require('../services/wallet-adapter/dist/blnk-client.js');
+    BlnkClient = blnkModule.BlnkClient;
+    blnk = new BlnkClient(BLNK_URL, 2500);
+  } catch (bErr) {
+    blnkEnabled = false;
+    blnk = null;
+    console.warn('[WalletMode] BLNK_ENABLED=true, mas adaptador Blnk não pôde ser carregado:', bErr.message);
+  }
+} else {
+  console.log(
+    '[WalletMode] BLNK_ENABLED=false -> Modo POSTGRES_DEMO_FALLBACK ativo (users.demo_balance_minor é a única fonte da verdade para contas DEMO; contas REAL recusadas com 503 LEDGER_UNAVAILABLE).'
+  );
+}
+
+async function verifyBlnkBootHealthcheck() {
+  if (!blnkEnabled || !blnk) return false;
+  try {
+    await blnk.initializeLedgerAndHouseAccounts();
+    console.log(
+      `[WalletMode] BLNK_ENABLED=true -> Healthcheck OK em ${BLNK_URL}. Modo BLNK_LEDGER ativo (Blnk Ledger é a única fonte da verdade contábil).`
+    );
+    return true;
+  } catch (err) {
+    blnkEnabled = false;
+    blnk = null;
+    console.warn(
+      `[WalletMode] BLNK_ENABLED=true -> Healthcheck FALHOU em ${BLNK_URL} (${err.message}). Degradando para POSTGRES_DEMO_FALLBACK (contas REAL bloqueadas com 503 LEDGER_UNAVAILABLE).`
+    );
+    return false;
+  }
 }
 
 // ============================================================
@@ -2930,65 +2954,19 @@ const server = http.createServer(async (req, res) => {
         }
 
         const contractId = crypto.randomUUID();
-        const blnkConfigured = Boolean(
-          blnk && (!blnk.baseUrl || !String(blnk.baseUrl).endsWith(':1'))
-        );
+        const accountType = String(
+          payload.account_type || payload.wallet_type || req.headers['x-account-type'] || 'DEMO'
+        )
+          .trim()
+          .toUpperCase();
 
-        // 3. Reserva contábil idempotente no Blnk Ledger (D-02, I-01, I-02, I-03) — sem UPDATE users como contabilidade
-        if (authData && authData.sub && blnkConfigured) {
-          try {
-            let blnkBal;
-            try {
-              blnkBal = await blnk.getBalance(authData.sub);
-            } catch (balErr) {
-              if (
-                String(balErr.message).includes('404') ||
-                String(balErr.message).includes('not found')
-              ) {
-                await blnk.onboardUser(authData.sub);
-                blnkBal = await blnk.getBalance(authData.sub);
-              } else {
-                throw balErr;
-              }
-            }
-            if (!blnkBal || Number(blnkBal.available_minor) < stake) {
-              abortOrder(400, { code: 'INSUFFICIENT_BALANCE', message: 'Saldo insuficiente no Blnk Ledger' });
-              return;
-            }
-            await blnk.reserveStake(authData.sub, contractId, stake);
-            walletReadEngine.invalidateUserWallet(
-              authData.sub,
-              Number(blnkBal.available_minor) - stake
-            );
-          } catch (blnkReserveErr) {
-            if (String(blnkReserveErr.message).includes('422') || String(blnkReserveErr.message).includes('INSUFFICIENT_BALANCE')) {
-              abortOrder(400, { code: 'INSUFFICIENT_BALANCE', message: 'Saldo insuficiente no Blnk Ledger' });
-              return;
-            }
-            abortOrder(503, { code: 'LEDGER_UNAVAILABLE', message: 'Blnk Ledger indisponível' });
-            return;
-          }
-        } else {
-          let userBalance = devWallet.available_minor;
-          if (authData && authData.sub && pgPool) {
-            try {
-              const uRes = await pgPool.query('SELECT demo_balance_minor FROM users WHERE id = $1', [authData.sub]);
-              if (uRes.rows.length > 0) {
-                userBalance = Number(uRes.rows[0].demo_balance_minor);
-              }
-            } catch (_) {}
-          }
-          if (stake > userBalance) {
-            abortOrder(400, { code: 'INSUFFICIENT_BALANCE', message: 'Saldo insuficiente' });
-            return;
-          }
-          if (authData && authData.sub) {
-            walletReadEngine.invalidateUserWallet(authData.sub);
-          }
+        if (accountType === 'REAL' && !blnkEnabled) {
+          abortOrder(503, {
+            code: 'LEDGER_UNAVAILABLE',
+            message: 'Blnk Ledger obrigatório para abertura de contrato em conta REAL',
+          });
+          return;
         }
-
-        devWallet.available_minor = Math.max(0, devWallet.available_minor - stake);
-        devWallet.reserved_minor += stake;
 
         // Cálculo autêntico no servidor baseado no modo de expiração (Subetapa 9.1)
         const expiryMode = payload.expiry_mode || (payload.duration_seconds === 300 ? 'CANDLE_5M' : '1M_FIXED');
@@ -3048,51 +3026,35 @@ const server = http.createServer(async (req, res) => {
           _persistedInDb: false,
         };
 
-        // 4. Persistência Atômica ACID no PostgreSQL: Contrato + Outbox RESERVE_STAKE (I-04, DB-07, R-01)
-        if (authData && authData.sub && pgPool) {
-          let dbClient;
-          try {
-            dbClient = await pgPool.connect();
-            await dbClient.query('BEGIN');
+        // 3 & 4. Reserva/Débito e Persistência Atômica ACID (P0-1 Passo 2a/2b/2c/2d)
+        if (authData && authData.sub && (pgPool || blnkEnabled)) {
+          const openTxRes = await executeAtomicContractOpen({
+            pgPool,
+            blnk,
+            blnkEnabled,
+            contractId,
+            userId: authData.sub,
+            symbol: dbSymbol,
+            direction,
+            stakeMinor: stake,
+            payoutPct: 85,
+            entryPrice,
+            entryTickSequence,
+            entryTickHash,
+            idempotencyKey,
+            expiresAt,
+            accountType,
+            onWalletMutated: (uid, newBal) => {
+              walletReadEngine.invalidateUserWallet(uid, newBal);
+            },
+          });
 
-            await dbClient.query(`
-              INSERT INTO contracts (
-                id, user_id, symbol, direction, status, stake_minor, entry_price,
-                idempotency_key, opened_at, expires_at, created_at, entry_tick_sequence
-              ) VALUES ($1, $2, $3, $4, 'OPEN', $5, $6, $7, NOW(), $8, NOW(), $9)
-            `, [contractId, authData.sub, dbSymbol, direction, stake, entryPrice, idempotencyKey, expiresAt, entryTickSequence]);
-
-            const outboxPayload = JSON.stringify({
-              contract_id: contractId,
-              user_id: authData.sub,
-              stake_minor: stake,
-              symbol: dbSymbol,
-              entry_price: entryPrice,
-              entry_tick_sequence: entryTickSequence,
-              entry_tick_hash: entryTickHash,
-              reference: `reserve:${contractId}`,
-            });
-
-            await dbClient.query(`
-              INSERT INTO outbox_events (event_type, payload, status, processed_at)
-              VALUES ('RESERVE_STAKE', $1::jsonb, $2::varchar(16), CASE WHEN $2::varchar(16) = 'PROCESSED' THEN NOW() ELSE NULL END)
-            `, [outboxPayload, blnkConfigured ? 'PROCESSED' : 'PENDING']);
-
-            await dbClient.query('COMMIT');
-            newContract._persistedInDb = true;
-          } catch (dbErr) {
-            if (dbClient) {
-              try { await dbClient.query('ROLLBACK'); } catch (_) {}
+          if (!openTxRes.ok) {
+            const dbErr = openTxRes.dbError;
+            if (dbErr) {
+              console.error('[DB Atomic Insert Contract Error]', dbErr.message);
             }
-            if (authData && authData.sub && blnkConfigured) {
-              try {
-                await blnk.releaseReservedStake(authData.sub, contractId, stake);
-                walletReadEngine.invalidateUserWallet(authData.sub);
-              } catch (_) {}
-            }
-            console.error('[DB Atomic Insert Contract Error]', dbErr.message);
-            // Se falhou por violação de unicidade de idempotência concorrente, retorna o contrato existente
-            if (dbErr.code === '23505' && dbErr.constraint === 'uq_contracts_user_idempotency') {
+            if (dbErr && dbErr.code === '23505' && dbErr.constraint === 'uq_contracts_user_idempotency' && pgPool) {
               try {
                 const dupRes = await pgPool.query(
                   `SELECT *
@@ -3103,23 +3065,34 @@ const server = http.createServer(async (req, res) => {
                   const dupContract = serializeContract(dupRes.rows[0]);
                   if (resolveInFlight) resolveInFlight(dupContract);
                   res.writeHead(200, { 'Content-Type': 'application/json' });
-                  res.end(JSON.stringify({
-                    success: true,
-                    is_duplicate: true,
-                    contract: dupContract,
-                  }));
+                  res.end(
+                    JSON.stringify({
+                      success: true,
+                      is_duplicate: true,
+                      contract: dupContract,
+                    })
+                  );
                   return;
                 }
               } catch (_) {}
             }
-            abortOrder(500, { code: 'DB_TRANSACTION_FAILED', message: 'Falha na gravação atômica do contrato' });
+            abortOrder(openTxRes.statusCode || 500, openTxRes.errorBody);
             return;
-          } finally {
-            if (dbClient) {
-              try { dbClient.release(); } catch (_) {}
-            }
+          }
+
+          newContract._persistedInDb = Boolean(openTxRes.persistedInDb);
+        } else {
+          if (stake > devWallet.available_minor) {
+            abortOrder(400, { code: 'INSUFFICIENT_BALANCE', message: 'Saldo insuficiente' });
+            return;
+          }
+          if (authData && authData.sub) {
+            walletReadEngine.invalidateUserWallet(authData.sub);
           }
         }
+
+        devWallet.available_minor = Math.max(0, devWallet.available_minor - stake);
+        devWallet.reserved_minor += stake;
 
         devContracts.unshift(newContract);
         const serializedCreated = serializeContract(newContract);
@@ -3499,6 +3472,7 @@ settlementCoordinator = createSettlementCoordinator({
   devWallet,
   pgPool,
   blnk,
+  blnkEnabled: () => blnkEnabled,
   wss,
   WebSocket,
   onWalletMutated: (userId, newSyncedBal) => {
@@ -3837,6 +3811,7 @@ async function bootstrapMarketState() {
   if (!liveMarketStore) {
     throw new Error('LIVE_MARKET_STORE_UNAVAILABLE');
   }
+  await verifyBlnkBootHealthcheck();
   const heads = await liveMarketStore.initialize(ASSETS_CONFIG);
   for (const item of ASSETS_CONFIG) {
     const state = assetState.get(item.symbol);
