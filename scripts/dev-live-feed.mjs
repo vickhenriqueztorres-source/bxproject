@@ -605,6 +605,7 @@ const liveMarketStore = (pgPool && REDIS_URL)
       pgPool,
       redisUrl: REDIS_URL,
       instanceId: `dev-live-feed-${process.pid}`,
+      enableTickOutbox: process.env.OUTBOX_WRITE_TICK_EVENTS === 'true',
     })
   : null;
 const walletReadEngine = createWalletReadEngine({
@@ -3318,6 +3319,8 @@ const server = http.createServer(async (req, res) => {
             tick_persist_queue_depth: 0,
             tick_dropped_total: 0,
             outbox_pending_total: 0,
+            outbox_oldest_pending_seconds: 0,
+            outbox_oldest_pending_alert: 0,
             market_audit_diffs_total: 0,
           };
 
@@ -3340,6 +3343,14 @@ const server = http.createServer(async (req, res) => {
     lines.push('# HELP outbox_pending_total Total de eventos pendentes na tabela outbox_events');
     lines.push('# TYPE outbox_pending_total gauge');
     lines.push(`outbox_pending_total ${persistMetrics.outbox_pending_total}`);
+
+    lines.push('# HELP outbox_oldest_pending_seconds Idade em segundos do evento PENDING mais antigo na outbox_events (P0-2 Passo 4)');
+    lines.push('# TYPE outbox_oldest_pending_seconds gauge');
+    lines.push(`outbox_oldest_pending_seconds ${persistMetrics.outbox_oldest_pending_seconds || 0}`);
+
+    lines.push('# HELP outbox_oldest_pending_alert Alerta quando outbox_oldest_pending_seconds > 300s (0=OK, 1=ALERTA)');
+    lines.push('# TYPE outbox_oldest_pending_alert gauge');
+    lines.push(`outbox_oldest_pending_alert ${persistMetrics.outbox_oldest_pending_alert || 0}`);
 
     lines.push('# HELP market_audit_diffs_total Total de divergencias detectadas na ultima auditoria de mercado');
     lines.push('# TYPE market_audit_diffs_total gauge');

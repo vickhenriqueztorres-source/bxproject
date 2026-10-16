@@ -52,7 +52,7 @@ export async function processOutboxBatch(
         FROM outbox_events
        WHERE status = 'PENDING'
        ORDER BY created_at ASC
-       LIMIT 50
+       LIMIT 500
          FOR UPDATE SKIP LOCKED;
     `;
     const res = await client.query(query);
@@ -141,17 +141,22 @@ export async function processOutboxBatch(
 }
 
 export async function startRelay() {
-  console.log("[OutboxRelay] Worker started. Polling pending events...");
+  console.log("[OutboxRelay] Worker started. Polling pending events (LIMIT 500, FOR UPDATE SKIP LOCKED)...");
+  let consecutiveFailures = 0;
 
   while (true) {
     try {
       const processedCount = await processOutboxBatch();
+      consecutiveFailures = 0;
       if (processedCount === 0) {
         await new Promise((resolve) => setTimeout(resolve, 50)); // Sleep curto quando ocioso
       }
     } catch (err) {
+      consecutiveFailures = Math.min(consecutiveFailures + 1, 6);
+      const baseDelayMs = Math.min(30_000, 500 * Math.pow(2, consecutiveFailures - 1));
+      const jitterMs = Math.floor((Date.now() % 250));
       console.error("[OutboxRelay] Error in relay processing cycle:", err);
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Backoff em falhas de rede
+      await new Promise((resolve) => setTimeout(resolve, baseDelayMs + jitterMs)); // Backoff exponencial em falhas
     }
   }
 }

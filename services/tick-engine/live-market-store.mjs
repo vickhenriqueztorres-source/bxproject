@@ -54,7 +54,7 @@ function checkHead(row, latest) {
  * makePrice(previousDecimalString) runs under the index_state row lock and must
  * synchronously return a positive decimal string with at most six fractional digits.
  */
-export function createLiveMarketStore({ pgPool, redisUrl, instanceId }) {
+export function createLiveMarketStore({ pgPool, redisUrl, instanceId, enableTickOutbox = true }) {
   if (!pgPool?.connect || !pgPool?.query || typeof redisUrl !== 'string' || !redisUrl ||
       typeof instanceId !== 'string' || !instanceId) throw new Error('LIVE_MARKET_STORE_CONFIG_REQUIRED');
 
@@ -226,8 +226,10 @@ export function createLiveMarketStore({ pgPool, redisUrl, instanceId }) {
         WHERE symbol=$1 AND lease_epoch=$6 AND lease_leader=$7`,
       [dbSym, sequence, price, hash, ts, epoch, owner]);
       if (updated.rowCount !== 1) throw new Error('FENCED');
-      await client.query(`INSERT INTO outbox_events(event_type,payload)
-        VALUES ('TICK',$1::jsonb)`, [JSON.stringify(tick)]);
+      if (enableTickOutbox) {
+        await client.query(`INSERT INTO outbox_events(event_type,payload)
+          VALUES ('TICK',$1::jsonb)`, [JSON.stringify(tick)]);
+      }
       const bucket = new Date(Math.floor(Date.parse(ts) / 60_000) * 60_000).toISOString();
       await client.query(`INSERT INTO candles(symbol,interval,bucket_start,open,high,low,close,volume)
         SELECT $1::varchar(32),'1m',$2::timestamptz,
@@ -394,11 +396,13 @@ export function createLiveMarketStore({ pgPool, redisUrl, instanceId }) {
           epochs.delete(item.symbol);
           throw new Error('FENCED');
         }
-        await client.query(
-          `INSERT INTO outbox_events(event_type,payload)
-           VALUES ('TICK',$1::jsonb)`,
-          [JSON.stringify(tick)]
-        );
+        if (enableTickOutbox) {
+          await client.query(
+            `INSERT INTO outbox_events(event_type,payload)
+             VALUES ('TICK',$1::jsonb)`,
+            [JSON.stringify(tick)]
+          );
+        }
         const bucket = new Date(Math.floor(Date.parse(ts) / 60_000) * 60_000).toISOString();
         await client.query(
           `INSERT INTO candles(symbol,interval,bucket_start,open,high,low,close,volume)
@@ -855,8 +859,13 @@ export function createLiveMarketStore({ pgPool, redisUrl, instanceId }) {
       [tickCutoffIso, batchLimit]
     );
 
+    const retentionRes = await pruneProcessedAndArchivedOutbox(pgPool, {
+      retentionDays: 7,
+      batchLimit,
+    });
+
     return {
-      prunedOutboxCount: Number(outboxRes.rowCount || 0),
+      prunedOutboxCount: Number(outboxRes.rowCount || 0) + Number(retentionRes.deletedCount || 0),
       prunedTicksCount: Number(ticksRes.rowCount || 0),
       tickCutoffIso,
       outboxCutoffIso,
@@ -1111,13 +1120,7 @@ export function createLiveMarketStore({ pgPool, redisUrl, instanceId }) {
   }
 
   async function getPersistenceMetrics() {
-    let pendingOutboxCount = 0;
-    try {
-      const res = await pgPool.query(
-        `SELECT COUNT(*)::int AS cnt FROM outbox_events WHERE status = 'PENDING'`
-      );
-      pendingOutboxCount = Number(res.rows[0]?.cnt || 0);
-    } catch {}
+    const outboxStats = await queryOutboxPendingMetrics(pgPool);
 
     let p99 = 0;
     if (persistDurationSamplesMs.length > 0) {
@@ -1131,7 +1134,9 @@ export function createLiveMarketStore({ pgPool, redisUrl, instanceId }) {
       tick_persist_p99_ms: Number(p99.toFixed(3)),
       tick_persist_queue_depth: inFlightPersistOps,
       tick_dropped_total: droppedTicksTotal,
-      outbox_pending_total: pendingOutboxCount,
+      outbox_pending_total: outboxStats.outbox_pending_total,
+      outbox_oldest_pending_seconds: outboxStats.outbox_oldest_pending_seconds,
+      outbox_oldest_pending_alert: outboxStats.outbox_oldest_pending_alert,
       market_audit_diffs_total: lastAuditDiffsTotal,
     };
   }
@@ -1163,3 +1168,122 @@ export function createLiveMarketStore({ pgPool, redisUrl, instanceId }) {
     close,
   };
 }
+
+/**
+ * Passo 2 de P0-2: Arquiva eventos PENDING antigos (anteriores a cutoffIso) em lotes
+ * de 10.000 usando FOR UPDATE SKIP LOCKED para evitar locks longos e reprocessamento cego.
+ */
+export async function archiveLegacyPendingOutbox(
+  pgPool,
+  { cutoffIso = new Date().toISOString(), batchLimit = 10_000, maxBatches = 500 } = {}
+) {
+  if (!pgPool?.query) throw new Error('PG_POOL_REQUIRED');
+  if (!Number.isInteger(batchLimit) || batchLimit < 1 || batchLimit > 50_000) {
+    throw new Error('INVALID_ARCHIVE_BATCH_LIMIT');
+  }
+
+  let totalArchived = 0;
+  let batchesExecuted = 0;
+
+  while (batchesExecuted < maxBatches) {
+    const res = await pgPool.query(
+      `WITH legacy_batch AS (
+         SELECT id
+         FROM outbox_events
+         WHERE status = 'PENDING'
+           AND created_at < $1::timestamptz
+         ORDER BY created_at ASC
+         LIMIT $2::int
+         FOR UPDATE SKIP LOCKED
+       )
+       UPDATE outbox_events o
+       SET status = 'ARCHIVED',
+           processed_at = NOW()
+       FROM legacy_batch b
+       WHERE o.id = b.id
+       RETURNING o.id`,
+      [cutoffIso, batchLimit]
+    );
+
+    const archivedInBatch = Number(res.rowCount || 0);
+    if (archivedInBatch === 0) break;
+    totalArchived += archivedInBatch;
+    batchesExecuted += 1;
+    if (archivedInBatch < batchLimit) break;
+  }
+
+  return {
+    totalArchived,
+    batchesExecuted,
+    cutoffIso,
+  };
+}
+
+/**
+ * Passo 3 de P0-2: Job de retenção que apaga PROCESSED e ARCHIVED com mais de 7 dias
+ * em lotes usando FOR UPDATE SKIP LOCKED (preserva FAILED e PENDING).
+ */
+export async function pruneProcessedAndArchivedOutbox(
+  pgPool,
+  { retentionDays = 7, batchLimit = 10_000 } = {}
+) {
+  if (!pgPool?.query) throw new Error('PG_POOL_REQUIRED');
+  if (!Number.isFinite(retentionDays) || retentionDays < 1) {
+    throw new Error('INVALID_RETENTION_DAYS');
+  }
+  if (!Number.isInteger(batchLimit) || batchLimit < 1 || batchLimit > 50_000) {
+    throw new Error('INVALID_PRUNE_BATCH_LIMIT');
+  }
+
+  const cutoffIso = new Date(Date.now() - retentionDays * 24 * 3_600 * 1000).toISOString();
+  const res = await pgPool.query(
+    `WITH doomed_outbox AS (
+       SELECT id
+       FROM outbox_events
+       WHERE status IN ('PROCESSED', 'ARCHIVED')
+         AND created_at < $1::timestamptz
+       ORDER BY created_at ASC
+       LIMIT $2::int
+       FOR UPDATE SKIP LOCKED
+     )
+     DELETE FROM outbox_events o
+     USING doomed_outbox d
+     WHERE o.id = d.id`,
+    [cutoffIso, batchLimit]
+  );
+
+  return {
+    deletedCount: Number(res.rowCount || 0),
+    cutoffIso,
+  };
+}
+
+/**
+ * Passo 4 de P0-2: Consulta outbox_pending_total e outbox_oldest_pending_seconds
+ * com flag de alerta quando > 300s.
+ */
+export async function queryOutboxPendingMetrics(
+  pgPool,
+  { alertThresholdSeconds = 300 } = {}
+) {
+  let pendingOutboxCount = 0;
+  let oldestPendingSeconds = 0;
+  if (pgPool?.query) {
+    try {
+      const res = await pgPool.query(
+        `SELECT COUNT(*)::int AS cnt,
+                COALESCE(EXTRACT(EPOCH FROM (NOW() - MIN(created_at))), 0)::float AS oldest_pending_sec
+         FROM outbox_events WHERE status = 'PENDING'`
+      );
+      pendingOutboxCount = Number(res.rows[0]?.cnt || 0);
+      oldestPendingSeconds = Math.max(0, Number(res.rows[0]?.oldest_pending_sec || 0));
+    } catch {}
+  }
+
+  return {
+    outbox_pending_total: pendingOutboxCount,
+    outbox_oldest_pending_seconds: Number(oldestPendingSeconds.toFixed(3)),
+    outbox_oldest_pending_alert: oldestPendingSeconds > alertThresholdSeconds ? 1 : 0,
+  };
+}
+
