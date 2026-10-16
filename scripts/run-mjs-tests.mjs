@@ -1,12 +1,7 @@
 #!/usr/bin/env node
-/**
- * Runner multiplataforma (Windows / Linux / CI) para a suíte de testes .mjs (P1-3 - Opção B).
- * Expande deterministicamente:
- *   - tests/*.test.mjs
- *   - tests/unit/*.test.mjs
- *   - scripts/**/*.test.mjs
- * e executa `node --test` sobre todos os arquivos encontrados.
- */
+// Runner multiplataforma (Windows / Linux / CI) para a suíte de testes .mjs (P1-3 - Opção B).
+// Expande deterministicamente tests/*.test.mjs, tests/unit/*.test.mjs e scripts/**/*.test.mjs
+// e executa `node --test` sobre todos os arquivos encontrados.
 
 import fs from 'node:fs';
 import path from 'node:path';
