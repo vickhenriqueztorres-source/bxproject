@@ -3003,6 +3003,8 @@ const server = http.createServer(async (req, res) => {
 
         const expiresAt = new Date(targetExpiryEpoch).toISOString();
         const durationSeconds = Math.round(safeDurationMs / 1000);
+        const contractPayoutPct =
+          state && Number.isFinite(Number(state.payout_pct)) ? Number(state.payout_pct) : 85;
 
         const newContract = {
           id: contractId,
@@ -3010,6 +3012,7 @@ const server = http.createServer(async (req, res) => {
           symbol: dbSymbol,
           direction,
           stake_minor: stake,
+          payout_pct: contractPayoutPct,
           status: 'OPEN',
           result: null,
           payout_minor: null,
@@ -3038,7 +3041,7 @@ const server = http.createServer(async (req, res) => {
             symbol: dbSymbol,
             direction,
             stakeMinor: stake,
-            payoutPct: 85,
+            payoutPct: contractPayoutPct,
             entryPrice,
             entryTickSequence,
             entryTickHash,

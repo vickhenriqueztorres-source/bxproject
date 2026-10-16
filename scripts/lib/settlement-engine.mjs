@@ -99,9 +99,39 @@ export function resolveExitPriceAtExpiry(state, expiresAtMs, fallbackPrice) {
 }
 
 /**
- * Calcula de forma pura e determinística o resultado e o payout em centavos (minor units).
+ * Resolve o payout_pct gravado no contrato no momento da abertura.
+ * Se contratos antigos não tiverem payout_pct gravado, usa 85 apenas para eles com log de aviso (P1-1).
  */
-export function computeContractOutcome({ direction, entryPrice, exitPrice, stakeMinor }) {
+export function resolveContractPayoutPct(contractRow, contractId = 'unknown') {
+  const raw = contractRow?.payout_pct ?? contractRow?.payoutPct;
+  if (raw === null || raw === undefined || String(raw).trim() === '') {
+    console.warn(
+      `[Settlement Legacy Payout] Contrato antigo ${contractId} sem payout_pct gravado; usando fallback 85`
+    );
+    return 85;
+  }
+  return Number(raw);
+}
+
+/**
+ * Calcula de forma pura e determinística o resultado e o payout em centavos (minor units).
+ * P1-1: Usa aritmética inteira exata: payoutMinor = stake + Math.floor((stake * payoutPct) / 100).
+ * Exige payoutPct obrigatório dentro de [0, 100].
+ */
+export function computeContractOutcome({ direction, entryPrice, exitPrice, stakeMinor, payoutPct }) {
+  if (
+    payoutPct === null ||
+    payoutPct === undefined ||
+    typeof payoutPct === 'boolean' ||
+    (typeof payoutPct === 'string' && payoutPct.trim() === '')
+  ) {
+    throw new Error('INVALID_PAYOUT_PCT: payoutPct obrigatório em [0, 100]');
+  }
+  const pct = Number(payoutPct);
+  if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+    throw new Error(`INVALID_PAYOUT_PCT: valor fora de [0, 100] (${String(payoutPct)})`);
+  }
+
   const entry = Number(entryPrice);
   const exit = Number(exitPrice);
   const stake = parseInt(stakeMinor, 10);
@@ -109,11 +139,12 @@ export function computeContractOutcome({ direction, entryPrice, exitPrice, stake
   const won = (isUp && exit > entry) || (!isUp && exit < entry);
   const draw = exit === entry;
   const result = won ? 'WIN' : draw ? 'DRAW' : 'LOSS';
-  const payoutMinor = won ? Math.round(stake * 1.85) : draw ? stake : 0;
+  const payoutMinor = won ? stake + Math.floor((stake * pct) / 100) : draw ? stake : 0;
 
   return {
     result,
     payoutMinor,
+    payoutPct: pct,
     entryPrice: entry,
     exitPrice: exit,
     stakeMinor: stake,
@@ -165,6 +196,10 @@ export function serializeContract(row) {
     status: row.status || 'OPEN',
     result: isOpen ? null : (row.result || null),
     stake_minor: Number(row.stake_minor),
+    payout_pct:
+      row.payout_pct !== null && row.payout_pct !== undefined && Number.isFinite(Number(row.payout_pct))
+        ? Number(row.payout_pct)
+        : 85,
     payout_minor:
       !isOpen && row.payout_minor !== null && row.payout_minor !== undefined
         ? Number(row.payout_minor)
@@ -342,8 +377,8 @@ export async function executeAtomicContractOpen({
       await dbClient.query(
         `INSERT INTO contracts (
           id, user_id, symbol, direction, status, stake_minor, entry_price,
-          idempotency_key, opened_at, expires_at, created_at, entry_tick_sequence
-        ) VALUES ($1, $2, $3, $4, 'OPEN', $5, $6, $7, NOW(), $8, NOW(), $9)`,
+          idempotency_key, opened_at, expires_at, created_at, entry_tick_sequence, payout_pct
+        ) VALUES ($1, $2, $3, $4, 'OPEN', $5, $6, $7, NOW(), $8, NOW(), $9, $10)`,
         [
           contractId,
           userId,
@@ -354,6 +389,7 @@ export async function executeAtomicContractOpen({
           idempotencyKey,
           expiresAt,
           entryTickSequence,
+          payoutPct,
         ]
       );
 
@@ -513,7 +549,7 @@ export function createSettlementCoordinator({
           await dbClient.query('BEGIN');
 
           const lockRes = await dbClient.query(
-            `SELECT id, user_id, symbol, direction, status, stake_minor, entry_price, expires_at
+            `SELECT id, user_id, symbol, direction, status, stake_minor, payout_pct, entry_price, expires_at
              FROM contracts
              WHERE id = $1
              FOR UPDATE`,
@@ -563,12 +599,14 @@ export function createSettlementCoordinator({
           entryPrice = Number(contractRow.entry_price);
           stake = parseInt(contractRow.stake_minor, 10);
           userId = contractRow.user_id;
+          const payoutPct = resolveContractPayoutPct(contractRow, contractId);
 
           const outcome = computeContractOutcome({
             direction: contractRow.direction,
             entryPrice,
             exitPrice,
             stakeMinor: stake,
+            payoutPct,
           });
           result = outcome.result;
           payoutMinor = outcome.payoutMinor;
@@ -697,12 +735,14 @@ export function createSettlementCoordinator({
         exitPrice = tickResolution.exitPrice;
         exitTickSequence = tickResolution.tickSequence;
         tickSource = tickResolution.source;
+        const payoutPct = resolveContractPayoutPct(target, contractId);
 
         const outcome = computeContractOutcome({
           direction: target.direction,
           entryPrice,
           exitPrice,
           stakeMinor: stake,
+          payoutPct,
         });
         result = outcome.result;
         payoutMinor = outcome.payoutMinor;
@@ -892,7 +932,7 @@ export function createSettlementCoordinator({
       if (pgPool && nowMs >= dbRecoveryBackoffUntil) {
         try {
           const expiredDbRes = await pgPool.query(
-            `SELECT id, user_id, symbol, direction, status, stake_minor, entry_price, expires_at, opened_at, created_at
+            `SELECT id, user_id, symbol, direction, status, stake_minor, payout_pct, entry_price, expires_at, opened_at, created_at
              FROM contracts
              WHERE status = 'OPEN' AND expires_at <= NOW()
              ORDER BY expires_at ASC
@@ -908,6 +948,7 @@ export function createSettlementCoordinator({
                 direction: row.direction,
                 status: row.status,
                 stake_minor: Number(row.stake_minor),
+                payout_pct: row.payout_pct !== undefined && row.payout_pct !== null ? Number(row.payout_pct) : undefined,
                 entry_price: Number(row.entry_price),
                 strike_price: Number(row.entry_price),
                 expires_at: new Date(row.expires_at).toISOString(),

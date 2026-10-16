@@ -1088,9 +1088,13 @@ export function createLiveMarketStore({ pgPool, redisUrl, instanceId, enableTick
           continue;
         }
         const stakeMinor = Number(c.stake_minor);
+        const pct =
+          c.payout_pct !== null && c.payout_pct !== undefined && Number.isFinite(Number(c.payout_pct))
+            ? Number(c.payout_pct)
+            : 85;
         const expectedPayoutMinor =
           expectedResult === 'WIN'
-            ? stakeMinor + Math.floor((stakeMinor * 8500) / 10000)
+            ? stakeMinor + Math.floor((stakeMinor * pct) / 100)
             : expectedResult === 'LOSS'
               ? 0
               : stakeMinor;
