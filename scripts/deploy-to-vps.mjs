@@ -74,7 +74,7 @@ async function main() {
 
   await execCommand(
     conn,
-    'mkdir -p /root/app/scripts/lib /root/app/scripts/sentiment /root/app/services/tick-engine /root/app/services/api/src/routes /root/app/db/migrations /root/app/apps/web/dist /root/app/apps/admin/dist',
+    'mkdir -p /root/app/scripts/lib /root/app/scripts/sentiment /root/app/services/tick-engine /root/app/services/wallet-adapter/dist /root/app/services/wallet-adapter/src /root/app/services/api/src/routes /root/app/db/migrations /root/app/apps/web/dist /root/app/apps/admin/dist',
   );
 
   const sftp = await new Promise((resolve, reject) => {
@@ -104,7 +104,22 @@ async function main() {
     '/root/app/scripts/sentiment/sentiment-service.mjs',
   );
 
-  // 3. Upload do tick-engine e rotas auxiliares
+  // 3. Upload do tick-engine, wallet-adapter e rotas auxiliares
+  if (fs.existsSync('services/wallet-adapter/dist/blnk-client.js')) {
+    await uploadFile(
+      sftp,
+      'services/wallet-adapter/dist/blnk-client.js',
+      '/root/app/services/wallet-adapter/dist/blnk-client.js',
+    );
+  }
+  if (fs.existsSync('services/wallet-adapter/src/blnk-client.ts')) {
+    await uploadFile(
+      sftp,
+      'services/wallet-adapter/src/blnk-client.ts',
+      '/root/app/services/wallet-adapter/src/blnk-client.ts',
+    );
+  }
+
   const tickEngineFiles = ['core.mjs', 'engine.mjs', 'live-market-store.mjs'];
   for (const file of tickEngineFiles) {
     if (fs.existsSync(`services/tick-engine/${file}`)) {
@@ -124,16 +139,31 @@ async function main() {
     );
   }
 
-  if (fs.existsSync('db/migrations/0063_contracts_entry_tick_sequence.up.sql')) {
-    await uploadFile(
-      sftp,
-      'db/migrations/0063_contracts_entry_tick_sequence.up.sql',
-      '/root/app/db/migrations/0063_contracts_entry_tick_sequence.up.sql',
-    );
+  const migrationFiles = [
+    '0061_arena_blitz_escrow_and_real_wallet.up.sql',
+    '0062_arena_trade_orders.up.sql',
+    '0063_contracts_entry_tick_sequence.up.sql',
+    '0064_contracts_payout_pct.up.sql',
+  ];
+  for (const mig of migrationFiles) {
+    if (fs.existsSync(`db/migrations/${mig}`)) {
+      await uploadFile(
+        sftp,
+        `db/migrations/${mig}`,
+        `/root/app/db/migrations/${mig}`,
+      );
+    }
   }
 
-  // 4. Descompactar bundles, ajustar permissões, recarregar Nginx e reiniciar PM2
+  // 4. Descompactar bundles, aplicar migrations pendentes, ajustar permissões, recarregar Nginx e reiniciar PM2
   const remoteScript = `
+echo "=== Aplicando Migrations Pendentes no PostgreSQL ==="
+for mig in 0061_arena_blitz_escrow_and_real_wallet.up.sql 0062_arena_trade_orders.up.sql 0063_contracts_entry_tick_sequence.up.sql 0064_contracts_payout_pct.up.sql; do
+  if [ -f "/root/app/db/migrations/$mig" ]; then
+    docker exec -i broker-postgres psql -U synth_migrator -d broker_platform < "/root/app/db/migrations/$mig" >/dev/null 2>&1 || true
+  fi
+done
+
 echo "=== Descompactando Frontend Web ==="
 rm -rf /root/app/apps/web/dist/*
 tar -xzf /root/web-dist.tar.gz -C /root/app/apps/web/dist
@@ -150,6 +180,7 @@ chmod 755 /root /root/app /root/app/apps /root/app/apps/web /root/app/apps/admin
 
 echo "=== Recarregando Nginx e PM2 ==="
 nginx -t && systemctl reload nginx
+pm2 flush broker-feed
 pm2 restart broker-feed
 sleep 3
 

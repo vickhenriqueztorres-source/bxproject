@@ -173,7 +173,10 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   if (!response.ok) {
     let code = 'REQUEST_FAILED';
-    try { code = (await response.json()).code ?? code; } catch { /* No trusted error body. */ }
+    try {
+      const errBody = await response.json();
+      code = errBody?.code ?? errBody?.error ?? code;
+    } catch { /* No trusted error body. */ }
     throw new ApiError(response.status, code);
   }
   const value = await response.json();
@@ -580,7 +583,7 @@ export const openContract = async (
     throw new ApiError(502, 'INVALID_CONTRACT_RESPONSE');
   }
   const rawEntry = contract.entry_price ?? contract.strike_price ?? (envelope as any)?.entry_price ?? (envelope as any)?.strike_price;
-  const numEntry = typeof rawEntry === 'number' ? rawEntry : (typeof rawEntry === 'string' ? parseFloat(rawEntry) : undefined);
+  const numEntry = typeof rawEntry === 'number' && Number.isFinite(rawEntry) ? rawEntry : undefined;
   const rawSeq = contract.entry_tick_sequence;
   const numSeq = typeof rawSeq === 'number' && Number.isFinite(rawSeq) ? rawSeq : null;
   const resultReceipt: Receipt = { id, status, expires_at: expiry };

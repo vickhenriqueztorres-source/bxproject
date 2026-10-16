@@ -20,8 +20,17 @@ const messages: Record<string, string> = {
   RATE_LIMITED: 'Muitas ordens em sequência. Aguarde alguns segundos.',
   TICK_UNAVAILABLE: 'Cotação indisponível no momento.',
   AUTH_REQUIRED: 'Sua sessão expirou. Entre novamente.',
+  UNAUTHORIZED: 'Sua sessão expirou. Entre novamente.',
   FEED_STALE: 'Feed de cotações desatualizado. Ordem bloqueada por segurança.',
   KILLSWITCH_ACTIVE: 'Kill switch de risco ativo. Operação suspensa temporariamente para este ativo.',
+  LEDGER_UNAVAILABLE: 'Serviço contábil temporariamente indisponível. Tente novamente em instantes.',
+  MARKET_NOT_READY: 'O motor de mercado está sincronizando. Aguarde alguns segundos.',
+  MARKET_STORE_UNAVAILABLE: 'Serviço de cotações indisponível no momento. Tente novamente.',
+  DB_TRANSACTION_FAILED: 'Falha temporária ao registrar a ordem. Tente novamente.',
+  STAKE_OUT_OF_BOUNDS: 'Valor da ordem fora dos limites permitidos.',
+  INVALID_STAKE: 'Valor mínimo de operação é de $1,00.',
+  INVALID_SYMBOL: 'Ativo indisponível para operação no momento.',
+  RISK_LIMIT_EXCEEDED: 'Limite de exposição atingido para este ativo. Aguarde a liquidação.',
 };
 
 export interface OrderTicketProps {

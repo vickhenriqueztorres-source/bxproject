@@ -206,8 +206,8 @@ export class BlnkClient {
 
         if (!response.ok) {
           const body = await response.text();
-          // Se for erro de idempotência ou conflito conhecido, não retenta
-          if (response.status === 400 || response.status === 401 || response.status === 403 || response.status === 409 || response.status === 422) {
+          // Se for erro de idempotência, recurso não encontrado (pré-onboarding) ou conflito conhecido, não retenta nem abre circuit breaker
+          if (response.status === 400 || response.status === 401 || response.status === 403 || response.status === 404 || response.status === 409 || response.status === 422) {
             throw new Error(`BLNK_CLIENT_ERROR_${response.status}: ${body}`);
           }
           throw new Error(`BLNK_HTTP_ERROR_${response.status}: ${body}`);

@@ -88,21 +88,23 @@ export function createWalletReadEngine({
     let resolvedBalance = null;
 
     // 2. Tenta obter o saldo oficial do Blnk Ledger
-    if (blnk) {
+    const activeBlnk = typeof blnk === 'function' ? blnk() : blnk;
+    if (activeBlnk) {
       try {
         let blnkBalance;
         try {
           telemetry.blnkCallsTotal += 1;
-          blnkBalance = await blnk.getBalance(userId);
+          blnkBalance = await activeBlnk.getBalance(userId);
         } catch (bErr) {
           if (
             bErr.message?.includes('404') ||
             bErr.message?.includes('not found') ||
-            bErr.message?.includes('BLNK_HTTP_ERROR_404')
+            bErr.message?.includes('BLNK_HTTP_ERROR_404') ||
+            bErr.message?.includes('BLNK_CLIENT_ERROR_404')
           ) {
             telemetry.blnkCallsTotal += 2;
-            await blnk.onboardUser(userId);
-            blnkBalance = await blnk.getBalance(userId);
+            await activeBlnk.onboardUser(userId);
+            blnkBalance = await activeBlnk.getBalance(userId);
           } else {
             throw bErr;
           }

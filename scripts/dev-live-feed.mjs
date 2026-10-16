@@ -64,6 +64,15 @@ try {
     console.error('[DB] Erro no pool do PostgreSQL:', err.message);
   });
   pgPool.query('ALTER TABLE contracts ADD COLUMN IF NOT EXISTS entry_tick_sequence BIGINT').catch(() => {});
+  pgPool.query('ALTER TABLE contracts ADD COLUMN IF NOT EXISTS payout_pct SMALLINT DEFAULT 85').catch(() => {});
+  pgPool.query('ALTER TABLE indices ADD COLUMN IF NOT EXISTS payout_pct SMALLINT NOT NULL DEFAULT 85').catch(() => {});
+  const defaultDemoHash = crypto.createHash('sha256').update('Demo1234!' + 'c7a8b9f1d2e3456789abcdef01234567').digest('hex');
+  pgPool.query(
+    `INSERT INTO users (id, name, email, password_hash, password_salt, country_code, demo_balance_minor, email_verified)
+     VALUES ('00000000-0000-4000-8000-000000000001', 'Usuario Demo Binmax', 'demo@binmax.com', $1, 'c7a8b9f1d2e3456789abcdef01234567', 'ES', 1000000, true)
+     ON CONFLICT DO NOTHING`,
+    [defaultDemoHash]
+  ).catch(() => {});
 } catch (e) {
   console.warn('[DB] Fallback em memória para auth/users:', e.message);
 }
@@ -609,7 +618,7 @@ const liveMarketStore = (pgPool && REDIS_URL)
     })
   : null;
 const walletReadEngine = createWalletReadEngine({
-  blnk,
+  blnk: () => (blnkEnabled ? blnk : null),
   pgPool,
   memoryUsers,
   getDevWallet: () => devWallet,
@@ -3503,7 +3512,9 @@ setInterval(() => {
   }
   if (marketReady && arenaHttpEngine) {
     arenaHttpEngine.sweepExpiredArenaTrades().catch((err) => {
-      console.error('[Arena Settlement Sweeper Error]', err.message);
+      if (err?.code !== '42P01' && !String(err?.message || '').includes('does not exist')) {
+        console.error('[Arena Settlement Sweeper Error]', err.message);
+      }
     });
   }
 }, 500);
