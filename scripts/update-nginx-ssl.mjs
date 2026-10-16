@@ -93,6 +93,22 @@ const content = `server {
         proxy_http_version 1.1;
     }
 
+    # Compressão Gzip e Assets Imutáveis (Subetapa 4.4 / P3-1)
+    gzip on;
+    gzip_static on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml application/json application/javascript application/xml+rss image/svg+xml;
+
+    location ^~ /assets/ {
+        root /root/app/apps/web/dist;
+        expires 1y;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files $uri =404;
+    }
+
     # Terminal Web (Frontend Principal)
     location / {
         root /root/app/apps/web/dist;
