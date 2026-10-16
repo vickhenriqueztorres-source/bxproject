@@ -6,6 +6,8 @@
  * - 05-resilience-patterns (R-02, R-03: Sweeper com recuperação pós-restart e backoff de banco)
  */
 
+import { getAssetConfig } from './ou-engine.mjs';
+
 export const TICK_HISTORY_MAX_SIZE = 900; // 15 minutos de ticks de 1s por ativo
 
 /**
@@ -114,11 +116,48 @@ export function resolveContractPayoutPct(contractRow, contractId = 'unknown') {
 }
 
 /**
+ * P1-2: Converte um preço (string decimal ou number) para inteiro escalado (BigInt)
+ * pela precisão do ativo (getAssetConfig(symbol).decimals), eliminando erros de IEEE-754.
+ */
+export function scalePriceToBigInt(price, decimals = 6) {
+  const d = Number.isInteger(decimals) && decimals >= 0 ? decimals : 6;
+  if (typeof price === 'bigint') {
+    return price;
+  }
+  if (typeof price === 'string') {
+    const trimmed = price.trim();
+    if (/^[+-]?\d+(?:\.\d+)?$/.test(trimmed)) {
+      const sign = trimmed.startsWith('-') ? -1n : 1n;
+      const unsigned = trimmed.replace(/^[+-]/, '');
+      const [whole, rawFrac = ''] = unsigned.split('.');
+      const strippedFrac = rawFrac.length > d ? rawFrac.replace(/0+$/, '') : rawFrac;
+      if (strippedFrac.length <= d) {
+        const paddedFrac = strippedFrac.padEnd(d, '0');
+        return sign * BigInt(whole + paddedFrac);
+      }
+    }
+  }
+  const num = Number(price);
+  if (!Number.isFinite(num)) {
+    throw new Error(`INVALID_PRICE: ${String(price)}`);
+  }
+  return BigInt(Math.round(num * 10 ** d));
+}
+
+/**
  * Calcula de forma pura e determinística o resultado e o payout em centavos (minor units).
  * P1-1: Usa aritmética inteira exata: payoutMinor = stake + Math.floor((stake * payoutPct) / 100).
- * Exige payoutPct obrigatório dentro de [0, 100].
+ * P1-2: Compara entryPrice e exitPrice convertidos para inteiro escalado pela precisão do ativo.
  */
-export function computeContractOutcome({ direction, entryPrice, exitPrice, stakeMinor, payoutPct }) {
+export function computeContractOutcome({
+  direction,
+  entryPrice,
+  exitPrice,
+  stakeMinor,
+  payoutPct,
+  symbol,
+  decimals,
+}) {
   if (
     payoutPct === null ||
     payoutPct === undefined ||
@@ -132,12 +171,21 @@ export function computeContractOutcome({ direction, entryPrice, exitPrice, stake
     throw new Error(`INVALID_PAYOUT_PCT: valor fora de [0, 100] (${String(payoutPct)})`);
   }
 
+  const assetCfg = symbol ? getAssetConfig(symbol) : null;
+  const resolvedDecimals =
+    Number.isInteger(decimals) && decimals >= 0
+      ? decimals
+      : assetCfg?.decimals ?? assetCfg?.precision ?? 6;
+
+  const entryScaled = scalePriceToBigInt(entryPrice, resolvedDecimals);
+  const exitScaled = scalePriceToBigInt(exitPrice, resolvedDecimals);
+
   const entry = Number(entryPrice);
   const exit = Number(exitPrice);
   const stake = parseInt(stakeMinor, 10);
   const isUp = direction === 'UP';
-  const won = (isUp && exit > entry) || (!isUp && exit < entry);
-  const draw = exit === entry;
+  const won = (isUp && exitScaled > entryScaled) || (!isUp && exitScaled < entryScaled);
+  const draw = exitScaled === entryScaled;
   const result = won ? 'WIN' : draw ? 'DRAW' : 'LOSS';
   const payoutMinor = won ? stake + Math.floor((stake * pct) / 100) : draw ? stake : 0;
 
@@ -603,10 +651,11 @@ export function createSettlementCoordinator({
 
           const outcome = computeContractOutcome({
             direction: contractRow.direction,
-            entryPrice,
-            exitPrice,
+            entryPrice: contractRow.entry_price,
+            exitPrice: officialTick.price,
             stakeMinor: stake,
             payoutPct,
+            symbol: dbCanonicalSymbol,
           });
           result = outcome.result;
           payoutMinor = outcome.payoutMinor;
@@ -739,10 +788,11 @@ export function createSettlementCoordinator({
 
         const outcome = computeContractOutcome({
           direction: target.direction,
-          entryPrice,
+          entryPrice: target.entry_price ?? target.strike_price ?? entryPrice,
           exitPrice,
           stakeMinor: stake,
           payoutPct,
+          symbol: canonicalSymbol,
         });
         result = outcome.result;
         payoutMinor = outcome.payoutMinor;

@@ -66,10 +66,11 @@ export const ASSETS_CONFIG = Object.freeze([
   { symbol: 'VOL_75', price: 750.3200, precision: 4, annualVolTarget: 0.75, sigma: 0.00013355, theta: LONG_HORIZON_THETA, halfLifeSec: LONG_HORIZON_HALFLIFE_SEC, legacySigma: 0.00085 },
   { symbol: 'VOL_100', price: 1000.4500, precision: 4, annualVolTarget: 1, sigma: 0.00017807, theta: LONG_HORIZON_THETA, halfLifeSec: LONG_HORIZON_HALFLIFE_SEC, legacySigma: 0.0011 },
   { symbol: 'CRASH_BOOM_100', price: 1000.8200, precision: 4, annualVolTarget: 1.2, sigma: 0.00021369, theta: LONG_HORIZON_THETA, halfLifeSec: LONG_HORIZON_HALFLIFE_SEC, legacySigma: 0.0013 },
-]);
+].map(a => Object.freeze({ ...a, decimals: a.precision })));
 
 export function getAssetConfig(symbol) {
-  return ASSETS_CONFIG.find(a => a.symbol === symbol) || null;
+  const canonical = typeof symbol === 'string' ? symbol.replace(/^SYNTH_/, '') : symbol;
+  return ASSETS_CONFIG.find(a => a.symbol === canonical) || null;
 }
 
 export function createSeededRandom(seedStr) {
