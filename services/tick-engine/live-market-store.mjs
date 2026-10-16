@@ -54,11 +54,11 @@ function checkHead(row, latest) {
  * makePrice(previousDecimalString) runs under the index_state row lock and must
  * synchronously return a positive decimal string with at most six fractional digits.
  */
-export function createLiveMarketStore({ pgPool, redisUrl, instanceId, enableTickOutbox = true }) {
-  if (!pgPool?.connect || !pgPool?.query || typeof redisUrl !== 'string' || !redisUrl ||
+export function createLiveMarketStore({ pgPool, redisUrl, redisClient = null, instanceId, enableTickOutbox = true }) {
+  if (!pgPool?.connect || !pgPool?.query || (!redisClient && (typeof redisUrl !== 'string' || !redisUrl)) ||
       typeof instanceId !== 'string' || !instanceId) throw new Error('LIVE_MARKET_STORE_CONFIG_REQUIRED');
 
-  const redis = new Redis(redisUrl, {
+  const redis = redisClient || new Redis(redisUrl, {
     lazyConnect: true,
     commandTimeout: 2_000,
     connectTimeout: 2_000,
@@ -66,7 +66,9 @@ export function createLiveMarketStore({ pgPool, redisUrl, instanceId, enableTick
     enableOfflineQueue: false,
     retryStrategy: () => null,
   });
-  redis.on('error', () => {});
+  if (typeof redis.on === 'function') {
+    redis.on('error', () => {});
+  }
   const owner = `${instanceId}:${randomUUID()}`;
   const epochs = new Map();
   const symbols = new Set();
@@ -328,10 +330,15 @@ export function createLiveMarketStore({ pgPool, redisUrl, instanceId, enableTick
       }
 
       const latestRes = await client.query(
-        `SELECT DISTINCT ON (symbol) symbol, sequence, price, hash, ts
-         FROM ticks
-         WHERE symbol = ANY($1::varchar[])
-         ORDER BY symbol ASC, sequence DESC`,
+        `SELECT t.symbol, t.sequence, t.price, t.hash, t.ts
+         FROM UNNEST($1::varchar[]) AS u(sym)
+         CROSS JOIN LATERAL (
+           SELECT symbol, sequence, price, hash, ts
+           FROM ticks
+           WHERE symbol = u.sym
+           ORDER BY sequence DESC
+           LIMIT 1
+         ) t`,
         [dbSyms]
       );
       const latestByDbSym = new Map();

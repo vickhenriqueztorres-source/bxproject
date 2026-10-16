@@ -62,20 +62,29 @@ class ContractSettler {
                 return { success: false, reason: "MARKET_CLOSED_AT_EXPIRY" };
             }
             // 3. Busca rigorosa do primeiro tick oficial gravado no PostgreSQL onde ts >= expires_at (B-08)
+            const rawSym = String(contract.symbol || "").trim();
+            const strippedSym = rawSym.replace(/^SYNTH_/, "");
+            const candidateSymbols = Array.from(new Set([
+                rawSym,
+                strippedSym,
+                strippedSym.startsWith("VOL_") || strippedSym === "CRASH_BOOM_100"
+                    ? `SYNTH_${strippedSym}`
+                    : strippedSym,
+            ].filter(Boolean)));
             const tickRes = await client.query(`SELECT symbol, sequence, price, ts
          FROM ticks
-         WHERE symbol = $1
+         WHERE symbol = ANY($1::text[])
            AND ts >= $2
-         ORDER BY sequence ASC
-         LIMIT 1;`, [contract.symbol, contract.expires_at]);
+         ORDER BY ts ASC, sequence ASC
+         LIMIT 1;`, [candidateSymbols, contract.expires_at]);
             if (tickRes.rows.length === 0) {
                 // O tick oficial de saída ainda não foi gravado! ROLLBACK para retentar no próximo ciclo (sem inventar preço)
                 await client.query("ROLLBACK");
                 return { success: false, reason: "EXIT_TICK_NOT_YET_AVAILABLE" };
             }
             const exitTick = tickRes.rows[0];
-            // Perigo 5 (Técnica 2): Asserção estrita anti-cross-asset (tick.symbol === contract.symbol)
-            if (exitTick.symbol && exitTick.symbol !== contract.symbol) {
+            // Perigo 5 (Técnica 2): Asserção estrita anti-cross-asset (tick.symbol pertence ao mesmo ativo canônico)
+            if (exitTick.symbol && !candidateSymbols.includes(exitTick.symbol)) {
                 await client.query("ROLLBACK");
                 return { success: false, reason: "CROSS_ASSET_TICK_MISMATCH" };
             }

@@ -47,7 +47,7 @@ export function PortfolioDrawer({
     const expEpoch = Date.parse(c.expires_at);
     if (Number.isFinite(expEpoch) && expEpoch <= now) return acc;
     const stake = typeof c.stake_minor === 'string' ? parseInt(c.stake_minor, 10) : c.stake_minor;
-    return acc + Math.round(stake * 0.85);
+    return acc + Math.floor((stake * 85) / 100);
   }, 0);
 
   const isBinmax = isNewTraderoomEnabled();
@@ -410,7 +410,7 @@ export function PortfolioDrawer({
                           </td>
                           <td style={{ padding: '8px 6px', textAlign: 'right' }}>
                             <strong style={{ color: isBinmax ? '#22C55E' : '#00e676', fontFamily: isBinmax ? "'Geist Mono', monospace" : "'Space Grotesk', sans-serif" }}>
-                              {`+${isBinmax ? formatCurrencyBinmax(Math.round(stakeNum * 0.85)) : formatMinor(Math.round(stakeNum * 0.85))}`}
+                              {`+${isBinmax ? formatCurrencyBinmax(Math.floor((stakeNum * 85) / 100)) : formatMinor(Math.floor((stakeNum * 85) / 100))}`}
                             </strong>
                           </td>
                         </tr>

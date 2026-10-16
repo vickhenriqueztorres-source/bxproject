@@ -199,18 +199,199 @@ function emptyStore(options?: UseArenaOptions): Store {
 const settledBalance = (t: ClosedTrade) =>
   t.result === 'win' ? t.amount + t.profit : t.result === 'tie' ? t.amount : 0;
 
+export const ARENA_SESSION_STORAGE_KEY = 'binmax_arena_active_session_v1';
+
+const VALID_PAYOUT_TIERS: ReadonlySet<string> = new Set(['TOP_3', 'TOP_10', 'TOP_20', 'TOP_30']);
+const VALID_ACTIVE_STAGES: ReadonlySet<string> = new Set(['countdown', 'running', 'settling']);
+
+export function sanitizeAndValidatePersistedArenaStore(raw: unknown, now = Date.now()): Store | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+
+  const stage = typeof obj.stage === 'string' ? obj.stage : '';
+  if (!VALID_ACTIVE_STAGES.has(stage)) return null;
+
+  const roomIndex = typeof obj.roomIndex === 'number' && Number.isInteger(obj.roomIndex) ? obj.roomIndex : -1;
+  if (roomIndex < 0 || roomIndex >= BUY_INS.length) return null;
+
+  const tier = typeof obj.tier === 'string' && VALID_PAYOUT_TIERS.has(obj.tier)
+    ? (obj.tier as PayoutTier)
+    : 'TOP_3';
+
+  const startsAt = typeof obj.startsAt === 'number' && Number.isFinite(obj.startsAt) ? obj.startsAt : NaN;
+  if (!Number.isFinite(startsAt) || startsAt <= 0) return null;
+  if (now - startsAt > ARENA.durationMs + 60_000 || startsAt > now + 60_000) return null;
+
+  const rawPoints = typeof obj.points === 'number' ? obj.points : NaN;
+  if (!Number.isFinite(rawPoints) || rawPoints < 0 || rawPoints > 1_000_000) return null;
+
+  const rebuys = typeof obj.rebuys === 'number' && Number.isInteger(obj.rebuys)
+    ? Math.max(0, Math.min(ARENA.maxRebuys, obj.rebuys))
+    : 0;
+
+  const room = BUY_INS[roomIndex] ?? BUY_INS[0];
+  const countdownEndsAt =
+    typeof obj.countdownEndsAt === 'number' && Number.isFinite(obj.countdownEndsAt)
+      ? obj.countdownEndsAt
+      : startsAt + COUNTDOWN_MS;
+
+  const positions = Array.isArray(obj.positions)
+    ? (obj.positions.filter(
+        (p: any) =>
+          p &&
+          typeof p === 'object' &&
+          typeof p.id === 'string' &&
+          (p.direction === 'up' || p.direction === 'down') &&
+          typeof p.amount === 'number' &&
+          Number.isFinite(p.amount) &&
+          p.amount > 0 &&
+          typeof p.openPrice === 'number' &&
+          Number.isFinite(p.openPrice) &&
+          typeof p.expiresAt === 'number' &&
+          Number.isFinite(p.expiresAt)
+      ) as Position[])
+    : [];
+
+  const trades = Array.isArray(obj.trades) ? (obj.trades as ClosedTrade[]) : [];
+  const rivals =
+    Array.isArray(obj.rivals) && obj.rivals.length > 0
+      ? (obj.rivals as Rival[])
+      : createRivals(room.rivals, startsAt, 492 + roomIndex);
+
+  const bot =
+    obj.bot && typeof obj.bot === 'object' && typeof (obj.bot as any).points === 'number' && Number.isFinite((obj.bot as any).points)
+      ? (obj.bot as BotState)
+      : createBot(startsAt);
+
+  const defaultPool = (room.rivals + 1) * splitEntry(room.cents).pool;
+  const poolCents =
+    typeof obj.poolCents === 'number' && Number.isFinite(obj.poolCents) && obj.poolCents >= 0
+      ? obj.poolCents
+      : defaultPool;
+
+  const ledger: LedgerEvent[] = Array.isArray(obj.ledger) && obj.ledger.length > 0
+    ? (obj.ledger as LedgerEvent[])
+    : [
+        {
+          id: `buy-${startsAt}`,
+          type: 'BUY_IN',
+          amountCents: room.cents,
+          poolCents: splitEntry(room.cents).pool,
+          at: startsAt,
+        },
+      ];
+
+  return {
+    stage: stage as Stage,
+    roomIndex,
+    tier,
+    startsAt,
+    countdownEndsAt,
+    points: round2(rawPoints),
+    reachedAt: typeof obj.reachedAt === 'number' && Number.isFinite(obj.reachedAt) ? obj.reachedAt : now,
+    rebuys,
+    consecutiveWins: typeof obj.consecutiveWins === 'number' && Number.isInteger(obj.consecutiveWins) ? Math.max(0, obj.consecutiveWins) : 0,
+    maxStreak: typeof obj.maxStreak === 'number' && Number.isInteger(obj.maxStreak) ? Math.max(0, obj.maxStreak) : 0,
+    positions,
+    trades,
+    rivals,
+    bot,
+    poolCents,
+    ledger,
+    lastStepAt: typeof obj.lastStepAt === 'number' && Number.isFinite(obj.lastStepAt) ? obj.lastStepAt : now,
+    settlingSince: typeof obj.settlingSince === 'number' && Number.isFinite(obj.settlingSince) ? obj.settlingSince : 0,
+    result: null,
+    rebuyPending: false,
+    rebuyDismissed: Boolean(obj.rebuyDismissed),
+    clockOffsetMs: typeof obj.clockOffsetMs === 'number' && Number.isFinite(obj.clockOffsetMs) ? obj.clockOffsetMs : 12,
+  };
+}
+
+function getSessionStorage(): Storage | undefined {
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      return window.sessionStorage;
+    }
+    if (typeof sessionStorage !== 'undefined') {
+      return sessionStorage;
+    }
+  } catch {
+    /* ignore */
+  }
+  return undefined;
+}
+
+export function loadPersistedArenaSession(now = Date.now()): Store | null {
+  const storage = getSessionStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(ARENA_SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const validated = sanitizeAndValidatePersistedArenaStore(parsed, now);
+    if (!validated) {
+      storage.removeItem(ARENA_SESSION_STORAGE_KEY);
+      return null;
+    }
+    return validated;
+  } catch {
+    try {
+      storage.removeItem(ARENA_SESSION_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+}
+
+export function savePersistedArenaSession(s: Store): boolean {
+  const storage = getSessionStorage();
+  if (!storage) return false;
+  try {
+    if (!VALID_ACTIVE_STAGES.has(s.stage)) {
+      storage.removeItem(ARENA_SESSION_STORAGE_KEY);
+      return false;
+    }
+    storage.setItem(ARENA_SESSION_STORAGE_KEY, JSON.stringify(s));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearPersistedArenaSession(): void {
+  const storage = getSessionStorage();
+  if (!storage) return;
+  try {
+    storage.removeItem(ARENA_SESSION_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function useArena(options?: UseArenaOptions) {
   const [symbol, setSymbol] = useState<string>('VOL_100');
   const asset = useMemo(() => getArenaAsset(symbol), [symbol]);
+  const hasExplicitStageOverride = options?.initialStage !== undefined;
 
   const store = useRef<Store>(null as unknown as Store);
   if (store.current === null) {
-    store.current = emptyStore(options);
+    const persisted = !hasExplicitStageOverride ? loadPersistedArenaSession() : null;
+    store.current = persisted ?? emptyStore(options);
   }
 
   const rand = useRef(mulberry32(7_492));
   const [, setVersion] = useState(0);
-  const bump = useCallback(() => setVersion((v) => v + 1), []);
+  const bump = useCallback(() => {
+    if (!hasExplicitStageOverride && store.current) {
+      if (VALID_ACTIVE_STAGES.has(store.current.stage)) {
+        savePersistedArenaSession(store.current);
+      } else if (store.current.stage === 'lobby' || store.current.stage === 'ended') {
+        clearPersistedArenaSession();
+      }
+    }
+    setVersion((v) => v + 1);
+  }, [hasExplicitStageOverride]);
 
   // Feed real do tradingFeedManager + fallback determinístico de candles
   const [candles, setCandles] = useState<ApiCandle[]>(() => generateSeedCandles('VOL_100', 120));
@@ -781,6 +962,7 @@ export function useArena(options?: UseArenaOptions) {
       bump();
     },
     leave: () => {
+      clearPersistedArenaSession();
       store.current = emptyStore();
       bump();
     },

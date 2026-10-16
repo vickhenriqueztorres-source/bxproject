@@ -187,17 +187,26 @@ export function OrderFlagsOverlay({
           style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
         >
           {groups.map((g, i) => (
-            <line
-              key={`strike-line-${g.key}`}
-              x1={0}
-              y1={lineYs[i]}
-              x2={lineEndX}
-              y2={lineYs[i]}
-              stroke={stateColor(g)}
-              strokeOpacity={0.7}
-              strokeWidth={1}
-              strokeDasharray="4 4"
-            />
+            <g key={`strike-line-wrap-${g.key}`}>
+              <line
+                key={`strike-line-${g.key}`}
+                data-testid={`strike-line-${g.key}`}
+                x1={0}
+                y1={lineYs[i]}
+                x2={lineEndX}
+                y2={lineYs[i]}
+                stroke={stateColor(g)}
+                strokeOpacity={0.95}
+                strokeWidth={2}
+              />
+              <circle
+                data-testid={`strike-entry-dot-${g.key}`}
+                cx={lineEndX}
+                cy={lineYs[i]}
+                r={3.5}
+                fill={stateColor(g)}
+              />
+            </g>
           ))}
         </svg>
 
@@ -214,10 +223,10 @@ export function OrderFlagsOverlay({
               background: stateColor(g),
               color: 'var(--bg-0)',
               fontSize: '11px',
-              fontWeight: 600,
+              fontWeight: 700,
               fontFamily: 'var(--font-mono)',
               fontVariantNumeric: 'tabular-nums',
-              padding: '2px 5px',
+              padding: '2px 6px',
               borderRadius: '4px',
               pointerEvents: 'none',
             }}
@@ -245,7 +254,7 @@ export function OrderFlagsOverlay({
                 padding: '3px 8px',
                 borderRadius: '6px',
                 background: 'var(--bg-2)',
-                border: `1px solid ${stateColor(g)}`,
+                border: `1.5px solid ${stateColor(g)}`,
                 color: 'var(--text-strong)',
                 fontSize: '11px',
                 fontWeight: 600,

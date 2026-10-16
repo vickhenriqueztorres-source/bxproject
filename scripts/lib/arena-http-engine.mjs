@@ -502,13 +502,17 @@ export function createArenaHttpEngine({ pgPool, resolveSymbol }) {
         typeof resolveSymbol === 'function'
           ? resolveSymbol(orderRow.symbol) || orderRow.symbol
           : orderRow.symbol;
+      const synthAlias =
+        canonicalSym.startsWith('VOL_') || canonicalSym === 'CRASH_BOOM_100'
+          ? `SYNTH_${canonicalSym}`
+          : canonicalSym;
       const tickRes = await pgPool.query(
         `SELECT sequence, price, ts
          FROM ticks
-         WHERE (symbol = $1 OR symbol = $2) AND ts >= $3
+         WHERE (symbol = $1 OR symbol = $2 OR symbol = $4) AND ts >= $3
          ORDER BY ts ASC, sequence ASC
          LIMIT 1`,
-        [orderRow.symbol, canonicalSym, orderRow.expires_at]
+        [orderRow.symbol, canonicalSym, orderRow.expires_at, synthAlias]
       );
       if (tickRes.rowCount > 0) {
         const settled = await settleSingleArenaOrder(orderRow, tickRes.rows[0]);
@@ -952,14 +956,18 @@ export function createArenaHttpEngine({ pgPool, resolveSymbol }) {
       const rawSymbol = body.symbol || tRow.symbol || 'VOL_100';
       const canonicalSym =
         typeof resolveSymbol === 'function' ? resolveSymbol(rawSymbol) || rawSymbol : rawSymbol;
+      const synthAliasOpen =
+        canonicalSym.startsWith('VOL_') || canonicalSym === 'CRASH_BOOM_100'
+          ? `SYNTH_${canonicalSym}`
+          : canonicalSym;
 
       const tickRes = await pgPool.query(
         `SELECT sequence, price, ts
          FROM ticks
-         WHERE symbol = $1 OR symbol = $2
+         WHERE symbol = $1 OR symbol = $2 OR symbol = $3
          ORDER BY ts DESC, sequence DESC
          LIMIT 1`,
-        [rawSymbol, canonicalSym]
+        [rawSymbol, canonicalSym, synthAliasOpen]
       );
       if (tickRes.rowCount === 0) {
         sendJson(res, 409, { error: 'OFFICIAL_TICK_NOT_AVAILABLE' });
@@ -1055,13 +1063,17 @@ export function createArenaHttpEngine({ pgPool, resolveSymbol }) {
         typeof resolveSymbol === 'function'
           ? resolveSymbol(orderRow.symbol) || orderRow.symbol
           : orderRow.symbol;
+      const synthAliasSettle =
+        canonicalSym.startsWith('VOL_') || canonicalSym === 'CRASH_BOOM_100'
+          ? `SYNTH_${canonicalSym}`
+          : canonicalSym;
       const tickRes = await pgPool.query(
         `SELECT sequence, price, ts
          FROM ticks
-         WHERE (symbol = $1 OR symbol = $2) AND ts >= $3
+         WHERE (symbol = $1 OR symbol = $2 OR symbol = $4) AND ts >= $3
          ORDER BY ts ASC, sequence ASC
          LIMIT 1`,
-        [orderRow.symbol, canonicalSym, orderRow.expires_at]
+        [orderRow.symbol, canonicalSym, orderRow.expires_at, synthAliasSettle]
       );
       if (tickRes.rowCount === 0) {
         sendJson(res, 409, { error: 'OFFICIAL_SETTLEMENT_TICK_NOT_AVAILABLE' });

@@ -42,6 +42,7 @@ export interface SidebarDockProps {
   newsContent?: React.ReactNode;
   tournamentsContent?: React.ReactNode;
   activeRoute?: 'trade' | 'arena' | 'tournaments';
+  onProtectedExitAttempt?: (target: 'operar' | 'tournaments' | 'arena') => boolean;
 }
 
 export function SidebarDock({
@@ -57,6 +58,7 @@ export function SidebarDock({
   newsContent,
   tournamentsContent,
   activeRoute,
+  onProtectedExitAttempt,
 }: SidebarDockProps) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -126,9 +128,12 @@ export function SidebarDock({
               data-testid="sidebar-item-operar"
               className="sidebar-dock-btn"
               onClick={() => {
+                if (onProtectedExitAttempt?.('operar')) {
+                  return;
+                }
                 onSelectTab(null);
                 if (isArenaActive) {
-                  navigate('/');
+                  navigate('/operar');
                 }
               }}
               style={{
@@ -251,6 +256,9 @@ export function SidebarDock({
               data-testid="sidebar-item-tournaments"
               className="sidebar-dock-btn"
               onClick={() => {
+                if (onProtectedExitAttempt?.('tournaments')) {
+                  return;
+                }
                 toggleTab('tournaments');
                 setIsTournamentsModalOpen(true);
               }}
@@ -287,7 +295,12 @@ export function SidebarDock({
               type="button"
               data-testid="sidebar-item-arena"
               className="sidebar-dock-btn"
-              onClick={() => navigate('/arena')}
+              onClick={() => {
+                if (onProtectedExitAttempt?.('arena')) {
+                  return;
+                }
+                navigate('/arena');
+              }}
               style={{
                 width: '100%',
                 padding: '4px 0',

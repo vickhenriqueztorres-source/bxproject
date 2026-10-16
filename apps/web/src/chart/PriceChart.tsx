@@ -238,6 +238,8 @@ export function PriceChart({
   const hasMoreHistoryRef = useRef(true);
   const oldestLoadedTimeRef = useRef<number | null>(null);
   const shouldScrollToRealTimeRef = useRef(true);
+  const symbolMountedAtRef = useRef<number>(Date.now());
+  const pendingHistoryShiftRef = useRef<number>(0);
   const prevCandlesSigRef = useRef<{
     symbol: string;
     len: number;
@@ -263,6 +265,8 @@ export function PriceChart({
       return;
     }
 
+    const wasEmptyBefore = !prevSig || prevSig.len < 5;
+
     prevCandlesSigRef.current = {
       symbol,
       len: candles.length,
@@ -282,12 +286,18 @@ export function PriceChart({
       isLoadingHistoryRef.current = false;
       oldestLoadedTimeRef.current = null;
       shouldScrollToRealTimeRef.current = true;
+      symbolMountedAtRef.current = Date.now();
+      pendingHistoryShiftRef.current = 0;
       rafUpdaterRef.current.reset(symbol);
+    } else if (wasEmptyBefore && candles.length >= 5) {
+      shouldScrollToRealTimeRef.current = true;
+      symbolMountedAtRef.current = Date.now();
     }
   }, [candles, symbol]);
 
   // Busca velas dedicadas reais quando o timeframe for alterado (ex: '5s', '15s', '30s', '5m')
   useEffect(() => {
+    symbolMountedAtRef.current = Date.now();
     if (timeframe === '1m') return;
     let cancelled = false;
     const fetchTimeframeCandles = async () => {
@@ -421,9 +431,24 @@ export function PriceChart({
       observed.current.symbol === symbol ? [...observed.current.bars.values()] : [], timeframe);
   }, [effectiveCandles, timeframe, chartType, symbol]);
 
-  // Atualiza referência da vela mais recente quando as velas reamostradas mudam (sem resetar sequências do rAF)
+  // Atualiza referência da vela mais recente e aplica shift pós-setData quando histórico retroativo é inserido
   useEffect(() => {
     latestCandle.current = resampledCandles.at(-1) ?? null;
+    if (pendingHistoryShiftRef.current > 0 && chartInstance.current) {
+      const addedCount = pendingHistoryShiftRef.current;
+      pendingHistoryShiftRef.current = 0;
+      try {
+        const currentRange = chartInstance.current.timeScale().getVisibleLogicalRange();
+        if (currentRange) {
+          chartInstance.current.timeScale().setVisibleLogicalRange({
+            from: currentRange.from + addedCount,
+            to: currentRange.to + addedCount,
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+    }
   }, [resampledCandles, isChartReady]);
 
   // Sincronizar Linha de Preço Atual na troca de tipo de gráfico
@@ -519,12 +544,17 @@ export function PriceChart({
 
     const onVisibleLogicalRangeChanged = (logicalRange: any) => {
       if (cancelled || !logicalRange || isLoadingHistoryRef.current || !hasMoreHistoryRef.current) return;
+      // Impede disparo prematuro de prefetch durante a abertura/hidratação inicial de nova aba (causa raiz da Imagem 1)
+      if (internalCandlesRef.current.length < 30 || Date.now() - symbolMountedAtRef.current < 1500) {
+        return;
+      }
 
       // Se o usuário rolou até perto da borda esquerda (menos de 60 barras visíveis - Prefetch Preditivo)
       if (logicalRange.from < 60) {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(async () => {
           if (cancelled || isLoadingHistoryRef.current || !hasMoreHistoryRef.current) return;
+          if (internalCandlesRef.current.length < 30 || Date.now() - symbolMountedAtRef.current < 1500) return;
 
           const sorted = [...internalCandlesRef.current].sort((a, b) => (Number(a.time) || 0) - (Number(b.time) || 0));
           const oldest = sorted[0];
@@ -575,14 +605,8 @@ export function PriceChart({
               }
 
               const addedCount = merged.length - prev.length;
-              if (addedCount > 0 && chartInstance.current && !cancelled) {
-                const currentRange = chartInstance.current.timeScale().getVisibleLogicalRange();
-                if (currentRange) {
-                  chartInstance.current.timeScale().setVisibleLogicalRange({
-                    from: currentRange.from + addedCount,
-                    to: currentRange.to + addedCount,
-                  });
-                }
+              if (addedCount > 0 && !cancelled) {
+                pendingHistoryShiftRef.current = addedCount;
               }
 
               return merged;

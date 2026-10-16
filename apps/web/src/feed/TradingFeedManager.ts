@@ -105,6 +105,9 @@ export class TradingFeedManager {
   private tokenBucket = new TokenBucketRateLimiter({ capacity: 10, refillRatePerSecond: 1 });
   private initialConnectDone = false;
   private connecting = false;
+  private symbolSubscribedAt = new Map<string, number>();
+  private managerBootedAt = Date.now();
+  private everConnected = false;
 
   private connected = false;
   private stale = true;
@@ -204,6 +207,7 @@ export class TradingFeedManager {
         } else {
           // In guest mode, request public ticks feed
           this.connected = true;
+          this.everConnected = true;
           this.attempt = 0;
           this.circuitBreaker.recordSuccess();
           this.notifyCircuitBreakerStatus();
@@ -239,6 +243,7 @@ export class TradingFeedManager {
 
       if (data.type === 'authenticated' || data.type === 'auth_ok') {
         this.connected = true;
+        this.everConnected = true;
         this.attempt = 0;
         this.circuitBreaker.recordSuccess();
         this.notifyCircuitBreakerStatus();
@@ -745,6 +750,10 @@ export class TradingFeedManager {
       this.symbolSubscribers.set(symbol, callbacks);
     }
 
+    if (wasEmpty || !this.symbolSubscribedAt.has(symbol)) {
+      this.symbolSubscribedAt.set(symbol, Date.now());
+    }
+
     callbacks.add(callback);
 
     let initialTickTimer: ReturnType<typeof setTimeout> | null = null;
@@ -793,6 +802,7 @@ export class TradingFeedManager {
         // Only send unsubscribe to the server if NO charts are looking at this symbol anymore
         if (set.size === 0) {
           this.symbolSubscribers.delete(symbol);
+          this.symbolSubscribedAt.delete(symbol);
           this.symbolTickBuffers.delete(symbol);
           this.symbolResyncing.delete(symbol);
           this.sendUnsubscribe(symbol);
@@ -896,6 +906,35 @@ export class TradingFeedManager {
     const last = this.symbolLastTickAt.get(symbol);
     if (!last) return true;
     return Date.now() - last > threshold;
+  }
+
+  /**
+   * Indica se o símbolo está na janela inicial de warm-up (cold-start) após F5 ou abertura de aba,
+   * antes de ter recebido o 1º tick e sem ter sofrido nenhuma queda ou falha de conexão.
+   */
+  public isSymbolColdStarting(symbol: string, graceMs = 4000): boolean {
+    if (this.closed) return false;
+    if (this.symbolFallbackFailed.get(symbol)) return false;
+    if (!this.circuitBreaker.canExecute()) return false;
+    if (this.attempt > 0 || this.totalReconnectCount > 0) return false;
+    if ((this.symbolReconnectCounts.get(symbol) ?? 0) > 0) return false;
+    if ((this.symbolDelayedCounts.get(symbol) ?? 0) > 0) return false;
+    if (this.everConnected && !this.connected) return false;
+    if (this.symbolLastTickAt.has(symbol)) return false;
+
+    const startedAt = this.symbolSubscribedAt.get(symbol) ?? this.managerBootedAt;
+    return Math.max(0, Date.now() - startedAt) < graceMs;
+  }
+
+  /**
+   * Indica se o gerenciador global de feed está nos primeiros instantes do boot inicial (F5)
+   * antes de concluir o primeiro handshake e sem falhas registradas.
+   */
+  public isColdStarting(graceMs = 4000): boolean {
+    if (this.closed || this.connected) return false;
+    if (this.everConnected || this.attempt > 0 || this.totalReconnectCount > 0) return false;
+    if (!this.circuitBreaker.canExecute()) return false;
+    return Math.max(0, Date.now() - this.managerBootedAt) < graceMs;
   }
 
   public getSymbolTickAge(symbol: string): number {

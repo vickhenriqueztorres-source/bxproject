@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { User } from 'oidc-client-ts';
-import { getCandles, getContracts, getIndex, getWallet, onMockPrivateEvent, resetMockWallet, type Wallet } from './api/client';
+import { getCandles, getContracts, getIndex, getWallet, onMockPrivateEvent, resetMockWallet, type Contract, type Wallet } from './api/client';
 import { finishSignin, guestUser, isGuestMode, setGuestMode, signIn, signOut, userManager } from './auth/oidc';
 import { MultiChartGrid, type GridLayout } from './chart/MultiChartGrid';
 import { ChartErrorBoundary } from './chart/ChartErrorBoundary';
@@ -157,6 +157,9 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
       }
     }
     if (event.type === 'contract_settled') {
+      if (event.contract_id) {
+        wsSettledIdsRef.current.add(event.contract_id);
+      }
       const isBinmax = isNewTraderoomEnabled();
       if (isBinmax) {
         const isWin = event.result === 'WIN';
@@ -209,6 +212,82 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
       void queryClient.invalidateQueries({ queryKey: ['wallet'] });
     }
   }, [queryClient, soundEnabled, activeSymbol, contracts.data, t]);
+
+  const wsSettledIdsRef = useRef<Set<string>>(new Set());
+  const prevOpenIdsRef = useRef<Set<string>>(new Set());
+
+  // Fallback de sincronização: se uma operação OPEN passar para SETTLED via polling HTTP (sem WS), atualiza carteira
+  useEffect(() => {
+    const list: Contract[] = contracts.data ?? [];
+    let anyTransitioned = false;
+    for (const c of list) {
+      if (c.status === 'SETTLED' && prevOpenIdsRef.current.has(c.id)) {
+        anyTransitioned = true;
+        if (!wsSettledIdsRef.current.has(c.id)) {
+          wsSettledIdsRef.current.add(c.id);
+        }
+      }
+    }
+    if (anyTransitioned) {
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    }
+    const nextOpenIds = new Set<string>();
+    for (const c of list) {
+      if (c.status === 'OPEN' && c.id) {
+        nextOpenIds.add(c.id);
+      }
+    }
+    prevOpenIdsRef.current = nextOpenIds;
+  }, [contracts.data, queryClient]);
+
+  // Watchdog de Reconciliação Ativa para operações em "Liquidando..." (Subetapa 3)
+  useEffect(() => {
+    const openList = (contracts.data ?? []).filter((c) => c.status === 'OPEN');
+    if (openList.length === 0) return;
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    let expiryTimerId: ReturnType<typeof setTimeout> | null = null;
+
+    const triggerReconcileIfExpired = () => {
+      const nowMs = Date.now();
+      const hasExpiredOpen = openList.some((c) => {
+        const expMs = Date.parse(c.expires_at);
+        return Number.isFinite(expMs) && expMs <= nowMs + 250;
+      });
+      if (hasExpiredOpen) {
+        void queryClient.invalidateQueries({ queryKey: ['contracts'] });
+        void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      }
+    };
+
+    const nowMs = Date.now();
+    const alreadyExpired = openList.some((c) => {
+      const expMs = Date.parse(c.expires_at);
+      return Number.isFinite(expMs) && expMs <= nowMs + 250;
+    });
+
+    if (alreadyExpired) {
+      triggerReconcileIfExpired();
+      intervalId = setInterval(triggerReconcileIfExpired, 1000);
+    } else {
+      const validExpiries = openList
+        .map((c) => Date.parse(c.expires_at))
+        .filter((ms) => Number.isFinite(ms));
+      if (validExpiries.length > 0) {
+        const nextExpiryMs = Math.min(...validExpiries);
+        const delayMs = Math.max(250, nextExpiryMs - nowMs + 300);
+        expiryTimerId = setTimeout(() => {
+          triggerReconcileIfExpired();
+          intervalId = setInterval(triggerReconcileIfExpired, 1000);
+        }, delayMs);
+      }
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      if (expiryTimerId) clearTimeout(expiryTimerId);
+    };
+  }, [contracts.data, queryClient]);
 
   useEffect(() => {
     if (isGuestMode()) {
@@ -271,6 +350,7 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
       for (const c of contracts.data) {
         if (c.status === 'OPEN' && c.symbol) {
           set.add(c.symbol);
+          set.add(normalizeSymbol(c.symbol));
         }
       }
     }
@@ -280,11 +360,14 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
   const multiPrices = useMultiSymbolPriceFeed(trackedSymbols);
 
   const consolidatedPrices = useMemo(() => {
-    const merged = { ...multiPrices };
+    const merged: Record<string, number> = { ...multiPrices };
     if (feed.tick) {
       const p = Number(feed.tick.price);
       if (Number.isFinite(p)) {
+        const canonicalActive = activeSymbol.replace(/^SYNTH_/, '');
         merged[activeSymbol] = p;
+        merged[canonicalActive] = p;
+        merged[`SYNTH_${canonicalActive}`] = p;
       }
     }
     return merged;
@@ -302,7 +385,7 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
           onAddTab={handleAddTab}
           balanceMinor={wallet.data?.available_minor ?? null}
           accountEmail={user.profile.email ?? 'demo'}
-          isLive={feed.connected && !feed.stale}
+          isLive={(feed.connected && !feed.stale) || Boolean(feed.isColdStarting)}
           latencyMs={feed.connected ? 16 : 88}
           onResetDemo={handleResetDemo}
           onSignOut={handleSignOut}
@@ -388,7 +471,7 @@ function Dashboard({ user, symbol }: { user: User; symbol: string }) {
           onToggleSound={() => setSoundEnabled((s) => !s)}
           timeZone={timeZone}
           onToggleTimeZone={() => setTimeZone((t) => t === 'UTC-3' ? 'UTC' : 'UTC-3')}
-          isConnected={feed.connected && !feed.stale}
+          isConnected={(feed.connected && !feed.stale) || Boolean(feed.isColdStarting)}
           activeContractsCount={activeContractsCount}
           portfolioTotalFormatted={portfolioTotalFormatted}
           todayProfitFormatted={todayProfitFormatted}

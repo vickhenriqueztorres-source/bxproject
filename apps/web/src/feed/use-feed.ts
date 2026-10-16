@@ -12,17 +12,39 @@ export function useFeed(
   const [tick, setTick] = useState<Tick | null>(null);
   const [connected, setConnected] = useState(false);
   const [stale, setStale] = useState(false);
+  const [isColdStarting, setIsColdStarting] = useState<boolean>(() =>
+    tradingFeedManager.isColdStarting() || tradingFeedManager.isSymbolColdStarting(symbol)
+  );
 
   useEffect(() => {
     let mounted = true;
-    tradingFeedManager.connect();
+    tradingFeedManager.connect(true);
+    setIsColdStarting(
+      tradingFeedManager.isColdStarting() || tradingFeedManager.isSymbolColdStarting(symbol)
+    );
+
+    const graceTimer = setTimeout(() => {
+      if (mounted) {
+        setIsColdStarting(false);
+      }
+    }, 3500);
 
     const unsubscribeStatus = tradingFeedManager.onStatusChange((conn) => {
-      if (mounted) setConnected(conn);
+      if (!mounted) return;
+      setConnected(conn);
+      if (conn) {
+        setIsColdStarting(false);
+      } else if (!tradingFeedManager.isColdStarting()) {
+        setIsColdStarting(false);
+      }
     });
 
     const unsubscribeStaleness = tradingFeedManager.onSymbolStaleness(symbol, (isStale) => {
-      if (mounted) setStale(isStale);
+      if (!mounted) return;
+      setStale(isStale);
+      if (!isStale) {
+        setIsColdStarting(false);
+      }
     });
 
     const unsubscribePrivate = tradingFeedManager.subscribePrivate((event) => {
@@ -30,11 +52,14 @@ export function useFeed(
     });
 
     const unsubscribeSymbol = tradingFeedManager.subscribeSymbol(symbol, (incomingTick) => {
-      if (mounted) setTick(incomingTick);
+      if (!mounted) return;
+      setTick(incomingTick);
+      setIsColdStarting(false);
     });
 
     return () => {
       mounted = false;
+      clearTimeout(graceTimer);
       unsubscribeSymbol();
       unsubscribePrivate();
       unsubscribeStaleness();
@@ -42,5 +67,5 @@ export function useFeed(
     };
   }, [symbol, onPrivate, onResync]);
 
-  return { tick, connected, stale };
+  return { tick, connected, stale, isColdStarting };
 }

@@ -157,6 +157,39 @@ export function syncChartViewportOnResize(
   }
 }
 
+export interface ViewportReanchorDecisionParams {
+  symbolChanged: boolean;
+  timeframeChanged: boolean;
+  wasEmpty: boolean;
+  prevBarCount: number;
+  nextBarCount: number;
+  historyHydratedForKey: boolean;
+}
+
+/**
+ * Decide deterministicamente se o viewport do gráfico deve re-ativar autoScale e
+ * rolar para o tempo real (scrollToRealTime) após um setData().
+ * Resolve o bug da Imagem 1 onde abrir uma nova aba recebia 1 barra de tick antes
+ * do histórico HTTP (1440 velas), consumindo `wasEmpty` prematuramente e deixando
+ * as velas históricas espremidas na borda esquerda.
+ */
+export function shouldReanchorViewportOnDataUpdate({
+  symbolChanged,
+  timeframeChanged,
+  wasEmpty,
+  prevBarCount,
+  nextBarCount,
+  historyHydratedForKey,
+}: ViewportReanchorDecisionParams): boolean {
+  if (nextBarCount <= 0) return false;
+  if (symbolChanged || timeframeChanged) return true;
+  if (wasEmpty) return true;
+  if (nextBarCount >= 5 && (prevBarCount < 5 || !historyHydratedForKey)) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Componente Ilhado de Canvas do TradingView Lightweight Charts (v4.2.1).
  * Implementa as 4 regras de ouro de isolamento + blindagens industriais:
@@ -195,6 +228,8 @@ const IsolatedChartHostComponent = forwardRef<IsolatedChartHandle, IsolatedChart
     const isDisposedRef = useRef<boolean>(false);
     const latestCandlesRef = useRef<CandlestickData<UTCTimestamp>[]>(candles);
     const hadBarsRef = useRef<boolean>(false);
+    const prevBarCountRef = useRef<number>(0);
+    const historyHydratedKeyRef = useRef<string>('');
     const prevSymbolRef = useRef<string | undefined>(symbol);
     const prevTimeframeRef = useRef<Timeframe>(timeframe);
     const lastDimensionsRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
@@ -382,6 +417,16 @@ const IsolatedChartHostComponent = forwardRef<IsolatedChartHandle, IsolatedChart
           areaSeries.setData(lineData);
           lastAppliedCandlesRef.current = latestCandlesRef.current;
           hadBarsRef.current = true;
+          prevBarCountRef.current = cleanInitial.length;
+          if (cleanInitial.length >= 5) {
+            historyHydratedKeyRef.current = `${symbol ?? 'DEFAULT'}:${timeframe}`;
+          }
+          try {
+            chart.priceScale('right').applyOptions({ autoScale: true });
+            chart.timeScale().scrollToRealTime();
+          } catch {
+            /* ignore */
+          }
         }
       }
 
@@ -625,6 +670,11 @@ const IsolatedChartHostComponent = forwardRef<IsolatedChartHandle, IsolatedChart
       prevSymbolRef.current = symbol;
       prevTimeframeRef.current = timeframe;
 
+      if (symbolChanged || timeframeChanged) {
+        prevBarCountRef.current = 0;
+        historyHydratedKeyRef.current = '';
+      }
+
       if (
         !symbolChanged &&
         !timeframeChanged &&
@@ -636,7 +686,24 @@ const IsolatedChartHostComponent = forwardRef<IsolatedChartHandle, IsolatedChart
 
       const cleanBars = ensureStrictAscendingBars(candles);
       const wasEmpty = !hadBarsRef.current;
+      const prevBarCount = prevBarCountRef.current;
+      const currentKey = `${symbol ?? 'DEFAULT'}:${timeframe}`;
+      const historyHydratedForKey = historyHydratedKeyRef.current === currentKey;
+
+      const shouldReanchor = shouldReanchorViewportOnDataUpdate({
+        symbolChanged,
+        timeframeChanged,
+        wasEmpty,
+        prevBarCount,
+        nextBarCount: cleanBars.length,
+        historyHydratedForKey,
+      });
+
       hadBarsRef.current = cleanBars.length > 0;
+      prevBarCountRef.current = cleanBars.length;
+      if (cleanBars.length >= 5) {
+        historyHydratedKeyRef.current = currentKey;
+      }
 
       try {
         candleSeriesRef.current.applyOptions({ priceFormat });
@@ -652,8 +719,8 @@ const IsolatedChartHostComponent = forwardRef<IsolatedChartHandle, IsolatedChart
         /* ignore if series is disposed */
       }
 
-      // Garante autoScale e reposiciona em tempo real apenas quando ativo/timeframe mudam ou na 1ª carga
-      if (symbolChanged || timeframeChanged || (wasEmpty && cleanBars.length > 0)) {
+      // Garante autoScale e reposiciona em tempo real quando ativo/timeframe mudam, na 1ª carga ou quando o histórico real hidrata após tick inicial
+      if (shouldReanchor) {
         try {
           chartRef.current?.priceScale('right').applyOptions({ autoScale: true });
           chartRef.current?.timeScale().scrollToRealTime();

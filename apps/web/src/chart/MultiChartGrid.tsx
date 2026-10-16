@@ -69,14 +69,24 @@ const GridCell = React.memo(function GridCell({
   const isVisible = useVisibilityPause(cellRef);
   const [tick, setTick] = useState<Tick | null>(null);
   const [isStale, setIsStale] = useState(false);
+  const [isColdStartGrace, setIsColdStartGrace] = useState<boolean>(() =>
+    tradingFeedManager.isSymbolColdStarting(symbol)
+  );
   const [tickAgeMs, setTickAgeMs] = useState(0);
   const [feedState, setFeedState] = useState<SymbolFeedState>('LIVE');
 
   // Subscribe to symbol ticks & per-symbol staleness/state via single WebSocket manager
   useEffect(() => {
-    tradingFeedManager.connect();
+    tradingFeedManager.connect(true);
+    setIsColdStartGrace(tradingFeedManager.isSymbolColdStarting(symbol));
+
+    const graceTimer = setTimeout(() => {
+      setIsColdStartGrace(false);
+    }, 3500);
+
     const unsubscribeTick = tradingFeedManager.subscribeSymbol(symbol, (incomingTick) => {
       setTick(incomingTick);
+      setIsColdStartGrace(false);
       if (onTickUpdate) {
         onTickUpdate(symbol, incomingTick.event_time ?? Date.now());
       }
@@ -84,17 +94,25 @@ const GridCell = React.memo(function GridCell({
     const unsubscribeStale = tradingFeedManager.onSymbolStaleness(symbol, (stale, age) => {
       setIsStale(stale);
       setTickAgeMs(age);
+      if (!stale || !tradingFeedManager.isSymbolColdStarting(symbol)) {
+        setIsColdStartGrace(tradingFeedManager.isSymbolColdStarting(symbol));
+      }
     });
     const unsubscribeState = tradingFeedManager.onSymbolStateChange(symbol, (state, age) => {
       setFeedState(state);
       setTickAgeMs(age);
+      if (state === 'LIVE' || state === 'DEAD') {
+        setIsColdStartGrace(false);
+      }
     });
     return () => {
+      clearTimeout(graceTimer);
       unsubscribeTick();
       unsubscribeStale();
       unsubscribeState();
       setTick(null);
       setIsStale(false);
+      setIsColdStartGrace(false);
       setFeedState('LIVE');
     };
   }, [symbol]);
@@ -105,6 +123,12 @@ const GridCell = React.memo(function GridCell({
     queryFn: () => getCandles(symbol, '1m'),
     staleTime: 60_000,
   });
+
+  const effectiveIsStale = isStale && !isColdStartGrace;
+  const isInitialLoading =
+    !effectiveIsStale &&
+    isColdStartGrace &&
+    candlesQuery.isLoading;
 
   const relevantContracts = useMemo(
     () => contracts.filter((c) => c.status === 'OPEN' && isSameAsset(c.symbol, symbol)),
@@ -200,7 +224,7 @@ const GridCell = React.memo(function GridCell({
                 ATIVO
               </span>
             )}
-            {isStale && (
+            {effectiveIsStale && (
               <span
                 style={{
                   fontSize: '9px',
@@ -231,8 +255,8 @@ const GridCell = React.memo(function GridCell({
             >
               ⚡ {tick?.latency_ms ?? 0}ms
             </span>
-            <span style={{ color: isStale ? '#ff6b6b' : '#8597b4', fontSize: '10px', fontWeight: isStale ? 700 : 400 }}>
-              {tick ? tick.price : '—'} {isStale && '(stale)'}
+            <span style={{ color: effectiveIsStale ? '#ff6b6b' : '#8597b4', fontSize: '10px', fontWeight: effectiveIsStale ? 700 : 400 }}>
+              {tick ? tick.price : '—'} {effectiveIsStale && '(stale)'}
             </span>
           </div>
         </div>
@@ -241,14 +265,14 @@ const GridCell = React.memo(function GridCell({
       {/* Chart Canvas Area + Cell Order Ticket */}
       <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', position: 'relative' }}>
         <div style={{ flex: 1, height: '100%', minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-          <ReconnectingOverlay isReconnecting={isStale} symbol={symbol} />
-          <StalenessOverlay isStale={isStale} symbol={symbol} tickAgeMs={tickAgeMs} feedState={feedState} />
+          <ReconnectingOverlay isReconnecting={effectiveIsStale} isLoadingInitial={isInitialLoading} symbol={symbol} />
+          <StalenessOverlay isStale={effectiveIsStale} symbol={symbol} tickAgeMs={tickAgeMs} feedState={feedState} />
           <ChartSandbox
             candles={candlesQuery.data ?? EMPTY_CANDLES}
             tick={tick}
             symbol={symbol}
             activeContracts={relevantContracts}
-            isStale={isStale}
+            isStale={effectiveIsStale}
             isVisible={isVisible}
             onSelectSymbol={onSymbolChange}
           />

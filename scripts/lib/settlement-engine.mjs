@@ -11,6 +11,22 @@ import { getAssetConfig } from './ou-engine.mjs';
 export const TICK_HISTORY_MAX_SIZE = 900; // 15 minutos de ticks de 1s por ativo
 
 /**
+ * Resolve todas as representações candidatas de um símbolo (canônico e legado no PostgreSQL)
+ * para garantir que buscas em `ticks` e `contracts` encontrem tanto `SYNTH_VOL_50` quanto `VOL_50`.
+ */
+export function buildSymbolCandidates(rawSymbol, resolveSymbolFn = null) {
+  const cleanRaw = typeof rawSymbol === 'string' && rawSymbol.trim() ? rawSymbol.trim() : 'VOL_50';
+  const canonical =
+    typeof resolveSymbolFn === 'function'
+      ? resolveSymbolFn(cleanRaw) || cleanRaw.replace(/^SYNTH_/, '')
+      : cleanRaw.replace(/^SYNTH_/, '');
+  const isSyntheticIndex =
+    canonical.startsWith('VOL_') || canonical === 'CRASH_BOOM_100';
+  const legacySynth = isSyntheticIndex ? `SYNTH_${canonical}` : null;
+  return Array.from(new Set([cleanRaw, canonical, legacySynth].filter(Boolean)));
+}
+
+/**
  * Registra cada tick gerado no histórico circular do ativo em memória
  * para garantir captura exata do primeiro tick com event_time >= expires_at.
  */
@@ -627,13 +643,14 @@ export function createSettlementCoordinator({
           }
 
           const dbCanonicalSymbol = resolveSymbol(contractRow.symbol);
+          const symbolCandidates = buildSymbolCandidates(contractRow.symbol, resolveSymbol);
           const tickRes = await dbClient.query(
             `SELECT sequence, price, ts, hash
              FROM ticks
-             WHERE symbol = $1 AND ts >= $2
+             WHERE symbol = ANY($1::text[]) AND ts >= $2
              ORDER BY ts ASC, sequence ASC
              LIMIT 1`,
-            [dbCanonicalSymbol, contractRow.expires_at]
+            [symbolCandidates, contractRow.expires_at]
           );
 
           if (tickRes.rowCount === 0) {
@@ -966,12 +983,14 @@ export function createSettlementCoordinator({
     telemetry.sweeperRunsTotal += 1;
 
     const settledResults = [];
+    const attemptedInCycle = new Set();
     try {
       // 1. Varre contratos em memória cujo expires_at <= nowMs
       for (const c of devContracts) {
         if (c && c.status === 'OPEN') {
           const expMs = Date.parse(c.expires_at);
           if (Number.isFinite(expMs) && expMs <= nowMs) {
+            attemptedInCycle.add(String(c.id));
             const res = await settleOpenContract(c, 'sweeper_mem', nowMs);
             if (res.settled) settledResults.push(res);
           }
@@ -990,7 +1009,13 @@ export function createSettlementCoordinator({
           );
 
           for (const row of expiredDbRes.rows) {
-            if (!settledContractIdsCache.has(row.id) && !settlingContractIds.has(row.id)) {
+            const rowId = String(row.id);
+            if (
+              !attemptedInCycle.has(rowId) &&
+              !settledContractIdsCache.has(rowId) &&
+              !settlingContractIds.has(rowId)
+            ) {
+              attemptedInCycle.add(rowId);
               const dbContractObj = {
                 id: row.id,
                 user_id: row.user_id,

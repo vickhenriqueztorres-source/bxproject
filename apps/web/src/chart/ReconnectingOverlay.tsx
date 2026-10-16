@@ -2,16 +2,63 @@ import React from 'react';
 
 export interface ReconnectingOverlayProps {
   isReconnecting: boolean;
+  isLoadingInitial?: boolean;
   symbol?: string;
   message?: string;
 }
 
 export const ReconnectingOverlay: React.FC<ReconnectingOverlayProps> = ({
   isReconnecting,
+  isLoadingInitial = false,
   symbol,
   message = 'Reconectando...',
 }) => {
-  if (!isReconnecting) return null;
+  if (!isReconnecting && !isLoadingInitial) return null;
+
+  if (!isReconnecting && isLoadingInitial) {
+    return (
+      <div
+        data-testid="cold-start-loading-icon"
+        aria-label={symbol ? `Carregando ${symbol}` : 'Carregando gráfico'}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 35,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}
+      >
+        <div
+          style={{
+            width: '28px',
+            height: '28px',
+            borderRadius: '50%',
+            background: 'rgba(16, 22, 34, 0.72)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            display: 'grid',
+            placeItems: 'center',
+          }}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#8A92A1"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+          </svg>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

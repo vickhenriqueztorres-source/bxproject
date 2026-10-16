@@ -139,11 +139,12 @@ describe('Subetapa 04 — overlay de posições', () => {
       expect(html).toContain('+9');
     });
 
-    it('linhas finas: 1px, tracejadas, sem faixa sólida', () => {
+    it('linhas de ponto de entrada retas, sólidas (2px) e destacadas, sem tracejado', () => {
       const html = render(PROD);
-      expect(html).toContain('stroke-width="1"');
-      expect(html).toContain('stroke-dasharray="4 4"');
-      expect(html).not.toContain('stroke-width="1.5"');
+      expect(html).toContain('stroke-width="2"');
+      expect(html).toContain('stroke-opacity="0.95"');
+      expect(html).not.toContain('stroke-dasharray');
+      expect(html).toContain('data-testid="strike-entry-dot-');
     });
 
     it('cor segue o estado provisório: perdendo = vermelho, ganhando = verde', () => {

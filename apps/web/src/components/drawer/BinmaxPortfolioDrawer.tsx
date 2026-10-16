@@ -174,14 +174,21 @@ export const BinmaxPortfolioDrawer: React.FC<BinmaxPortfolioDrawerProps> = ({
             // ─── ABA ABERTAS ──────────────────────────────────────────
             if (activeTab === 'abiertas') {
               const strikePrice = Number(c.strike_price ?? c.entry_price ?? 0);
-              const symbolPrice = currentPrices?.[c.symbol] ?? (currentPrice !== null && currentPrice !== undefined ? Number(currentPrice) : null);
+              const canonicalSym = (c.symbol || '').replace(/^SYNTH_/, '');
+              const symbolPrice =
+                currentPrices?.[c.symbol] ??
+                currentPrices?.[canonicalSym] ??
+                currentPrices?.[`SYNTH_${canonicalSym}`] ??
+                (currentPrice !== null && currentPrice !== undefined ? Number(currentPrice) : null);
               const numCurrentPrice = symbolPrice !== null && Number.isFinite(symbolPrice) ? symbolPrice : null;
               let isWinning = false;
               if (numCurrentPrice !== null && Number.isFinite(numCurrentPrice)) {
                 isWinning = isUp ? numCurrentPrice > strikePrice : numCurrentPrice < strikePrice;
               }
 
-              const expectedProfitMinor = Math.round(stake * 0.85);
+              const rawPayoutPct = (c as { payout_pct?: number }).payout_pct;
+              const payoutPct = typeof rawPayoutPct === 'number' && Number.isFinite(rawPayoutPct) ? rawPayoutPct : 85;
+              const expectedProfitMinor = Math.floor((stake * payoutPct) / 100);
               const pnlDollars = isWinning ? (expectedProfitMinor / 100).toFixed(2) : (stake / 100).toFixed(2);
               const pnlFormatted = isWinning ? `+$${pnlDollars}` : `-$${pnlDollars}`;
 
